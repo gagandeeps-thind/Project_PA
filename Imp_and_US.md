@@ -1,3 +1,39 @@
+## 1. The MVP Implementation Plan  
+#### Phase 1: Onboarding & The "Stat" Engine  
+- **User Profile**: Standard Email/Password auth.  
+- **The Avatar Logic**: Instead of complex 3D models initially, use Dynamic 2D Sprite Sheets.  
+  - **Logic**: Calculate BMI ($Weight / Height^2$). Map BMI ranges to "Physical Classes" (e.g., Tank, Assassin, Mage).
+  - **Ranking**: Hardcode the Rank/Title strings in a lookup table so the UI updates instantly as XP crosses thresholds.  
+- **The Decay System**: Implement a "Streak" counter. If the last_activity_date is > 24 hours, a background cron job deducts a percentage of XP daily.  
+#### Phase 2: The Quest Board (GPS & AR)  
+- **Geofencing**: Use the Google Maps API to define "Quest Zones" in Bedford/Halifax.  
+- **The Loot Drop**: When the user enters the geofence and completes the task (e.g., "Reach the park in 10 mins"), trigger the AR view.  
+- **AR Implementation**: Use ARCore (Android) / ARKit (iOS). Instead of complex physics, simply "anchor" a 3D chest model to the horizontal plane (the ground) once the GPS coordinates match.  
+#### Phase 3: The ML Referee (The Betting System)  
+- **Pose Estimation**: Use MediaPipe (it's lightweight and runs on-device). It can track "Landmarks" (elbow, shoulder, hip) to count reps.  
+- **Synchronization**: For the "Live" bet, you’ll need WebRTC for the video stream and WebSockets to sync the rep counts in real-time.  
+## 2. Flaw Logic & Reality Checks
+#### A. The "BMI = Avatar" Flaw  
+- **The Issue**: BMI is a notoriously poor indicator of fitness for bodybuilders (it doesn't distinguish between muscle and fat). BMI might label you as "Obese.  
+- **The Correction**: Use Body Fat Percentage estimates or let users pick a "Path" (Strength, Cardio, or Balance) during onboarding. Don't punish a muscular user with a "Heavy/Slow" avatar.
+#### B. The Live Betting Latency  
+- **The Issue**: Syncing two live video feeds and running ML pose estimation simultaneously is extremely taxing on battery and data. Latency (lag) will make it impossible to judge who finished a push-up "0.1 seconds faster."  
+- **The Correction**: For the MVP, make betting Asynchronous. Player A sets a record (video recorded/verified by ML). Player B tries to beat it later. This removes the need for expensive real-time servers.
+#### C. Safety & Traffic Logic  
+- **The Issue**: You can't realistically know if a user is at a "Don't Walk" sign using standard GPS (which has a 5-10 meter margin of error).  
+- **The Correction**: Avoid "Point A to Point B" speed quests in urban areas. Instead, use "Stay in the Zone" quests. (e.g., "Maintain a 5:00 min/km pace for 10 minutes inside this park boundary"). Parks are safer and GPS signals are clearer.
+## 3. The Business Model: Local Bounty  
+To get money from local businesses, we shouldn't just "put a chest" there. We provide Foot Traffic as a Service.  
+- **The Merchant Portal**: A simple web dashboard where a local cafe in Bedford can pay $50 to host a "Legendary Chest" for a weekend.  
+- **The Incentive**: The chest only unlocks if the player is within 10 meters of the shop.The Conversion: Inside the AR chest, the player gets XP plus a digital coupon (e.g., "20% off a protein smoothie").  
+## 4. Technical Stack Recommendation
+
+ - **Language**: Python (FastAPI) for the backend—great for the ML integration.
+
+- **Mobile**: Flutter. It handles AR/Camera and GPS much more smoothly for a solo dev than native coding two separate apps.
+
+- **ML**: MediaPipe for the push-up counter.
+
 # 🧩 1. USER STORIES (Structured & Production-Ready)
 
 ## 🔹 Epic 1: User Participation (Core Product)
@@ -170,19 +206,19 @@ A Verified Fitness Reward System using:
 
 **1. High-Level Architecture**
 
-Mobile App (Flutter / React Native)
-↓
-API Gateway (FastAPI / Node)
-↓
-Backend Services
-├── Tracking Service
-├── Verification Engine (ML + Rules)
-├── Reward Engine
-└── Merchant Service
-↓
-Database (PostgreSQL / DynamoDB)
-↓
-ML Pipeline (Python - PyTorch / Sklearn)
+Mobile App (Flutter / React Native)  
+↓  
+API Gateway (FastAPI / Node)  
+↓  
+Backend Services  
+├── Tracking Service  
+├── Verification Engine (ML + Rules)  
+├── Reward Engine  
+└── Merchant Service  
+↓  
+Database (PostgreSQL / DynamoDB)  
+↓  
+ML Pipeline (Python - PyTorch / Sklearn)  
 
 **2. Verification Engine (Core Design)**
 
