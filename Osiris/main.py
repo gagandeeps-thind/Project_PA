@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 # Import our newly created database connection and models
 import database
@@ -26,6 +27,9 @@ async def root():
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return {}
+
+# --- Security ---
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- Pydantic Models ---
 
@@ -109,12 +113,12 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
     avatar_class = get_avatar_class(user.preferred_path)
     
     # 3. Create the Database "Warehouse Worker" Model
-    # TODO: In a real app, hash the password using passlib/bcrypt here!
-    fake_hashed_password = user.password + "_hashed"
+    # Securely hash the user's password using bcrypt
+    hashed_pwd = pwd_context.hash(user.password)
     
     new_user = models.User(
         email=user.email,
-        hashed_password=fake_hashed_password,
+        hashed_password=hashed_pwd,
         bmi=bmi,
         avatar_class=avatar_class,
         xp=0,
