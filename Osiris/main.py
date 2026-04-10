@@ -1,13 +1,15 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
+import json
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 
 # Import our newly created database connection and models
 import database
 import models
+import spatial_utils
 
 # This line tells SQLAlchemy to look at our models and actually CREATE the tables 
 # in the SQLite database if they don't exist yet.
@@ -29,16 +31,29 @@ async def favicon():
     return {}
 
 # --- Security ---
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 # --- Pydantic Models ---
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., max_length=12, description="Password cannot exceed 72 characters")
     weight_kg: float = Field(..., gt=0, description="Weight in kg must be greater than 0")
     height_m: float = Field(..., gt=0, description="Height in meters must be greater than 0")
     preferred_path: str = "Balance"  # Options: Strength, Cardio, Balance
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(..., max_length=12)
+
+class Coordinate(BaseModel):
+    lat: float
+    lng: float
+    timestamp: datetime
 
 class UserProfile(BaseModel):
     id: int
@@ -47,11 +62,25 @@ class UserProfile(BaseModel):
     avatar_class: str
     xp: int
     rank: str
+    title: str
+    cumulative_area: float
     last_activity_date: datetime
     streak: int
 
     class Config:
         from_attributes = True  # For Pydantic v2 (Modern FastAPI)
+
+class DomainCreate(BaseModel):
+    owner_id: int
+    coordinates: List[Coordinate]
+    defense_score: int
+    defense_type: str = "pushups"
+
+class DomainResponse(BaseModel):
+    id: int
+    area_sqkm: float
+    defense_score: int
+    message: str
 
 # --- Core Business Logic ---
 
@@ -92,6 +121,14 @@ def get_rank(xp: int, last_activity_date: Optional[datetime] = None) -> str:
     if xp < 10000: return "SS - Emperor"
     return "SSS - God"
 
+def get_title(cumulative_area: float) -> str:
+    """Calculates Map Title based on total km2 owned."""
+    if cumulative_area >= 100.0: return "Sovereign"
+    if cumulative_area >= 20.0: return "High Lord"
+    if cumulative_area >= 5.0: return "Lord"
+    if cumulative_area >= 1.0: return "Warden"
+    return "Unawakened"
+
 # --- Endpoints ---
 
 @app.post("/api/v1/onboard", response_model=UserProfile)
@@ -114,7 +151,7 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
     
     # 3. Create the Database "Warehouse Worker" Model
     # Securely hash the user's password using bcrypt
-    hashed_pwd = pwd_context.hash(user.password)
+    hashed_pwd = get_password_hash(user.password)
     
     new_user = models.User(
         email=user.email,
@@ -123,6 +160,8 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
         avatar_class=avatar_class,
         xp=0,
         rank=get_rank(0),
+        title=get_title(0.0),
+        cumulative_area=0.0,
         last_activity_date=datetime.utcnow(),
         streak=0
     )
