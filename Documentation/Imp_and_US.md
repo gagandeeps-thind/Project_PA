@@ -25,12 +25,14 @@ Calculated by the AI Referee based on the user's completion of verified physical
 | **F** | The Dishonored | Flagged for cheating or prolonged inactivity (>30 days). |
 
 ### 2. The Peerage (Territorial Control)
-The real-world map is divided into GPS "Nodes" (e.g., DeWolf Park, Sunnyside Mall). High-ranking players can claim territories.
+Titles are tied to **Cumulative Land Ownership** through "Domain Expansion". Players trace GPS polygons in the real world to claim land.
 
-* **Warden:** Controls 1 Node. (Requires defeating the current Warden's high score).
-* **Lord:** Controls 5+ Nodes. (Requires holding 5 Warden titles + defeating 1 other Lord).
-* **High Lord:** Controls a City District (e.g., Bedford).
-* **Sovereign:** The #1 ranked player in a full city (e.g., Halifax) by total territory tax.
+| Title Rank | Cumulative Area Required | Map Privilege | Real-World Feat Equivalent |
+| :--- | :--- | :--- | :--- |
+| **Warden** | 1.0 km² | Receives Base Tax from players inside. | ~4 km perimeter run. |
+| **Lord** | 5.0 km² | Custom AR Flag on map center. | ~9 km perimeter run (or 5 Wardens). |
+| **High Lord** | 20.0 km² | Controls weather/spawn conditions. | ~18 km perimeter run (or 4 Lords). |
+| **Sovereign** | 100.0+ km² | Sovereign-only Guild Hall access. | Massive Guild Coordination. |
 
 ---
 
@@ -45,7 +47,16 @@ The real-world map is divided into GPS "Nodes" (e.g., DeWolf Park, Sunnyside Mal
 * **Bounties:** Low-stakes tasks ("Walk 5k steps," "Do 20 push-ups") to maintain XP and avoid Rank Decay.
 * **Dungeons:** Premium GPS-gated zones. Users pay "Mana Crystals" to enter and must clear a timed sequence of exercises to earn high-tier loot.
 
-### 3. The Adventure Party (Role Assignment)
+### 3. Domain Expansion (Territory Wars)
+*Strava Art meets Splatoon.* Players convert physical runs/walks into closed GPS polygons. The enclosed area becomes their "Virtual Property."
+* **The Cast:** User pays Mana Crystals, traces a path via GPS (polling every 5s), and closes the loop (returning to start within 20m).
+* **The Imprint:** Immediately upon closing the loop, the player performs a physical "Defense Feat" (e.g., max push-ups in 2 minutes) verified by the AI Referee to set the defending "Ghost" score.
+* **The Siege:** To steal a domain, a Challenger must physically run a path that completely encapsulates (swallows) the Defender's polygon. The Challenger must then beat the Defender's Ghost score.
+    * *Win:* Defender's polygon is erased; Challenger claims the new larger area.
+    * *Loss:* Challenger's trace shatters; Mana Crystals lost.
+* **Guild Empires:** If two players in the same Guild draw intersecting domains, the polygons merge into a unified "Guild Empire."
+
+### 4. The Adventure Party (Role Assignment)
 When players group up for a Dungeon or Raid Boss, the System assigns roles based on their **verified 30-day physical history**:
 * **Vanguard (Tank):** Highest Strength (STR). Tasked with explosive, heavy-resistance movements to "block" boss attacks.
 * **Striker (DPS):** Highest Agility (AGI). Tasked with high-speed movement (sprinting, burpees) to deal massive damage.
@@ -74,6 +85,13 @@ Osiris operates on a dual B2B/B2C revenue model, blending real-world local busin
 To prevent cheating and minimize battery drain, Osiris uses a **Hybrid Sensor Fusion** approach.
 
 ### 1. The Verification Matrix
+| Threat | Solution (The Anti-Cheat) |
+| :--- | :--- |
+| **Vehicle GPS Spoofing** | **Velocity Lock:** If Velocity > 25 km/h for >10s, Domain Trace shatters. |
+| **Invalid Polygons** | **Closure Tolerance:** Must return to origin coordinates within 20m. |
+| **Polygon Swallowing** | **Ray Casting Algorithm:** Checks if Target vertices fall entirely inside Challenger shape. |
+
+### 2. Sensor Compute Cost
 | Exercise Type | Primary Sensor | Tech / Logic | Compute Cost |
 | :--- | :--- | :--- | :--- |
 | **Sprinting / Running** | GPS + Accelerometer | Speed/Cadence validation; Velocity filtering (<25 km/h). | Low |
@@ -81,10 +99,10 @@ To prevent cheating and minimize battery drain, Osiris uses a **Hybrid Sensor Fu
 | **Push-ups / Squats** | Camera (MediaPipe) | On-device Pose Estimation (Skeleton tracking) at 15 FPS. | Medium/High |
 | **Dungeon Clearing** | Geofencing | Radius-based entry/exit triggers (Google Maps API). | Low |
 
-### 2. Tech Stack Recommendation
+### 3. Tech Stack Recommendation
 * **Frontend/Mobile:** Flutter (Handles ARCore/ARKit and maps efficiently).
 * **Backend:** Python (FastAPI) for high-performance ML integration.
-* **Database:** Firebase (Auth, Real-time state) + PostgreSQL (Relational data for economy/territory).
+* **Database:** PostgreSQL with **PostGIS extension** (Crucial for `ST_Area` and spatial intersect queries).
 * **ML Framework:** MediaPipe (On-device Pose Estimation), Scikit-learn (Accelerometer anomaly detection).
 
 ---
@@ -105,6 +123,12 @@ To prevent cheating and minimize battery drain, Osiris uses a **Hybrid Sensor Fu
     * *Story 2.2:* As the system, I will analyze accelerometer arrays to classify human stride vs. phone shaking (85% confidence required).
 * **Epic 3: Business Flow:**
     * *Story 3.1:* As a merchant, I want to define a reward amount, max users, and pay a pilot fee to place a chest at my storefront.
+* **Epic 4: Domain Expansion (Territory Wars):**
+    * *Story 4.1:* As a user, I want to press "Start Domain" and see a breadcrumb trail of my path on the map.
+    * *Story 4.2:* As the system, I will calculate the distance between the user's current location and start point, enabling "Close Domain" if < 20m.
+    * *Story 4.3:* As the backend, I will reject any domain submission where the user's average speed exceeded 25 km/h.
+    * *Story 4.4:* As the backend, I will use Point-in-Polygon logic to check if a new domain swallows an existing one, triggering a Siege.
+    * *Story 4.5:* As the system, I will aggregate total `area_sqkm` for a user and automatically update their Map Title (Warden, Lord, etc.).
 
 ### 3. Risk Mitigation
 | Risk | Mitigation Strategy |
