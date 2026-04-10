@@ -14,6 +14,7 @@ class User(Base):
     # Fitness Stats
     bmi = Column(Float)
     avatar_class = Column(String)
+    rank = Column(String)
     xp = Column(Integer, default=0)
     streak = Column(Integer, default=0)
     last_activity_date = Column(DateTime, default=datetime.datetime.utcnow)

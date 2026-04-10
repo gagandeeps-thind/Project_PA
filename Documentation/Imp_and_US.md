@@ -1,250 +1,115 @@
-# 1. The MVP Implementation Plan
+Here is the consolidated and updated **Master Design & Technical Document** for Osiris. It merges the initial MVP technical requirements with the advanced RPG mechanics, party systems, and territorial economy we discussed.
 
-## Phase 1: Onboarding & The "Stat" Engine
-*   **User Profile:** Standard Email/Password auth.
-*   **The Avatar Logic:** Instead of complex 3D models initially, use *Dynamic 2D Sprite Sheets*.
-    *   **Logic:** Calculate BMI ($Weight / Height^2$). Map BMI ranges to *Physical Classes* (e.g., Tank, Assassin, Mage).
-    *   **Ranking:** Hardcode the Rank/Title strings in a lookup table so the UI updates instantly as XP crosses thresholds.
-*   **The Decay System:** Implement a "Streak" counter. If the `last_activity_date` is > 24 hours, a background cron job deducts a percentage of XP daily.
+***
 
-## Phase 2: The Quest Board (GPS & AR)
-*   **Geofencing:** Use the Google Maps API to define "Quest Zones" in Bedford/Halifax.
-*   **The Loot Drop:** When the user enters the geofence and completes the task (e.g., *"Reach the park in 10 mins"*), trigger the AR view.
-*   **AR Implementation:** Use *ARCore* (Android) / *ARKit* (iOS). Instead of complex physics, simply "anchor" a 3D chest model to the horizontal plane (the ground) once the GPS coordinates match.
+# 📜 OSIRIS: Master Game Design & Technical Document (GDD/TDD)
 
-## Phase 3: The ML Referee (The Betting System)
-*   **Pose Estimation:** Use *MediaPipe* (it's lightweight and runs on-device). It can track "Landmarks" (elbow, shoulder, hip) to count reps.
-*   **Synchronization:** For the "Live" bet, you'll need **WebRTC** for the video stream and **WebSockets** to sync the rep counts in real-time.
+## I. Project Identity & Vision
+* **The Hook:** *"Earn Your Awakening."* Osiris is a high-stakes, real-world Action-RPG where physical effort translates directly to digital rank, territorial control, and financial rewards.
+* **The System:** An AI-driven "Referee" validates movement, preventing the cheating common in standard fitness apps and establishing a true economy of effort.
 
 ---
 
-# 2. Flaw Logic & Reality Checks
+## II. The Progression & Hierarchy System
 
-## A. The "BMI = Avatar" Flaw
-*   **The Issue:** BMI is a notoriously poor indicator of fitness for bodybuilders (it doesn't distinguish between muscle and fat). BMI might label you as *"Obese"*.
-*   **The Correction:** Use Body Fat Percentage estimates or let users pick a "Path" (*Strength, Cardio, or Balance*) during onboarding. Don't punish a muscular user with a "Heavy/Slow" avatar.
+Users are categorized by a dual-tier identity system: **Physical Grade** (Raw Power) and **Territorial Title** (World Influence).
 
-## B. The Live Betting Latency
-*   **The Issue:** Syncing two live video feeds and running ML pose estimation simultaneously is extremely taxing on battery and data. Latency (lag) will make it impossible to judge who finished a push-up *"0.1 seconds faster"*.
-*   **The Correction:** For the MVP, make betting **Asynchronous**. Player A sets a record (video recorded/verified by ML). Player B tries to beat it later. This removes the need for expensive real-time servers.
+### 1. The Grade (Physical Rank)
+Calculated by the AI Referee based on the user's completion of verified physical tasks.
 
-## C. Safety & Traffic Logic
-*   **The Issue:** You can't realistically know if a user is at a "Don't Walk" sign using standard GPS (which has a 5-10 meter margin of error).
-*   **The Correction:** Avoid "Point A to Point B" speed quests in urban areas. Instead, use *"Stay in the Zone"* quests. (e.g., *"Maintain a 5:00 min/km pace for 10 minutes inside this park boundary"*). Parks are safer and GPS signals are clearer.
+| Rank (Grade) | Title (Prestige) | Requirements & Decay Logic |
+| :--- | :--- | :--- |
+| **SSS / SS / S** | God, Emperor, King | Elite performance. Top 0.1% of Global Leaderboard + Unique Feats. |
+| **A / B** | Saint, Advanced | Dedicated athletes. Consistent high-level output. |
+| **C / D** | Intermediate, Beginner | Baseline fitness; casual/starting users ("The Awakened"). |
+| **F** | The Dishonored | Flagged for cheating or prolonged inactivity (>30 days). |
 
----
+### 2. The Peerage (Territorial Control)
+The real-world map is divided into GPS "Nodes" (e.g., DeWolf Park, Sunnyside Mall). High-ranking players can claim territories.
 
-# 3. The Business Model: Local Bounty
-
-> To get money from local businesses, we shouldn't just "put a chest" there. We provide **Foot Traffic as a Service**.
-
-*   **The Merchant Portal:** A simple web dashboard where a local cafe in Bedford can pay `$50` to host a *"Legendary Chest"* for a weekend.
-*   **The Incentive:** The chest only unlocks if the player is within 10 meters of the shop.
-*   **The Conversion:** Inside the AR chest, the player gets XP plus a digital coupon (e.g., *"20% off a protein smoothie"*).
+* **Warden:** Controls 1 Node. (Requires defeating the current Warden's high score).
+* **Lord:** Controls 5+ Nodes. (Requires holding 5 Warden titles + defeating 1 other Lord).
+* **High Lord:** Controls a City District (e.g., Bedford).
+* **Sovereign:** The #1 ranked player in a full city (e.g., Halifax) by total territory tax.
 
 ---
 
-# 4. Technical Stack Recommendation
+## III. The Gameplay Loop & Party Mechanics
 
-*   **Language:** **Python (FastAPI)** for the backend — great for the ML integration.
-*   **Mobile:** **Flutter** — it handles AR/Camera and GPS much more smoothly for a solo dev than native coding two separate apps.
-*   **ML:** **MediaPipe** for the push-up counter.
+### 1. Onboarding (The Awakening)
+* **Input:** Height, Weight, Age, Gender.
+* **Assessment Quest:** User performs a baseline physical test (push-ups, running) verified by the AI.
+* **Avatar:** Based on the assessment, the user is assigned a **2D Sprite Class** (e.g., Tank, Assassin, Mage) matching their primary physical strength.
 
----
+### 2. Daily Bounties & Dungeons
+* **Bounties:** Low-stakes tasks ("Walk 5k steps," "Do 20 push-ups") to maintain XP and avoid Rank Decay.
+* **Dungeons:** Premium GPS-gated zones. Users pay "Mana Crystals" to enter and must clear a timed sequence of exercises to earn high-tier loot.
 
-# 🧩 5. USER STORIES (Structured & Production-Ready)
-
-## 🔹 Epic 1: User Participation (Core Product)
-
-> **Goal:** Users complete fitness “Bounties” and earn rewards.
-
-### User Story 1.1 – Discover Bounties
-*As a fitness user, I want to see nearby bounties on a map so that I can choose a challenge near me.*
-
-**Acceptance Criteria:**
-*   Map shows Bedford zone (*DeWolf Park → Sunnyside Mall*).
-*   Each bounty displays:
-    *   Reward.
-    *   Distance.
-    *   Time validity.
-*   Only active bounties are visible.
-
-### User Story 1.2 – Start a Bounty
-*As a user, I want to start a bounty session so that my activity is tracked.*
-
-**Acceptance Criteria:**
-*   User taps *"Start Run"*.
-*   GPS tracking begins immediately.
-*   Session state is set to `ACTIVE`.
-*   Timer and current distance are visible.
-
-### User Story 1.3 – Complete & Claim Reward
-*As a user, I want to claim a reward after completing the route so that I get incentives.*
-
-**Acceptance Criteria:**
-*   User reaches the geo-fenced zone.
-*   Verification engine validates movement.
-*   Reward credited (*wallet / discount*).
-
-## 🔹 Epic 2: Verification Engine (Your MOAT 🔥)
-
-> **Goal:** Prevent cheating → core competitive advantage.
-
-### User Story 2.1 – GPS Geo-Fencing Validation
-*As a system, I want to verify user location within a 30–50m radius so that users must physically be at the bounty location.*
-
-**Acceptance Criteria:**
-*   GPS coordinates fall within defined polygon/radius.
-*   Reject if outside radius.
-*   Log entry created for validation.
-
-### User Story 2.2 – Velocity Filtering
-*As a system, I want to ensure speed is < 25 km/h so that vehicles are filtered out.*
-
-**Acceptance Criteria:**
-*   Speed calculated from GPS timestamps.
-*   If speed > threshold → session invalidated.
-*   Flag suspicious sessions.
-
-### User Story 2.3 – Cadence-Based Movement Detection (ML Core)
-*As a system, I want to analyze accelerometer patterns so that I distinguish walking/running from fake motion.*
-
-**Acceptance Criteria:**
-*   Collect accelerometer data (*x, y, z*).
-*   Apply ML classifier:
-    *   Human stride → `VALID`
-    *   Noise/vibration → `INVALID`
-*   Confidence score > threshold (e.g., `85%`).
-
-### User Story 2.4 – Anti-Spoof Detection
-*As a system, I want to detect GPS spoofing so that fake locations are rejected.*
-
-**Acceptance Criteria:**
-*   Detect sudden coordinate jumps.
-*   Check unrealistic acceleration.
-*   Cross-check with device sensor consistency.
-
-## 🔹 Epic 3: Business / Partner Flow
-
-### User Story 3.1 – Merchant Creates Bounty
-*As a local business, I want to create a weekend sprint offer so that I drive foot traffic.*
-
-**Acceptance Criteria:**
-*   Merchant defines:
-    *   Reward amount.
-    *   Max users.
-    *   Time window.
-*   Payment processed (`$50` pilot fee).
-
-### User Story 3.2 – Reward Redemption
-*As a user, I want to redeem rewards at partner shops so that I can use my earned value.*
-
-**Acceptance Criteria:**
-*   QR / code-based redemption.
-*   One-time usage validation.
-*   Linked to session ID.
+### 3. The Adventure Party (Role Assignment)
+When players group up for a Dungeon or Raid Boss, the System assigns roles based on their **verified 30-day physical history**:
+* **Vanguard (Tank):** Highest Strength (STR). Tasked with explosive, heavy-resistance movements to "block" boss attacks.
+* **Striker (DPS):** Highest Agility (AGI). Tasked with high-speed movement (sprinting, burpees) to deal massive damage.
+* **Scout (Support):** Highest Endurance (END). Tasked with maintaining steady volume (long-distance movement) to provide party buffs.
+* **Strategist (Healer):** Highest Consistency (Streak). Tasked with precision holds (planks) to restore the party's time limit.
 
 ---
 
-# ⚙️ 6. SDLC – PHASE 1 & 2
+## IV. The Economy & Business Model
 
-## 🚀 PHASE 1: PLANNING & REQUIREMENTS
+Osiris operates on a dual B2B/B2C revenue model, blending real-world local business with an RPG economy.
 
-### 1. Problem Statement
-Fitness apps are easily manipulated → no trust → low business value.
+### 1. B2C: The Adventurer's Economy
+* **The Defender's Vault & Challenge Tax:** To hold a Territorial Title, players must lock real money in a "Vault" (e.g., $10 for Warden). Challengers match this bet. The winner takes the title and 80% of the pot. Osiris takes a **20% War Tax**.
+* **The Black Market:** A user-to-user trading hub for rare digital loot (Skins/Artifacts) with a **15% transaction fee**.
+* **The Tower Pass:** A $9.99/month subscription offering XP boosters, "Decay Shields," and premium cosmetics.
 
-### 2. Solution
-A Verified Fitness Reward System using:
-*   GPS validation.
-*   Velocity filtering.
-*   ML-based cadence detection.
+### 2. B2B: Foot Traffic as a Service
+* **The Merchant Portal:** A web dashboard where local businesses pay (e.g., $50) to host a "Legendary Chest."
+* **The Conversion:** Chests unlock only when a player is within 10 meters of the shop. Inside, players find XP and a digital coupon (e.g., "20% off a protein smoothie").
 
-### 3. Scope (Bedford Pilot)
-*   **Zone:** DeWolf Park → Sunnyside Mall.
-*   **Users:** ~50 per bounty.
-*   **Partners:** Local cafes / supplement stores.
+---
 
-### 4. Functional Requirements
-*   Map-based bounty discovery.
-*   Real-time tracking.
-*   Reward distribution.
-*   Fraud detection (core).
+## V. Technical Architecture & The AI Referee (The Moat)
 
-### 5. Non-Functional Requirements
-*   **Latency:** < 1s for validation.
-*   **Accuracy:**
-    *   GPS: `±30m`
-    *   ML model: `>85%` precision
-*   **Scalability:** Support 1000 concurrent users (future).
-*   **Security:** Anti-spoofing and secure reward system.
+To prevent cheating and minimize battery drain, Osiris uses a **Hybrid Sensor Fusion** approach.
 
-### 6. Business Constraints
-*   Initial budget: low (MVP).
-*   Legal: avoid direct cash → prefer credits/discounts.
-*   Region-limited pilot.
+### 1. The Verification Matrix
+| Exercise Type | Primary Sensor | Tech / Logic | Compute Cost |
+| :--- | :--- | :--- | :--- |
+| **Sprinting / Running** | GPS + Accelerometer | Speed/Cadence validation; Velocity filtering (<25 km/h). | Low |
+| **Skipping / Jumping** | Accelerometer / IMU | Frequency (Hz) pattern matching; Anti-spoof detection. | Low |
+| **Push-ups / Squats** | Camera (MediaPipe) | On-device Pose Estimation (Skeleton tracking) at 15 FPS. | Medium/High |
+| **Dungeon Clearing** | Geofencing | Radius-based entry/exit triggers (Google Maps API). | Low |
 
-### 7. Success Metrics (KPIs)
-*   Completion rate %.
-*   Fraud detection accuracy.
-*   Partner ROI (foot traffic increase).
-*   Weekly revenue (target: `$250+`).
+### 2. Tech Stack Recommendation
+* **Frontend/Mobile:** Flutter (Handles ARCore/ARKit and maps efficiently).
+* **Backend:** Python (FastAPI) for high-performance ML integration.
+* **Database:** Firebase (Auth, Real-time state) + PostgreSQL (Relational data for economy/territory).
+* **ML Framework:** MediaPipe (On-device Pose Estimation), Scikit-learn (Accelerometer anomaly detection).
 
-## 🏗️ PHASE 2: DESIGN & ARCHITECTURE
+---
 
-### 1. High-Level Architecture
+## VI. SDLC – MVP Implementation Plan (Phase 1 & 2)
 
-```text
-Mobile App (Flutter / React Native)  
-↓  
-API Gateway (FastAPI / Node)  
-↓  
-Backend Services  
-├── Tracking Service  
-├── Verification Engine (ML + Rules)  
-├── Reward Engine  
-└── Merchant Service  
-↓  
-Database (PostgreSQL / DynamoDB)  
-↓  
-ML Pipeline (Python - PyTorch / Sklearn)  
-```
+### 1. Scope (The Bedford Pilot)
+* **Zone:** DeWolf Park to Sunnyside Mall.
+* **Users:** ~50 testers per bounty.
+* **Constraint:** Avoid direct live-road speed quests for safety. Rely on "Stay in the Zone" park quests.
 
-### 2. Verification Engine (Core Design)
+### 2. Core User Stories (MVP)
+* **Epic 1: Participation:**
+    * *Story 1.1:* As a user, I want to see nearby bounties on a map so I can choose a challenge.
+    * *Story 1.2:* As a user, I want to open my camera after a quest to claim an AR Treasure Chest on the ground.
+* **Epic 2: Verification (Anti-Cheat):**
+    * *Story 2.1:* As the system, I will verify GPS coordinates within a 30m polygon to ensure physical presence.
+    * *Story 2.2:* As the system, I will analyze accelerometer arrays to classify human stride vs. phone shaking (85% confidence required).
+* **Epic 3: Business Flow:**
+    * *Story 3.1:* As a merchant, I want to define a reward amount, max users, and pay a pilot fee to place a chest at my storefront.
 
-*   **Rule-Based Layer (Fast):**
-    *   Geo-fencing
-    *   Speed threshold
-    *   Time consistency
-*   **ML Layer (Advanced):**
-    *   **Input:** Accelerometer time series
-    *   **Features:** Frequency patterns, Step periodicity
-    *   **Model:** Random Forest / LSTM (future)
-    *   **Output:** `VALID` / `INVALID`
-
-### 3. Data Flow
-User runs → GPS + Sensor data collected → Sent to backend → Verification engine processes → Decision returned → Reward issued or rejected.
-
-### 4. Database Design (Simplified Tables)
-*   Users
-*   Bounties
-*   Sessions
-*   SensorData
-*   Rewards
-*   Merchants
-
-### 5. Tech Stack Recommendation
-
-*   **Backend:** Python (**FastAPI**)
-*   **ML:** PyTorch / Scikit-learn
-*   **Mobile:** Flutter *(best for speed + UI)*
-*   **Infrastructure:**
-    *   **AWS:** EC2 / Lambda, DynamoDB / RDS, S3 for logs.
-
-### 6. Risk Analysis
-
-| Risk | Mitigation |
+### 3. Risk Mitigation
+| Risk | Mitigation Strategy |
 | :--- | :--- |
-| **GPS spoofing** | Sensor fusion |
-| **Fake motion** | ML cadence detection |
-| **Low adoption** | Gamification |
-| **Merchant churn** | ROI tracking dashboard |
+| **GPS Spoofing** | Cross-check sudden coordinate jumps with realistic acceleration constraints. |
+| **Cheating (Shaking)** | Train ML model on accelerometer frequency patterns to reject non-human rhythms. |
+| **Live Betting Latency** | Force MVP betting/challenges to be **Asynchronous** (beat a ghost score) rather than live 1v1 video syncs. |
+| **Avatar Body-Shaming** | Avoid strict BMI visual morphing; let users choose their Class "Path" (Strength/Cardio). |
