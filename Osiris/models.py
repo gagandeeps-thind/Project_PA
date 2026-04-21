@@ -3,6 +3,12 @@ from sqlalchemy.orm import relationship
 from database import Base
 import datetime
 
+
+def _default_now_naive_utc():
+    """Naive UTC timestamp (tz stripped) for SQLite-compatible storage.
+    Server-side fallback default; most timestamps now flow from the client device."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
 class User(Base):
     __tablename__ = "users"
 
@@ -20,7 +26,17 @@ class User(Base):
     cumulative_area = Column(Float, default=0.0)  # Total km2 owned
     xp = Column(Integer, default=0)
     streak = Column(Integer, default=0)
-    last_activity_date = Column(DateTime, default=datetime.datetime.utcnow)
+    last_activity_date = Column(DateTime, default=_default_now_naive_utc)
+
+    # Virtual in-game currency (Phase 1 MVP — becomes real-world convertible in Phase 2)
+    mana_crystals = Column(Integer, default=100)
+
+    # Party Attribute Stats — accumulate on every verified activity, drive Party Role assignment.
+    # MVP keeps these as running totals; Phase 2 will recompute from a 30-day rolling ActivityLog.
+    str_stat = Column(Integer, default=0)  # Push-ups, squats, resistance
+    agi_stat = Column(Integer, default=0)  # Sprint, burpees, high-cadence
+    end_stat = Column(Integer, default=0)  # Long runs, walks, sustained volume
+    con_stat = Column(Integer, default=0)  # Planks, holds, streak precision
 
     # Relationships
     domains = relationship("Domain", back_populates="owner")
@@ -38,7 +54,11 @@ class Domain(Base):
     area_sqkm = Column(Float, default=0.0)
     defense_score = Column(Integer, default=0)
     defense_type = Column(String) # e.g., 'pushups'
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+    # Ownership economy: 0 = free tier (unprotected), >0 = paid tier.
+    # vault_balance doubles as the required Challenger Match amount for a siege.
+    vault_balance = Column(Integer, default=0)
 
     owner = relationship("User", back_populates="domains")
 
@@ -48,4 +68,24 @@ class SiegeLog(Base):
     challenger_id = Column(Integer, ForeignKey("users.id"))
     target_domain_id = Column(Integer, ForeignKey("domains.id"))
     status = Column(String, default="pending_feat") # pending_feat, won, failed
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+    # Snapshot of defender's score at siege creation — immutable for fair resolution
+    defender_score_snapshot = Column(Integer, default=0)
+    # Set on resolution
+    challenger_fee = Column(Integer, default=0)      # Crystals staked by challenger (0 for free-tier targets)
+    challenger_score = Column(Integer, nullable=True) # Defense Feat score submitted to resolve
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class SiegeDiscount(Base):
+    """Retry discount credit: created when a challenger fails a paid-tier siege. 20% of the forfeit
+    is stored here and auto-applied on their next attempt against the same target_domain_id."""
+    __tablename__ = "siege_discounts"
+    id = Column(Integer, primary_key=True, index=True)
+    challenger_id = Column(Integer, ForeignKey("users.id"), index=True)
+    target_domain_id = Column(Integer, ForeignKey("domains.id"), index=True)
+    amount = Column(Integer, default=0)               # Crystals of discount available
+    consumed = Column(Integer, default=0)             # 0 = available, 1 = already applied
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+    consumed_at = Column(DateTime, nullable=True)

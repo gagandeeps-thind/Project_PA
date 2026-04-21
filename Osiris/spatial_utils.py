@@ -49,3 +49,38 @@ def check_velocity_violation(coords: list, max_speed_kmh: float = 25.0) -> bool:
             if speed > max_speed_kmh:
                 return True # Violation detected!
     return False
+
+def point_in_polygon(x: float, y: float, polygon: list) -> bool:
+    """Ray casting algorithm to determine if a point (x=lng, y=lat) is inside a polygon."""
+    n = len(polygon)
+    inside = False
+    
+    def get_coords(pt):
+        if isinstance(pt, dict):
+            return pt['lng'], pt['lat']
+        return pt.lng, pt.lat
+
+    p1x, p1y = get_coords(polygon[0])
+    for i in range(1, n + 1):
+        p2x, p2y = get_coords(polygon[i % n])
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+def is_polygon_swallowed(target_coords: list, challenger_coords: list) -> bool:
+    """
+    Checks if a target polygon is completely swallowed by a challenger polygon.
+    Returns True if ALL points of the target_coords are inside the challenger_coords.
+    """
+    for pt in target_coords:
+        x = pt['lng'] if isinstance(pt, dict) else pt.lng
+        y = pt['lat'] if isinstance(pt, dict) else pt.lat
+        if not point_in_polygon(x, y, challenger_coords):
+            return False
+    return True
