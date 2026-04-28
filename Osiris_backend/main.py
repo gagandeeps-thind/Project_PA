@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 import json
+import secrets
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
 from sqlalchemy.orm import Session
 # bcrypt: Used to securely scramble (hash) passwords so they aren't saved as plain text.
@@ -162,6 +163,78 @@ class PartyRoleResponse(BaseModel):
     end_stat: int
     con_stat: int
     leading_stat: str
+
+# --- Epic 1: Bounty Board Pydantic shapes ---
+
+# JSON to register a B2B Merchant
+class MerchantCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str = Field(..., max_length=12)
+    business_type: str = "general"
+
+class MerchantResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    business_type: str
+
+    class Config:
+        from_attributes = True
+
+# JSON to seed a Bounty (admin / merchant)
+class BountyCreate(BaseModel):
+    title: str
+    description: str
+    bounty_type: str = "daily"               # 'daily' | 'merchant_chest'
+    merchant_id: Optional[int] = None
+    target_lat: float
+    target_lng: float
+    radius_m: float = 30.0
+    activity_type: str = "walk"
+    target_score: int = Field(0, ge=0)        # 0 = proximity-only
+    xp_reward: int = Field(50, ge=0)
+    crystal_reward: int = Field(0, ge=0)
+    coupon_text: Optional[str] = None
+    max_completions: int = Field(50, gt=0)
+    expires_at: Optional[datetime] = None
+
+# Returned in the nearby-listing — includes computed distance from the caller.
+class BountySummary(BaseModel):
+    id: int
+    title: str
+    description: str
+    bounty_type: str
+    target_lat: float
+    target_lng: float
+    radius_m: float
+    activity_type: str
+    target_score: int
+    xp_reward: int
+    crystal_reward: int
+    has_coupon: bool
+    completions_remaining: int
+    distance_km: float
+
+# JSON to claim a bounty
+class BountyCompleteRequest(BaseModel):
+    user_id: int
+    user_lat: float
+    user_lng: float
+    score: int = Field(..., ge=0)
+    device_timestamp: datetime
+
+# JSON returned after a successful bounty claim
+class BountyCompleteResponse(BaseModel):
+    bounty_id: int
+    completed: bool
+    xp_awarded: int
+    crystals_awarded: int
+    stat_incremented: Optional[str]
+    coupon_code: Optional[str]
+    coupon_text: Optional[str]
+    new_rank: str
+    message: str
 
 # --- Core Business Logic ---
 
@@ -622,6 +695,195 @@ async def get_user_party_role(user_id: int, db: Session = Depends(get_db)):
         end_stat=user.end_stat or 0,
         con_stat=user.con_stat or 0,
         leading_stat=leading_stat,
+    )
+
+
+# --- Epic 1: Bounty Board Endpoints ---
+
+@app.post("/api/v1/merchants/register", response_model=MerchantResponse)
+async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
+    """Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.
+    For MVP this is unauthenticated; production will gate it behind a Merchant Portal admin login."""
+    if db.query(models.Merchant).filter(models.Merchant.email == merchant.email).first():
+        raise HTTPException(status_code=400, detail="Merchant email already registered")
+    new = models.Merchant(
+        name=merchant.name,
+        email=merchant.email,
+        hashed_password=get_password_hash(merchant.password),
+        business_type=merchant.business_type,
+    )
+    db.add(new)
+    db.commit()
+    db.refresh(new)
+    return new
+
+
+@app.post("/api/v1/bounties", response_model=BountySummary)
+async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db)):
+    """Seed a bounty. Used by admins for daily quests and by merchants for storefront chests.
+    Geofence radius is in metres; distance to caller is filled with 0 since the creator may not
+    be on-site."""
+    if bounty.bounty_type == "merchant_chest" and bounty.merchant_id is None:
+        raise HTTPException(status_code=400, detail="merchant_chest requires merchant_id")
+    if bounty.merchant_id is not None:
+        if not db.query(models.Merchant).filter(models.Merchant.id == bounty.merchant_id).first():
+            raise HTTPException(status_code=404, detail="Merchant not found")
+
+    new = models.Bounty(
+        title=bounty.title,
+        description=bounty.description,
+        bounty_type=bounty.bounty_type,
+        merchant_id=bounty.merchant_id,
+        target_lat=bounty.target_lat,
+        target_lng=bounty.target_lng,
+        radius_m=bounty.radius_m,
+        activity_type=bounty.activity_type,
+        target_score=bounty.target_score,
+        xp_reward=bounty.xp_reward,
+        crystal_reward=bounty.crystal_reward,
+        coupon_text=bounty.coupon_text,
+        max_completions=bounty.max_completions,
+        expires_at=_to_naive_utc(bounty.expires_at) if bounty.expires_at else None,
+    )
+    db.add(new)
+    db.commit()
+    db.refresh(new)
+    return BountySummary(
+        id=new.id,
+        title=new.title,
+        description=new.description,
+        bounty_type=new.bounty_type,
+        target_lat=new.target_lat,
+        target_lng=new.target_lng,
+        radius_m=new.radius_m,
+        activity_type=new.activity_type,
+        target_score=new.target_score,
+        xp_reward=new.xp_reward,
+        crystal_reward=new.crystal_reward,
+        has_coupon=bool(new.coupon_text),
+        completions_remaining=new.max_completions,
+        distance_km=0.0,
+    )
+
+
+@app.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
+async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db)):
+    """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
+    nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
+    `ST_DWithin` in Phase 2."""
+    now = _now_naive_utc()
+    candidates = (
+        db.query(models.Bounty)
+        .filter(models.Bounty.is_active == 1)
+        .filter(models.Bounty.completions_count < models.Bounty.max_completions)
+        .all()
+    )
+
+    nearby: List[BountySummary] = []
+    for b in candidates:
+        if b.expires_at is not None and b.expires_at <= now:
+            continue
+        dist = spatial_utils.haversine_distance(lat, lng, b.target_lat, b.target_lng)
+        if dist > radius_km:
+            continue
+        nearby.append(BountySummary(
+            id=b.id,
+            title=b.title,
+            description=b.description,
+            bounty_type=b.bounty_type,
+            target_lat=b.target_lat,
+            target_lng=b.target_lng,
+            radius_m=b.radius_m,
+            activity_type=b.activity_type,
+            target_score=b.target_score,
+            xp_reward=b.xp_reward,
+            crystal_reward=b.crystal_reward,
+            has_coupon=bool(b.coupon_text),
+            completions_remaining=max(0, b.max_completions - b.completions_count),
+            distance_km=round(dist, 4),
+        ))
+
+    nearby.sort(key=lambda x: x.distance_km)
+    return nearby
+
+
+@app.post("/api/v1/bounties/{bounty_id}/complete", response_model=BountyCompleteResponse)
+async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db)):
+    """Validates proximity + score, awards XP/crystals, increments the matching attribute stat,
+    and (for merchant chests) issues a single-use coupon code. One claim per user per bounty."""
+    bounty = db.query(models.Bounty).filter(models.Bounty.id == bounty_id).first()
+    if not bounty:
+        raise HTTPException(status_code=404, detail="Bounty not found")
+    if not bounty.is_active:
+        raise HTTPException(status_code=400, detail="Bounty is no longer active")
+    if bounty.completions_count >= bounty.max_completions:
+        raise HTTPException(status_code=400, detail="Bounty has reached its max completions")
+
+    now = _now_naive_utc()
+    if bounty.expires_at is not None and bounty.expires_at <= now:
+        raise HTTPException(status_code=400, detail="Bounty has expired")
+
+    user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Single-claim-per-user enforcement
+    if (
+        db.query(models.BountyCompletion)
+        .filter(
+            models.BountyCompletion.bounty_id == bounty.id,
+            models.BountyCompletion.user_id == user.id,
+        )
+        .first()
+    ):
+        raise HTTPException(status_code=400, detail="You have already claimed this bounty")
+
+    # Proximity check — convert geofence radius from metres to km to match haversine units.
+    dist_km = spatial_utils.haversine_distance(req.user_lat, req.user_lng, bounty.target_lat, bounty.target_lng)
+    if dist_km * 1000.0 > (bounty.radius_m or 0):
+        raise HTTPException(status_code=400, detail="You are outside the bounty's geofence")
+
+    # Score gate — bounties with target_score=0 are proximity-only (e.g., merchant chests).
+    if bounty.target_score > 0 and req.score < bounty.target_score:
+        raise HTTPException(status_code=400, detail=f"Score {req.score} did not meet target {bounty.target_score}")
+
+    # Award rewards
+    device_ts = _to_naive_utc(req.device_timestamp)
+    user.xp += bounty.xp_reward
+    user.mana_crystals += bounty.crystal_reward
+    user.last_activity_date = device_ts
+    user.rank = get_rank(user.xp, user.last_activity_date)
+    stat_touched = increment_stat_from_activity(user, bounty.activity_type, req.score or bounty.target_score)
+
+    # Coupon issuance for merchant chests
+    coupon_code = None
+    if bounty.coupon_text:
+        coupon_code = secrets.token_urlsafe(8).upper()
+
+    completion = models.BountyCompletion(
+        bounty_id=bounty.id,
+        user_id=user.id,
+        score_submitted=req.score,
+        xp_awarded=bounty.xp_reward,
+        crystals_awarded=bounty.crystal_reward,
+        coupon_code_issued=coupon_code,
+        completed_at=device_ts,
+    )
+    bounty.completions_count += 1
+
+    db.add(completion)
+    db.commit()
+
+    return BountyCompleteResponse(
+        bounty_id=bounty.id,
+        completed=True,
+        xp_awarded=bounty.xp_reward,
+        crystals_awarded=bounty.crystal_reward,
+        stat_incremented=stat_touched,
+        coupon_code=coupon_code,
+        coupon_text=bounty.coupon_text,
+        new_rank=user.rank,
+        message=f"Bounty cleared. +{bounty.xp_reward} XP" + (f", +{bounty.crystal_reward} crystals" if bounty.crystal_reward else "") + (f", coupon {coupon_code}" if coupon_code else "") + ".",
     )
 
 

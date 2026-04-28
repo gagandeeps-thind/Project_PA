@@ -223,16 +223,20 @@ All stored timestamps are naive UTC for SQLite compatibility; Phase 2 PostgreSQL
 
 ### 7.2 Core User Stories
 
-**Epic 1 — Participation**
-- *1.1* As a user, I want to see nearby bounties on a map so I can choose a challenge.
-- *1.2* As a user, I want to open my camera after a quest to claim an AR Treasure Chest.
+**Epic 1 — Participation** *(Backend implemented — v2.3)*
+- ✅ *1.1* As a user, I want to see nearby bounties on a map so I can choose a challenge. → `GET /api/v1/bounties/nearby?lat&lng&radius_km`
+- 📋 *1.2* As a user, I want to open my camera after a quest to claim an AR Treasure Chest. → Frontend (Antigravity) — backend already issues coupon codes via merchant_chest bounties.
+- ✅ *1.3* As an admin/merchant, I want to seed bounties at specific GPS coordinates with reward + completion-cap settings. → `POST /api/v1/bounties`, `POST /api/v1/merchants/register`
+- ✅ *1.4* As the system, I will enforce one-claim-per-user, geofence proximity (haversine), score gate, and coupon issuance on `POST /api/v1/bounties/{id}/complete`.
 
 **Epic 2 — Verification (Anti-Cheat)**
 - *2.1* As the system, I will verify GPS coordinates within a 30 m polygon to ensure physical presence.
 - *2.2* As the system, I will analyze accelerometer arrays to classify human stride vs. phone shaking (85% confidence required).
 
-**Epic 3 — Business Flow**
-- *3.1* As a merchant, I want to define reward amount, max users, and pay a pilot fee to place a chest at my storefront.
+**Epic 3 — Business Flow** *(Partially implemented — v2.3)*
+- ✅ *3.1* As a merchant, I want to define reward amount, max users, and place a chest at my storefront. → Covered by `bounty_type='merchant_chest'` on `POST /api/v1/bounties`. Pilot-fee billing deferred.
+- 📋 *3.2* Merchant Portal web dashboard (separate frontend workstream).
+- 📋 *3.3* Pilot-fee invoicing / payment integration.
 
 **Epic 4 — Domain Expansion (Territory Wars)**
 - *4.1* As a user, I want to press "Start Domain" and see a breadcrumb trail of my path on the map.
@@ -277,3 +281,4 @@ See § 7.3 above. Risks are reviewed at the end of every sprint and promoted to 
 | 2.0 | 2026-04-20 | G. Thind | Added Land Ownership Economy (§ 4.4), Siege Resolution flow (§ 4.5), Party Attribute Stats (§ 3.3, Epic 6), Frontend–Backend collaboration model (§ 6.4); reformatted to corporate standard |
 | 2.1 | 2026-04-20 | G. Thind | Epic 5 shipped: virtual Mana Crystals currency confirmed for Phase 1; Vault Lock + Siege Resolve endpoints live; XP-on-claim and siege-win bonus wired; Pot/War-Tax payout formalized |
 | 2.2 | 2026-04-20 | G. Thind | Siege-loss split reworked to 50/30/20 (defender/system/retry-discount); `SiegeDiscount` model + auto-apply on re-attack; device-authoritative timestamps (§ 6.5); Epic 6 shipped — Party Attribute Stats (STR/AGI/END/CON) + `GET /users/{id}/party-role` |
+| 2.3 | 2026-04-20 | G. Thind | Epic 1 (Bounty Board) shipped — `Merchant`/`Bounty`/`BountyCompletion` models; merchant registration; bounty seeding; geofenced nearby discovery; proximity + score-gate completion with coupon issuance |

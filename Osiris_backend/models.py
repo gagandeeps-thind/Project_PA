@@ -89,3 +89,68 @@ class SiegeDiscount(Base):
     consumed = Column(Integer, default=0)             # 0 = available, 1 = already applied
     created_at = Column(DateTime, default=_default_now_naive_utc)
     consumed_at = Column(DateTime, nullable=True)
+
+
+# --- Epic 1: Bounty Board ---
+
+class Merchant(Base):
+    """B2B partner (local business) that can sponsor merchant_chest-type bounties at their storefront."""
+    __tablename__ = "merchants"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    business_type = Column(String, default="general")  # e.g., 'gym', 'cafe', 'retail'
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+    bounties = relationship("Bounty", back_populates="merchant")
+
+
+class Bounty(Base):
+    """A geofenced quest. Two flavors:
+       - 'daily'         : system-issued fitness task (e.g., 20 push-ups in DeWolf Park)
+       - 'merchant_chest': sponsored, often score=0 (just visit), unlocks a coupon
+    """
+    __tablename__ = "bounties"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    description = Column(String)
+    bounty_type = Column(String, default="daily")
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True)
+
+    # Geofence
+    target_lat = Column(Float)
+    target_lng = Column(Float)
+    radius_m = Column(Float, default=30.0)
+
+    # Quest spec — activity_type maps to DEFENSE_TYPE_TO_STAT for stat increment.
+    activity_type = Column(String, default="walk")
+    target_score = Column(Integer, default=0)  # 0 = proximity-only (e.g., merchant chest)
+
+    # Rewards
+    xp_reward = Column(Integer, default=0)
+    crystal_reward = Column(Integer, default=0)
+    coupon_text = Column(String, nullable=True)  # Display text for merchant coupons
+
+    # Lifecycle / pilot caps
+    max_completions = Column(Integer, default=50)   # Bedford pilot constraint
+    completions_count = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Integer, default=1)           # 1 = listable, 0 = retired
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+    merchant = relationship("Merchant", back_populates="bounties")
+
+
+class BountyCompletion(Base):
+    """One row per (user, bounty) successful completion. Enforces single-claim-per-user and
+    is the source of truth for issued coupon codes."""
+    __tablename__ = "bounty_completions"
+    id = Column(Integer, primary_key=True, index=True)
+    bounty_id = Column(Integer, ForeignKey("bounties.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    score_submitted = Column(Integer, default=0)
+    xp_awarded = Column(Integer, default=0)
+    crystals_awarded = Column(Integer, default=0)
+    coupon_code_issued = Column(String, nullable=True)
+    completed_at = Column(DateTime, default=_default_now_naive_utc)
