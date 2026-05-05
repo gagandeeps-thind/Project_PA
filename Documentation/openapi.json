@@ -1,0 +1,1734 @@
+{
+  "components": {
+    "schemas": {
+      "AccelerometerSample": {
+        "properties": {
+          "ax": {
+            "title": "Ax",
+            "type": "number"
+          },
+          "ay": {
+            "title": "Ay",
+            "type": "number"
+          },
+          "az": {
+            "title": "Az",
+            "type": "number"
+          },
+          "t_ms": {
+            "minimum": 0.0,
+            "title": "T Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "t_ms",
+          "ax",
+          "ay",
+          "az"
+        ],
+        "title": "AccelerometerSample",
+        "type": "object"
+      },
+      "ActivityProof": {
+        "properties": {
+          "accelerometer": {
+            "items": {
+              "$ref": "#/components/schemas/AccelerometerSample"
+            },
+            "title": "Accelerometer",
+            "type": "array"
+          },
+          "activity_type": {
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "declared_score": {
+            "minimum": 0.0,
+            "title": "Declared Score",
+            "type": "integer"
+          },
+          "device_timestamp": {
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "pose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "activity_type",
+          "declared_score",
+          "duration_seconds",
+          "device_timestamp"
+        ],
+        "title": "ActivityProof",
+        "type": "object"
+      },
+      "AuthLoginRequest": {
+        "properties": {
+          "device_timestamp": {
+            "description": "Client device's current datetime (ISO 8601)",
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 12,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "device_timestamp"
+        ],
+        "title": "AuthLoginRequest",
+        "type": "object"
+      },
+      "AuthLoginResponse": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "id",
+          "email",
+          "name",
+          "message"
+        ],
+        "title": "AuthLoginResponse",
+        "type": "object"
+      },
+      "BountyCompleteRequest": {
+        "properties": {
+          "device_timestamp": {
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          },
+          "score": {
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "score_proof": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActivityProof"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "user_lat": {
+            "title": "User Lat",
+            "type": "number"
+          },
+          "user_lng": {
+            "title": "User Lng",
+            "type": "number"
+          }
+        },
+        "required": [
+          "user_id",
+          "user_lat",
+          "user_lng",
+          "score",
+          "device_timestamp"
+        ],
+        "title": "BountyCompleteRequest",
+        "type": "object"
+      },
+      "BountyCompleteResponse": {
+        "properties": {
+          "bounty_id": {
+            "title": "Bounty Id",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "coupon_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Code"
+          },
+          "coupon_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Text"
+          },
+          "crystals_awarded": {
+            "title": "Crystals Awarded",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "new_rank": {
+            "title": "New Rank",
+            "type": "string"
+          },
+          "stat_incremented": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stat Incremented"
+          },
+          "xp_awarded": {
+            "title": "Xp Awarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bounty_id",
+          "completed",
+          "xp_awarded",
+          "crystals_awarded",
+          "stat_incremented",
+          "coupon_code",
+          "coupon_text",
+          "new_rank",
+          "message"
+        ],
+        "title": "BountyCompleteResponse",
+        "type": "object"
+      },
+      "BountyCreate": {
+        "properties": {
+          "activity_type": {
+            "default": "walk",
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "bounty_type": {
+            "default": "daily",
+            "title": "Bounty Type",
+            "type": "string"
+          },
+          "coupon_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Text"
+          },
+          "crystal_reward": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Crystal Reward",
+            "type": "integer"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "max_completions": {
+            "default": 50,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Completions",
+            "type": "integer"
+          },
+          "merchant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Id"
+          },
+          "radius_m": {
+            "default": 30.0,
+            "title": "Radius M",
+            "type": "number"
+          },
+          "target_lat": {
+            "title": "Target Lat",
+            "type": "number"
+          },
+          "target_lng": {
+            "title": "Target Lng",
+            "type": "number"
+          },
+          "target_score": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Target Score",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "xp_reward": {
+            "default": 50,
+            "minimum": 0.0,
+            "title": "Xp Reward",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "target_lat",
+          "target_lng"
+        ],
+        "title": "BountyCreate",
+        "type": "object"
+      },
+      "BountySummary": {
+        "properties": {
+          "activity_type": {
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "bounty_type": {
+            "title": "Bounty Type",
+            "type": "string"
+          },
+          "completions_remaining": {
+            "title": "Completions Remaining",
+            "type": "integer"
+          },
+          "crystal_reward": {
+            "title": "Crystal Reward",
+            "type": "integer"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "distance_km": {
+            "title": "Distance Km",
+            "type": "number"
+          },
+          "has_coupon": {
+            "title": "Has Coupon",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "radius_m": {
+            "title": "Radius M",
+            "type": "number"
+          },
+          "target_lat": {
+            "title": "Target Lat",
+            "type": "number"
+          },
+          "target_lng": {
+            "title": "Target Lng",
+            "type": "number"
+          },
+          "target_score": {
+            "title": "Target Score",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "xp_reward": {
+            "title": "Xp Reward",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "bounty_type",
+          "target_lat",
+          "target_lng",
+          "radius_m",
+          "activity_type",
+          "target_score",
+          "xp_reward",
+          "crystal_reward",
+          "has_coupon",
+          "completions_remaining",
+          "distance_km"
+        ],
+        "title": "BountySummary",
+        "type": "object"
+      },
+      "Coordinate": {
+        "properties": {
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "title": "Lng",
+            "type": "number"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "timestamp"
+        ],
+        "title": "Coordinate",
+        "type": "object"
+      },
+      "DomainCreate": {
+        "properties": {
+          "coordinates": {
+            "items": {
+              "$ref": "#/components/schemas/Coordinate"
+            },
+            "title": "Coordinates",
+            "type": "array"
+          },
+          "defense_proof": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActivityProof"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defense_score": {
+            "title": "Defense Score",
+            "type": "integer"
+          },
+          "defense_type": {
+            "default": "pushups",
+            "title": "Defense Type",
+            "type": "string"
+          },
+          "device_timestamp": {
+            "description": "Client device's current datetime (ISO 8601)",
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          },
+          "owner_id": {
+            "title": "Owner Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "owner_id",
+          "coordinates",
+          "defense_score",
+          "device_timestamp"
+        ],
+        "title": "DomainCreate",
+        "type": "object"
+      },
+      "DomainResponse": {
+        "properties": {
+          "area_sqkm": {
+            "title": "Area Sqkm",
+            "type": "number"
+          },
+          "defense_score": {
+            "title": "Defense Score",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "sieges_triggered": {
+            "default": 0,
+            "title": "Sieges Triggered",
+            "type": "integer"
+          },
+          "xp_awarded": {
+            "default": 0,
+            "title": "Xp Awarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "area_sqkm",
+          "defense_score",
+          "message"
+        ],
+        "title": "DomainResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MerchantCreate": {
+        "properties": {
+          "business_type": {
+            "default": "general",
+            "title": "Business Type",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 12,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
+        "title": "MerchantCreate",
+        "type": "object"
+      },
+      "MerchantResponse": {
+        "properties": {
+          "business_type": {
+            "title": "Business Type",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "business_type"
+        ],
+        "title": "MerchantResponse",
+        "type": "object"
+      },
+      "PartyRoleResponse": {
+        "properties": {
+          "agi_stat": {
+            "title": "Agi Stat",
+            "type": "integer"
+          },
+          "con_stat": {
+            "title": "Con Stat",
+            "type": "integer"
+          },
+          "end_stat": {
+            "title": "End Stat",
+            "type": "integer"
+          },
+          "leading_stat": {
+            "title": "Leading Stat",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "str_stat": {
+            "title": "Str Stat",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "role",
+          "str_stat",
+          "agi_stat",
+          "end_stat",
+          "con_stat",
+          "leading_stat"
+        ],
+        "title": "PartyRoleResponse",
+        "type": "object"
+      },
+      "PlatformRevenueSummary": {
+        "properties": {
+          "by_source": {
+            "additionalProperties": true,
+            "title": "By Source",
+            "type": "object"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "total_crystals": {
+            "title": "Total Crystals",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_crystals",
+          "by_source",
+          "row_count"
+        ],
+        "title": "PlatformRevenueSummary",
+        "type": "object"
+      },
+      "PoseSummary": {
+        "properties": {
+          "avg_rep_duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rep Duration Ms"
+          },
+          "max_joint_angle_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Joint Angle Deg"
+          },
+          "min_joint_angle_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Joint Angle Deg"
+          },
+          "rep_count": {
+            "minimum": 0.0,
+            "title": "Rep Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rep_count"
+        ],
+        "title": "PoseSummary",
+        "type": "object"
+      },
+      "SiegeResolveRequest": {
+        "properties": {
+          "challenger_proof": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActivityProof"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "challenger_score": {
+            "minimum": 0.0,
+            "title": "Challenger Score",
+            "type": "integer"
+          },
+          "device_timestamp": {
+            "description": "Client device's current datetime (ISO 8601)",
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenger_score",
+          "device_timestamp"
+        ],
+        "title": "SiegeResolveRequest",
+        "type": "object"
+      },
+      "SiegeResolveResponse": {
+        "properties": {
+          "challenger_score": {
+            "title": "Challenger Score",
+            "type": "integer"
+          },
+          "crystals_awarded": {
+            "title": "Crystals Awarded",
+            "type": "integer"
+          },
+          "defender_score": {
+            "title": "Defender Score",
+            "type": "integer"
+          },
+          "discount_applied": {
+            "default": 0,
+            "title": "Discount Applied",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "new_discount_banked": {
+            "default": 0,
+            "title": "New Discount Banked",
+            "type": "integer"
+          },
+          "siege_id": {
+            "title": "Siege Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "xp_awarded": {
+            "title": "Xp Awarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "siege_id",
+          "status",
+          "defender_score",
+          "challenger_score",
+          "crystals_awarded",
+          "xp_awarded",
+          "message"
+        ],
+        "title": "SiegeResolveResponse",
+        "type": "object"
+      },
+      "UserCreate": {
+        "properties": {
+          "device_timestamp": {
+            "description": "Client device's current datetime (ISO 8601)",
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "height_m": {
+            "description": "Height in meters must be greater than 0",
+            "exclusiveMinimum": 0.0,
+            "title": "Height M",
+            "type": "number"
+          },
+          "password": {
+            "description": "Password cannot exceed 72 characters",
+            "maxLength": 12,
+            "title": "Password",
+            "type": "string"
+          },
+          "preferred_path": {
+            "default": "Balance",
+            "title": "Preferred Path",
+            "type": "string"
+          },
+          "weight_kg": {
+            "description": "Weight in kg must be greater than 0",
+            "exclusiveMinimum": 0.0,
+            "title": "Weight Kg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "weight_kg",
+          "height_m",
+          "device_timestamp"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
+      "UserLogin": {
+        "properties": {
+          "device_timestamp": {
+            "description": "Client device's current datetime (ISO 8601)",
+            "format": "date-time",
+            "title": "Device Timestamp",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 12,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "device_timestamp"
+        ],
+        "title": "UserLogin",
+        "type": "object"
+      },
+      "UserProfile": {
+        "properties": {
+          "agi_stat": {
+            "title": "Agi Stat",
+            "type": "integer"
+          },
+          "avatar_class": {
+            "title": "Avatar Class",
+            "type": "string"
+          },
+          "bmi": {
+            "title": "Bmi",
+            "type": "number"
+          },
+          "con_stat": {
+            "title": "Con Stat",
+            "type": "integer"
+          },
+          "cumulative_area": {
+            "title": "Cumulative Area",
+            "type": "number"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "end_stat": {
+            "title": "End Stat",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_activity_date": {
+            "format": "date-time",
+            "title": "Last Activity Date",
+            "type": "string"
+          },
+          "mana_crystals": {
+            "title": "Mana Crystals",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "string"
+          },
+          "str_stat": {
+            "title": "Str Stat",
+            "type": "integer"
+          },
+          "streak": {
+            "title": "Streak",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "bmi",
+          "avatar_class",
+          "xp",
+          "rank",
+          "title",
+          "cumulative_area",
+          "last_activity_date",
+          "streak",
+          "mana_crystals",
+          "str_stat",
+          "agi_stat",
+          "end_stat",
+          "con_stat"
+        ],
+        "title": "UserProfile",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VaultLockRequest": {
+        "properties": {
+          "amount": {
+            "description": "Target vault balance in Mana Crystals",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "amount"
+        ],
+        "title": "VaultLockRequest",
+        "type": "object"
+      },
+      "VaultLockResponse": {
+        "properties": {
+          "crystals_spent": {
+            "title": "Crystals Spent",
+            "type": "integer"
+          },
+          "domain_id": {
+            "title": "Domain Id",
+            "type": "integer"
+          },
+          "mana_crystals_remaining": {
+            "title": "Mana Crystals Remaining",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "vault_balance": {
+            "title": "Vault Balance",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain_id",
+          "vault_balance",
+          "crystals_spent",
+          "mana_crystals_remaining",
+          "message"
+        ],
+        "title": "VaultLockResponse",
+        "type": "object"
+      },
+      "VerificationResult": {
+        "properties": {
+          "activity_type": {
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "verified_score": {
+            "title": "Verified Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "verified",
+          "confidence",
+          "verified_score",
+          "activity_type",
+          "flags"
+        ],
+        "title": "VerificationResult",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Verified Fitness Reward System API",
+    "version": "1.0-MVP"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/api/v1/activities/verify": {
+      "post": {
+        "description": "Stateless preview of the ML Referee. The frontend can call this to confirm a workout\nwill pass before submitting the real action (claim, siege, bounty). No DB writes.",
+        "operationId": "verify_activity_endpoint_api_v1_activities_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivityProof"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Activity Endpoint"
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Role-aware login. Probes Admin \u2192 Merchant \u2192 User in that order; the first table that\ncontains the email **and** matches the password wins. Returns `{role, id, email, name}`\nso the Flutter app can route into admin / merchant / game UI accordingly.\n\nProbe order matters: admins are most privileged, so they're checked first to ensure\nthat if Gagan accidentally creates a player account with the same email as the admin\naccount (very unlikely), admin still wins.",
+        "operationId": "auth_login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auth Login"
+      }
+    },
+    "/api/v1/bounties": {
+      "post": {
+        "description": "Seed a bounty. Used by admins for daily quests and by merchants for storefront chests.\nGeofence radius is in metres; distance to caller is filled with 0 since the creator may not\nbe on-site.",
+        "operationId": "create_bounty_api_v1_bounties_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BountyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BountySummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Bounty"
+      }
+    },
+    "/api/v1/bounties/nearby": {
+      "get": {
+        "description": "Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted\nnearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with\n`ST_DWithin` in Phase 2.",
+        "operationId": "get_nearby_bounties_api_v1_bounties_nearby_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "radius_km",
+            "required": false,
+            "schema": {
+              "default": 5.0,
+              "title": "Radius Km",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BountySummary"
+                  },
+                  "title": "Response Get Nearby Bounties Api V1 Bounties Nearby Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Nearby Bounties"
+      }
+    },
+    "/api/v1/bounties/{bounty_id}/complete": {
+      "post": {
+        "description": "Validates proximity + score, awards XP/crystals, increments the matching attribute stat,\nand (for merchant chests) issues a single-use coupon code. One claim per user per bounty.",
+        "operationId": "complete_bounty_api_v1_bounties__bounty_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bounty_id",
+            "required": true,
+            "schema": {
+              "title": "Bounty Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BountyCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BountyCompleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Bounty"
+      }
+    },
+    "/api/v1/domains": {
+      "post": {
+        "description": "Processes a completed Domain Trace, validates anti-cheat, and claims the territory.",
+        "operationId": "submit_domain_api_v1_domains_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DomainCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Domain"
+      }
+    },
+    "/api/v1/domains/{domain_id}/vault": {
+      "post": {
+        "description": "Lock (or top up) an Ownership Fee on a domain. Crystals are deducted from the owner's\nwallet and added to the domain's Vault. Vault balance doubles as the required Challenger\nMatch amount. Topping up is allowed; unlocking (lowering) is deferred to Phase 2.",
+        "operationId": "lock_vault_api_v1_domains__domain_id__vault_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "title": "Domain Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lock Vault"
+      }
+    },
+    "/api/v1/login": {
+      "post": {
+        "description": "Player-only login. Kept for backward compatibility; new clients should use the\nrole-aware `/api/v1/auth/login` endpoint and switch UI based on the returned `role`.",
+        "operationId": "login_user_api_v1_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login User"
+      }
+    },
+    "/api/v1/merchants/register": {
+      "post": {
+        "description": "Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.\nFor MVP this is unauthenticated; production will gate it behind a Merchant Portal admin login.",
+        "operationId": "register_merchant_api_v1_merchants_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Merchant"
+      }
+    },
+    "/api/v1/onboard": {
+      "post": {
+        "description": "API Endpoint to register a new user, calculate their stats, and assign an avatar.",
+        "operationId": "onboard_user_api_v1_onboard_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Onboard User"
+      }
+    },
+    "/api/v1/platform/revenue": {
+      "get": {
+        "description": "Aggregates the PlatformRevenue ledger so admins can audit total platform earnings and\nthe breakdown by source. Read-only; safe to expose internally during MVP. Production will\ngate this behind an admin role.",
+        "operationId": "get_platform_revenue_api_v1_platform_revenue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformRevenueSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Platform Revenue"
+      }
+    },
+    "/api/v1/sieges/{siege_id}/resolve": {
+      "post": {
+        "description": "Resolve a pending siege. Challenger submits their Defense Feat score.\nWIN: defender's polygon erased, pot (defender vault + challenger match) paid 80/20 to\n     challenger/system.\nLOSS: challenger's match is split 50% to defender vault / 30% to system / 20% banked as a\n      retry-discount against the same target_domain_id for this challenger.\nAny unconsumed retry discount for this challenger+domain pair is auto-applied to reduce\nthe challenger's out-of-pocket match on this attempt.",
+        "operationId": "resolve_siege_api_v1_sieges__siege_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "siege_id",
+            "required": true,
+            "schema": {
+              "title": "Siege Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiegeResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiegeResolveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Siege"
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "get": {
+        "description": "Fetches the latest stats, Rank, and XP for the app dashboard.",
+        "operationId": "get_user_profile_api_v1_users__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get User Profile"
+      }
+    },
+    "/api/v1/users/{user_id}/party-role": {
+      "get": {
+        "description": "Returns the user's Party Role. Two modes:\n   - default (no `window_days`)  \u2192 lifetime totals on `User.{str/agi/end/con}_stat`\n   - `?window_days=N`            \u2192 rolling sum of `ActivityLog.score` per stat over the\n                                   last N days, computed from `occurred_at`.\n\nPhase 1 wrote stats only as lifetime totals; v2.7 adds the ActivityLog-backed rolling\npath so the 30-day Party Role can flip even if a user's career totals stay unchanged.",
+        "operationId": "get_user_party_role_api_v1_users__user_id__party_role_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Window Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartyRoleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get User Party Role"
+      }
+    }
+  }
+}

@@ -80,16 +80,17 @@ class DashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.map),
               label: const Text('DOMAIN EXPANSION'),
               style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
             const SizedBox(height: 16),
-            // Bounty Board Action (Placeholder for Epic 4)
+            // Bounty Board Action
             ElevatedButton.icon(
               onPressed: () {
-                // Navigate to Bounty Board
+                Navigator.pushNamed(context, '/bounties');
               },
-              icon: const Icon(Icons.list_alt),
+              icon: const Icon(Icons.explore),
               label: const Text('BOUNTY BOARD'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.surface,
@@ -97,24 +98,34 @@ class DashboardScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
+            const SizedBox(height: 16),
+            // Vault Action
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(context, '/vault');
+              },
+              icon: const Icon(Icons.diamond),
+              label: const Text('THE VAULT'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.secondary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
             const SizedBox(height: 24),
-            // Stats Grid
-            const Text('PARTY STATS', style: TextStyle(color: AppTheme.secondary, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 2.5,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              children: [
-                _StatTile('STR', userProfile.strStat, Colors.redAccent),
-                _StatTile('AGI', userProfile.agiStat, Colors.orangeAccent),
-                _StatTile('END', userProfile.endStat, Colors.blueAccent),
-                _StatTile('CON', userProfile.conStat, Colors.greenAccent),
-              ],
-            )
+            // Adventure Profile Action
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(context, '/profile');
+              },
+              icon: const Icon(Icons.person),
+              label: const Text('ADVENTURE PROFILE'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.surface,
+                foregroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
           ],
         ),
       ),
@@ -122,29 +133,3 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _StatTile extends StatelessWidget {
-  final String label;
-  final int value;
-  final Color color;
-
-  const _StatTile(this.label, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
-          Text(value.toString(), style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}

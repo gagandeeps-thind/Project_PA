@@ -7,6 +7,7 @@ class AppTheme {
   static const Color primary = Color(0xFF9D4EDD);    // Purple crystal theme
   static const Color secondary = Color(0xFF03DAC6);  // Teal accent
   static const Color error = Color(0xFFCF6679);
+  static const Color success = Color(0xFF4CAF50);
   static const Color textPrimary = Color(0xFFE0E0E0);
   static const Color textSecondary = Color(0xFFAAAAAA);
 

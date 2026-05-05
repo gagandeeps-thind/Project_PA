@@ -7,6 +7,12 @@ import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/map_screen.dart';
+import 'screens/bounty_board_screen.dart';
+import 'screens/bounty_detail_screen.dart';
+import 'screens/vault_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
+import 'screens/merchant_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +34,6 @@ class OsirisApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Determine the initial route based on session state
-    // For MVP we just use simple Navigator 1.0 logic or flutter routes.
     return MaterialApp(
       title: 'Osiris',
       theme: AppTheme.darkTheme,
@@ -41,6 +45,12 @@ class OsirisApp extends ConsumerWidget {
         '/onboard': (context) => const OnboardingScreen(),
         '/dashboard': (context) => const DashboardScreen(),
         '/map': (context) => const MapScreen(),
+        '/bounties': (context) => const BountyBoardScreen(),
+        '/bounty_detail': (context) => const BountyDetailScreen(),
+        '/vault': (context) => const VaultScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/admin': (context) => const AdminDashboardScreen(),
+        '/merchant': (context) => const MerchantDashboardScreen(),
       },
     );
   }
@@ -56,7 +66,13 @@ class AuthWrapper extends ConsumerWidget {
     if (userProfile == null) {
       return const LoginScreen();
     } else {
-      return const DashboardScreen();
+      if (userProfile.role == 'admin') {
+        return const AdminDashboardScreen();
+      } else if (userProfile.role == 'merchant') {
+        return const MerchantDashboardScreen();
+      } else {
+        return const DashboardScreen();
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 {
     "editor.fontSize": 6,
     "editor.minimap.sectionHeaderFontSize": 5,
-    "screencastMode.fontSize": 20
+    "screencastMode.fontSize": 20,
+    "chat.fontSize": 10
 }

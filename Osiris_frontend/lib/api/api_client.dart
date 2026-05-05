@@ -43,7 +43,7 @@ class ApiClient {
     required String password,
     required String deviceTimestamp,
   }) async {
-    final response = await _dio.post('/api/v1/login', data: {
+    final response = await _dio.post('/api/v1/auth/login', data: {
       'email': email,
       'password': password,
       'device_timestamp': deviceTimestamp,
@@ -78,6 +78,19 @@ class ApiClient {
 
   Future<Map<String, dynamic>> completeBounty(int bountyId, Map<String, dynamic> data) async {
     final response = await _dio.post('/api/v1/bounties/$bountyId/complete', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getPartyRole(int userId, {int? windowDays}) async {
+    final queryParams = <String, dynamic>{};
+    if (windowDays != null) {
+      queryParams['window_days'] = windowDays;
+    }
+    final response = await _dio.get('/api/v1/users/$userId/party-role', queryParameters: queryParams);
+    return response.data;
+  }
+  Future<Map<String, dynamic>> getPlatformRevenue() async {
+    final response = await _dio.get('/api/v1/platform/revenue');
     return response.data;
   }
 }

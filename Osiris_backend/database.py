@@ -1,10 +1,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # We use SQLite for local development. It will create a file named 'fitness_mvp.db'
 # NOTE: For Production Phase 2 (Domain Expansion), this MUST be migrated to 
 # PostgreSQL with the PostGIS extension to handle spatial polygon intersect queries.
-SQLALCHEMY_DATABASE_URL = "sqlite:///./fitness_mvp.db"
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'fitness_mvp.db')}"
 
 # The engine is the actual connection to the database.
 # (check_same_thread=False is a specific requirement just for SQLite in FastAPI)

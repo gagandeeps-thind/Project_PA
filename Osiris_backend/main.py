@@ -7,24 +7,44 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 import json
 import secrets
+import hashlib
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
 from sqlalchemy.orm import Session
 # bcrypt: Used to securely scramble (hash) passwords so they aren't saved as plain text.
 import bcrypt
 # APScheduler: Runs background tasks automatically (like a cron job) while the server is running.
 from apscheduler.schedulers.background import BackgroundScheduler
+from contextlib import asynccontextmanager
 
 # Import our newly created database connection and models
 import database
 import models
 import spatial_utils
+import ml_referee
 
-# This line tells SQLAlchemy to look at our models and actually CREATE the tables 
+# This line tells SQLAlchemy to look at our models and actually CREATE the tables
 # in the SQLite database file if they don't exist yet.
 models.Base.metadata.create_all(bind=database.engine)
 
+# Background scheduler — runs the daily-decay cron. Defined before the app so the lifespan
+# handler below can reference it. Job is wired in lifespan(), not at module import.
+scheduler = BackgroundScheduler()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan handler — replaces the deprecated @app.on_event("startup"/"shutdown")
+    pattern. The hourly decay job (process_daily_decay) is wired up on startup and torn down
+    cleanly on shutdown. process_daily_decay is defined later in the module; that's fine
+    because lifespan only runs once the server starts (after full module import)."""
+    scheduler.add_job(process_daily_decay, 'interval', hours=24)
+    scheduler.start()
+    try:
+        yield
+    finally:
+        scheduler.shutdown()
+
 # Initialize the FastAPI application
-app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP")
+app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
 
 # A simple root endpoint to verify the server is running
 @app.get("/")
@@ -79,11 +99,64 @@ class UserLogin(BaseModel):
     password: str = Field(..., max_length=12)
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
 
+# --- Unified auth (v2.8): role-aware login ---
+# Frontend posts to /api/v1/auth/login; backend probes Admin → Merchant → User in that
+# order and returns the matching role. The Flutter app uses `role` to decide which UI tree
+# to render — game vs. merchant portal vs. admin portal.
+
+class AuthLoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., max_length=12)
+    device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
+
+class AuthLoginResponse(BaseModel):
+    role: str          # 'admin' | 'merchant' | 'player'
+    id: int            # role-specific primary key
+    email: EmailStr
+    name: str          # display name
+    message: str
+
 # The JSON shape for a single GPS point in our Domain trace
 class Coordinate(BaseModel):
     lat: float
     lng: float
     timestamp: datetime
+
+# --- Epic 2: ML Referee Pydantic shapes ---
+# (Defined here, ahead of DomainCreate/SiegeResolveRequest/BountyCompleteRequest, because
+# those endpoints embed an optional ActivityProof and need the type already in scope.)
+
+# A single accelerometer sample. `t_ms` is millis since the activity start (client-relative).
+class AccelerometerSample(BaseModel):
+    t_ms: int = Field(..., ge=0)
+    ax: float
+    ay: float
+    az: float
+
+# Summary of MediaPipe pose data extracted on-device. Sent for camera-verified exercises only.
+class PoseSummary(BaseModel):
+    rep_count: int = Field(..., ge=0)
+    min_joint_angle_deg: Optional[float] = None
+    max_joint_angle_deg: Optional[float] = None
+    avg_rep_duration_ms: Optional[float] = None
+
+# The proof envelope a client posts to vouch for an activity.
+class ActivityProof(BaseModel):
+    activity_type: str                                     # pushups | squats | sprint | run | walk | burpees | plank | hold
+    declared_score: int = Field(..., ge=0)
+    duration_seconds: float = Field(..., gt=0)
+    accelerometer: List[AccelerometerSample] = Field(default_factory=list)
+    pose: Optional[PoseSummary] = None
+    device_timestamp: datetime
+
+# Verdict returned by the verifier.
+class VerificationResult(BaseModel):
+    verified: bool
+    confidence: float
+    verified_score: int
+    activity_type: str
+    flags: List[str]
+
 
 # The JSON shape we promise to return to the frontend when sending user data
 class UserProfile(BaseModel):
@@ -114,6 +187,9 @@ class DomainCreate(BaseModel):
     defense_score: int
     defense_type: str = "pushups"
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
+    # Optional ML-Referee proof. If supplied, the server verifies it and uses verified_score
+    # as the canonical defense_score; if rejected, the whole submission 400s.
+    defense_proof: Optional[ActivityProof] = None
 
 # The JSON shape we return after a territory is successfully claimed
 class DomainResponse(BaseModel):
@@ -141,6 +217,9 @@ class VaultLockResponse(BaseModel):
 class SiegeResolveRequest(BaseModel):
     challenger_score: int = Field(..., ge=0)
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
+    # Optional ML-Referee proof for the Defense Feat. If supplied and verified, the
+    # verified_score replaces challenger_score; if rejected, the resolve 400s.
+    challenger_proof: Optional[ActivityProof] = None
 
 # The JSON shape we return after a siege resolves
 class SiegeResolveResponse(BaseModel):
@@ -223,6 +302,9 @@ class BountyCompleteRequest(BaseModel):
     user_lng: float
     score: int = Field(..., ge=0)
     device_timestamp: datetime
+    # Optional ML-Referee proof. If supplied and verified, verified_score replaces `score`;
+    # if rejected, the completion 400s.
+    score_proof: Optional[ActivityProof] = None
 
 # JSON returned after a successful bounty claim
 class BountyCompleteResponse(BaseModel):
@@ -328,6 +410,37 @@ def increment_stat_from_activity(user: models.User, defense_type: str, score: in
     setattr(user, stat_col, (getattr(user, stat_col) or 0) + score)
     return stat_col
 
+def record_activity(
+    db: Session,
+    user: models.User,
+    activity_type: str,
+    score: int,
+    occurred_at: datetime,
+    source: str,
+    related_id: Optional[int] = None,
+    verified: bool = False,
+    confidence: float = 1.0,
+) -> Optional[models.ActivityLog]:
+    """Single entry point for the activity history table. Increments the lifetime stat AND
+    appends an `ActivityLog` row so the 30-day rolling window can be reconstructed.
+    Returns the new log row (uncommitted) or None when score is non-positive."""
+    if score <= 0:
+        return None
+    stat_col = increment_stat_from_activity(user, activity_type, score)
+    log = models.ActivityLog(
+        user_id=user.id,
+        activity_type=(activity_type or "").lower(),
+        score=score,
+        stat_column=stat_col,
+        confidence=confidence,
+        verified=1 if verified else 0,
+        source=source,
+        related_id=related_id,
+        occurred_at=occurred_at,
+    )
+    db.add(log)
+    return log
+
 def get_party_role(user: models.User) -> tuple[str, str]:
     """Returns (role, leading_stat_name) based on the user's highest attribute.
     Ties broken by the order STR > AGI > END > CON (favors melee on equal stats)."""
@@ -389,21 +502,74 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/login", response_model=UserProfile)
 async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
-    """Authenticates a user and returns their profile data for the app to load."""
+    """Player-only login. Kept for backward compatibility; new clients should use the
+    role-aware `/api/v1/auth/login` endpoint and switch UI based on the returned `role`."""
     user = db.query(models.User).filter(models.User.email == credentials.email).first()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
     # Verify the password using bcrypt
     if not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid password")
-        
+
     # Security check passed! Update their activity timestamp so they don't get hit by rank decay
     user.last_activity_date = _to_naive_utc(credentials.device_timestamp)
     db.commit()
     db.refresh(user)
     return user
+
+
+@app.post("/api/v1/auth/login", response_model=AuthLoginResponse)
+async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db)):
+    """Role-aware login. Probes Admin → Merchant → User in that order; the first table that
+    contains the email **and** matches the password wins. Returns `{role, id, email, name}`
+    so the Flutter app can route into admin / merchant / game UI accordingly.
+
+    Probe order matters: admins are most privileged, so they're checked first to ensure
+    that if Gagan accidentally creates a player account with the same email as the admin
+    account (very unlikely), admin still wins."""
+    device_ts = _to_naive_utc(credentials.device_timestamp)
+
+    # 1. Admin probe (no public registration; rows are seeded via scripts/seed_admin.py).
+    admin = db.query(models.Admin).filter(models.Admin.email == credentials.email).first()
+    if admin and verify_password(credentials.password, admin.hashed_password):
+        admin.last_login_at = device_ts
+        db.commit()
+        return AuthLoginResponse(
+            role="admin",
+            id=admin.id,
+            email=admin.email,
+            name=admin.name or admin.email,
+            message="Admin authenticated. Open admin portal.",
+        )
+
+    # 2. Merchant probe (registered via /api/v1/merchants/register).
+    merchant = db.query(models.Merchant).filter(models.Merchant.email == credentials.email).first()
+    if merchant and verify_password(credentials.password, merchant.hashed_password):
+        return AuthLoginResponse(
+            role="merchant",
+            id=merchant.id,
+            email=merchant.email,
+            name=merchant.name or merchant.email,
+            message="Merchant authenticated. Open merchant portal.",
+        )
+
+    # 3. Player probe (registered via /api/v1/onboard).
+    user = db.query(models.User).filter(models.User.email == credentials.email).first()
+    if user and verify_password(credentials.password, user.hashed_password):
+        user.last_activity_date = device_ts
+        db.commit()
+        return AuthLoginResponse(
+            role="player",
+            id=user.id,
+            email=user.email,
+            name=user.email,  # Users don't have a separate display name yet
+            message="Player authenticated. Open game.",
+        )
+
+    # No match in any table — return 401 with a generic message so callers can't enumerate.
+    raise HTTPException(status_code=401, detail="Invalid email or password")
 
 @app.get("/api/v1/users/{user_id}", response_model=UserProfile)
 async def get_user_profile(user_id: int, db: Session = Depends(get_db)):
@@ -422,6 +588,14 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db))
     user = db.query(models.User).filter(models.User.id == domain_req.owner_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    # 0.5. ML Referee: if a proof is attached, validate it and override defense_score with the
+    # verified value. Without a proof we fall back to client-trusted defense_score (legacy).
+    verification = _enforce_proof(domain_req.defense_proof, expected_activity_type=domain_req.defense_type)
+    if verification is not None:
+        domain_req.defense_score = verification.verified_score
+    # 0.6. Replay-attack guard: every proof can be consumed exactly once across the system.
+    _consume_proof_or_409(db, user.id, domain_req.defense_proof, source="domain_claim")
 
     # 1. Anti-Cheat: Validate Closure Tolerance
     # The user must return to their starting point to close the polygon (within 20 meters)
@@ -483,9 +657,22 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db))
     user.xp += xp_gained
     user.last_activity_date = _to_naive_utc(domain_req.device_timestamp)
     user.rank = get_rank(user.xp, user.last_activity_date)
-    increment_stat_from_activity(user, domain_req.defense_type, domain_req.defense_score)
 
+    # 7. Append to ActivityLog so the 30-day rolling Party Stats window can include this rep.
     db.add(new_domain)
+    db.flush()  # need new_domain.id for the activity log's related_id
+    record_activity(
+        db,
+        user,
+        activity_type=domain_req.defense_type,
+        score=domain_req.defense_score,
+        occurred_at=_to_naive_utc(domain_req.device_timestamp),
+        source="domain_claim",
+        related_id=new_domain.id,
+        verified=bool(verification and verification.verified),
+        confidence=verification.confidence if verification else 1.0,
+    )
+
     db.commit()
     db.refresh(new_domain)
 
@@ -566,6 +753,14 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     # Capture defense_type BEFORE any potential db.delete(target_domain) on win path.
     target_defense_type = target_domain.defense_type or "pushups"
 
+    # ML Referee: if the challenger attached a proof, it must match the defender's exercise
+    # and pass verification. Verified score overrides the client-supplied challenger_score.
+    verification = _enforce_proof(req.challenger_proof, expected_activity_type=target_defense_type)
+    if verification is not None:
+        req.challenger_score = verification.verified_score
+    # Replay-attack guard
+    _consume_proof_or_409(db, challenger.id, req.challenger_proof, source="siege_resolve")
+
     required_match = target_domain.vault_balance or 0
 
     # Look up any available retry discount from a previous failed attempt at THIS domain.
@@ -606,9 +801,19 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
             challenger.mana_crystals -= out_of_pocket
             pot = required_match * 2  # treat as full match vs defender vault
             winner_share = int(pot * (1 - WAR_TAX_PCT))  # 80%
+            war_tax_revenue = pot - winner_share          # 20% to platform
             challenger.mana_crystals += winner_share
             crystals_awarded = winner_share
             target_domain.vault_balance = 0
+            # Ledger: record platform's War Tax cut.
+            if war_tax_revenue > 0:
+                db.add(models.PlatformRevenue(
+                    source="siege_war_tax",
+                    amount=war_tax_revenue,
+                    user_id=challenger.id,
+                    related_siege_id=siege.id,
+                    note=f"20% of pot {pot} on siege win",
+                ))
 
         # Transfer land: defender loses area; challenger's cumulative_area was bumped on claim.
         if defender:
@@ -636,7 +841,7 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
         if required_match > 0:
             challenger.mana_crystals -= out_of_pocket
             defender_cut = int(required_match * LOSS_DEFENDER_PCT)
-            # SYSTEM_KEEP portion is simply not credited to anyone (platform revenue).
+            system_keep = int(required_match * LOSS_SYSTEM_PCT)         # 30% — platform revenue
             future_discount_cut = int(required_match * LOSS_DISCOUNT_PCT)
 
             if defender_cut > 0:
@@ -650,13 +855,33 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
                 )
                 db.add(new_discount)
                 new_discount_banked = future_discount_cut
+            # Ledger: record platform's loss-side keep.
+            if system_keep > 0:
+                db.add(models.PlatformRevenue(
+                    source="siege_loss_keep",
+                    amount=system_keep,
+                    user_id=challenger.id,
+                    related_siege_id=siege.id,
+                    note=f"30% of forfeit {required_match} on siege loss",
+                ))
         siege.status = "failed"
         message = "Defense held. Your Defense Feat did not beat the defender's Ghost score."
         if new_discount_banked > 0:
             message += f" {new_discount_banked} crystals banked as a retry discount."
 
-    # Stat increment runs regardless of outcome — the challenger performed the activity.
-    increment_stat_from_activity(challenger, target_defense_type, req.challenger_score)
+    # Stat increment + ActivityLog: runs regardless of outcome — the challenger performed
+    # the activity. related_id points at the siege itself for traceability.
+    record_activity(
+        db,
+        challenger,
+        activity_type=target_defense_type,
+        score=req.challenger_score,
+        occurred_at=device_ts,
+        source="siege_resolve",
+        related_id=siege.id,
+        verified=bool(verification and verification.verified),
+        confidence=verification.confidence if verification else 1.0,
+    )
 
     siege.challenger_fee = out_of_pocket
     siege.challenger_score = req.challenger_score
@@ -678,24 +903,166 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
 
 
 @app.get("/api/v1/users/{user_id}/party-role", response_model=PartyRoleResponse)
-async def get_user_party_role(user_id: int, db: Session = Depends(get_db)):
-    """Returns the user's assigned Party Role (Vanguard / Striker / Scout / Strategist)
-    based on their leading attribute stat. MVP uses lifetime totals; Phase 2 will switch
-    to a rolling 30-day window computed from an ActivityLog."""
+async def get_user_party_role(
+    user_id: int,
+    window_days: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Returns the user's Party Role. Two modes:
+       - default (no `window_days`)  → lifetime totals on `User.{str/agi/end/con}_stat`
+       - `?window_days=N`            → rolling sum of `ActivityLog.score` per stat over the
+                                       last N days, computed from `occurred_at`.
+
+    Phase 1 wrote stats only as lifetime totals; v2.7 adds the ActivityLog-backed rolling
+    path so the 30-day Party Role can flip even if a user's career totals stay unchanged."""
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    role, leading_stat = get_party_role(user)
+    if window_days is None or window_days <= 0:
+        role, leading_stat = get_party_role(user)
+        return PartyRoleResponse(
+            user_id=user.id,
+            role=role,
+            str_stat=user.str_stat or 0,
+            agi_stat=user.agi_stat or 0,
+            end_stat=user.end_stat or 0,
+            con_stat=user.con_stat or 0,
+            leading_stat=leading_stat,
+        )
+
+    # Rolling-window path: aggregate ActivityLog rows for this user since (now - window_days).
+    cutoff = _now_naive_utc() - timedelta(days=window_days)
+    rows = (
+        db.query(models.ActivityLog)
+        .filter(
+            models.ActivityLog.user_id == user.id,
+            models.ActivityLog.occurred_at >= cutoff,
+            models.ActivityLog.stat_column.isnot(None),
+        )
+        .all()
+    )
+    totals = {"str_stat": 0, "agi_stat": 0, "end_stat": 0, "con_stat": 0}
+    for r in rows:
+        if r.stat_column in totals:
+            totals[r.stat_column] += r.score or 0
+
+    # Reuse get_party_role's tie-break order by mocking a temp object with the windowed totals.
+    class _Tmp:
+        pass
+    tmp = _Tmp()
+    for k, v in totals.items():
+        setattr(tmp, k, v)
+    role, leading_stat = get_party_role(tmp)  # type: ignore[arg-type]
     return PartyRoleResponse(
         user_id=user.id,
         role=role,
-        str_stat=user.str_stat or 0,
-        agi_stat=user.agi_stat or 0,
-        end_stat=user.end_stat or 0,
-        con_stat=user.con_stat or 0,
+        str_stat=totals["str_stat"],
+        agi_stat=totals["agi_stat"],
+        end_stat=totals["end_stat"],
+        con_stat=totals["con_stat"],
         leading_stat=leading_stat,
     )
+
+
+# --- Epic 2: ML Referee helpers + endpoint ---
+
+def _run_verification(proof: ActivityProof) -> VerificationResult:
+    """Bridge between the Pydantic proof shape and the pure-Python ml_referee module."""
+    outcome = ml_referee.verify_activity(
+        activity_type=proof.activity_type,
+        declared_score=proof.declared_score,
+        duration_seconds=proof.duration_seconds,
+        accelerometer_samples=proof.accelerometer,
+        pose_summary=proof.pose,
+    )
+    return VerificationResult(
+        verified=outcome.verified,
+        confidence=outcome.confidence,
+        verified_score=outcome.verified_score,
+        activity_type=outcome.activity_type,
+        flags=outcome.flags,
+    )
+
+
+def _proof_dedup_key(user_id: int, proof: ActivityProof) -> str:
+    """Deterministic SHA-256 hash over the bits of an ActivityProof that uniquely identify a
+    workout. Re-submitting the same proof produces the same key. Used by the replay-attack
+    guard. Pose data is excluded from the hash so a re-extract with slightly different
+    angles still collides — the accelerometer trace is the high-entropy fingerprint."""
+    sample_repr = ";".join(
+        f"{s.t_ms}:{s.ax:.3f}:{s.ay:.3f}:{s.az:.3f}" for s in proof.accelerometer
+    )
+    raw = (
+        f"{user_id}|{proof.device_timestamp.isoformat()}|"
+        f"{proof.activity_type.lower()}|{proof.declared_score}|"
+        f"{proof.duration_seconds:.3f}|{sample_repr}"
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _consume_proof_or_409(db: Session, user_id: int, proof: Optional[ActivityProof], source: str) -> None:
+    """Idempotency guard. Call AFTER `_enforce_proof` succeeds — if the same proof was already
+    consumed by any prior action endpoint, raises 409 Conflict so the client can treat the
+    earlier success as authoritative. No-ops when proof is None (legacy trust path)."""
+    if proof is None:
+        return
+    key = _proof_dedup_key(user_id, proof)
+    existing = db.query(models.ProofConsumed).filter(models.ProofConsumed.proof_key == key).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This proof has already been consumed by '{existing.source}' at {existing.consumed_at.isoformat()}",
+        )
+    db.add(models.ProofConsumed(proof_key=key, user_id=user_id, source=source))
+
+
+def _enforce_proof(proof: Optional[ActivityProof], expected_activity_type: Optional[str] = None) -> Optional[VerificationResult]:
+    """If a proof is attached to an action request, run it through the referee. Returns the
+    full VerificationResult (callers read verified_score + confidence) or raises 400 on
+    rejection. Returns None when no proof was supplied (legacy trust path)."""
+    if proof is None:
+        return None
+    if expected_activity_type and proof.activity_type.lower() != expected_activity_type.lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Proof activity_type '{proof.activity_type}' does not match expected '{expected_activity_type}'",
+        )
+    result = _run_verification(proof)
+    if not result.verified:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ML Referee rejected proof (confidence {result.confidence:.2f}): {'; '.join(result.flags) or 'no flags'}",
+        )
+    return result
+
+
+@app.post("/api/v1/activities/verify", response_model=VerificationResult)
+async def verify_activity_endpoint(proof: ActivityProof):
+    """Stateless preview of the ML Referee. The frontend can call this to confirm a workout
+    will pass before submitting the real action (claim, siege, bounty). No DB writes."""
+    return _run_verification(proof)
+
+
+# --- Hardening Sprint: PlatformRevenue read-only audit ---
+
+class PlatformRevenueSummary(BaseModel):
+    total_crystals: int
+    by_source: dict
+    row_count: int
+
+
+@app.get("/api/v1/platform/revenue", response_model=PlatformRevenueSummary)
+async def get_platform_revenue(db: Session = Depends(get_db)):
+    """Aggregates the PlatformRevenue ledger so admins can audit total platform earnings and
+    the breakdown by source. Read-only; safe to expose internally during MVP. Production will
+    gate this behind an admin role."""
+    rows = db.query(models.PlatformRevenue).all()
+    total = sum(r.amount or 0 for r in rows)
+    by_source: dict = {}
+    for r in rows:
+        by_source[r.source] = by_source.get(r.source, 0) + (r.amount or 0)
+    return PlatformRevenueSummary(total_crystals=total, by_source=by_source, row_count=len(rows))
 
 
 # --- Epic 1: Bounty Board Endpoints ---
@@ -843,6 +1210,14 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
     if dist_km * 1000.0 > (bounty.radius_m or 0):
         raise HTTPException(status_code=400, detail="You are outside the bounty's geofence")
 
+    # ML Referee: if a proof is attached, the activity type must match the bounty's, and the
+    # verified score replaces the client-supplied score before the gate check below.
+    verification = _enforce_proof(req.score_proof, expected_activity_type=bounty.activity_type)
+    if verification is not None:
+        req.score = verification.verified_score
+    # Replay-attack guard
+    _consume_proof_or_409(db, user.id, req.score_proof, source="bounty_complete")
+
     # Score gate — bounties with target_score=0 are proximity-only (e.g., merchant chests).
     if bounty.target_score > 0 and req.score < bounty.target_score:
         raise HTTPException(status_code=400, detail=f"Score {req.score} did not meet target {bounty.target_score}")
@@ -853,7 +1228,19 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
     user.mana_crystals += bounty.crystal_reward
     user.last_activity_date = device_ts
     user.rank = get_rank(user.xp, user.last_activity_date)
-    stat_touched = increment_stat_from_activity(user, bounty.activity_type, req.score or bounty.target_score)
+    activity_score = req.score or bounty.target_score
+    log_row = record_activity(
+        db,
+        user,
+        activity_type=bounty.activity_type,
+        score=activity_score,
+        occurred_at=device_ts,
+        source="bounty_complete",
+        related_id=bounty.id,
+        verified=bool(verification and verification.verified),
+        confidence=verification.confidence if verification else 1.0,
+    )
+    stat_touched = log_row.stat_column if log_row else None
 
     # Coupon issuance for merchant chests
     coupon_code = None
@@ -913,15 +1300,5 @@ def process_daily_decay():
     finally:
         db.close()
 
-scheduler = BackgroundScheduler()
-
-@app.on_event("startup")
-def start_scheduler():
-    """When the FastAPI server starts, begin the background scheduler."""
-    scheduler.add_job(process_daily_decay, 'interval', hours=24)
-    scheduler.start()
-
-@app.on_event("shutdown")
-def shutdown_scheduler():
-    """Safely shut down the background scheduler when the FastAPI server stops."""
-    scheduler.shutdown()
+# Scheduler + lifespan handler are now defined near the top of the module so FastAPI() can
+# accept lifespan= at construction time. See the @asynccontextmanager above.

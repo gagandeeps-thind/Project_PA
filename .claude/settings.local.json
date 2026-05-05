@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ml_referee; print\\('ml_referee OK'\\); import main; print\\('main OK'\\)\")",
+      "Bash(python -c \"import main; print\\('OK; routes:', len\\(main.app.routes\\)\\)\")",
+      "Bash(python tests/test_ml_referee.py)",
+      "Bash(python scripts/export_openapi.py)",
+      "Bash(python -c \"import main; print\\('routes:', len\\(main.app.routes\\)\\)\")"
+    ]
+  }
+}

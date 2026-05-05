@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../providers.dart';
 import '../services/location_service.dart';
 import '../theme.dart';
+import 'package:dio/dio.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -193,6 +194,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           backgroundColor: Colors.green,
         ));
       }
+    } on DioException catch (e) {
+      if (mounted) {
+        if (e.response?.statusCode == 409) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('You have already claimed this activity proof!'),
+            backgroundColor: AppTheme.error,
+          ));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Network Error: ${e.message}'),
+            backgroundColor: AppTheme.error,
+          ));
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -220,25 +235,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              center: _currentPosition != null ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude) : const LatLng(0, 0),
-              zoom: 16.0,
+              initialCenter: _currentPosition != null ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude) : const LatLng(0, 0),
+              initialZoom: 16.0,
             ),
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.osiris_frontend',
-                // Optional: apply dark mode filtering to OpenStreetMap tiles
-                tileBuilder: _darkModeTileBuilder,
+              ColorFiltered(
+                colorFilter: const ColorFilter.matrix([
+                  -1,  0,  0, 0, 255,
+                   0, -1,  0, 0, 255,
+                   0,  0, -1, 0, 255,
+                   0,  0,  0, 1,   0,
+                ]),
+                child: TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.osiris_frontend',
+                ),
               ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: _routePoints,
-                    strokeWidth: 4.0,
-                    color: AppTheme.primary,
-                  ),
-                ],
-              ),
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      strokeWidth: 4.0,
+                      color: AppTheme.primary,
+                    ),
+                  ],
+                ),
               if (_currentPosition != null)
                 MarkerLayer(
                   markers: [
@@ -246,8 +268,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
                       width: 24,
                       height: 24,
-                      builder: (ctx) => const Container(
-                        decoration: BoxDecoration(
+                      child: Container(
+                        decoration: const BoxDecoration(
                           color: AppTheme.secondary,
                           shape: BoxShape.circle,
                           boxShadow: [BoxShadow(color: AppTheme.secondary, blurRadius: 8)],
@@ -275,15 +297,4 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  Widget _darkModeTileBuilder(BuildContext context, Widget tileWidget, Tile tile) {
-    return ColorFiltered(
-      colorFilter: const ColorFilter.matrix([
-        -1,  0,  0, 0, 255,
-         0, -1,  0, 0, 255,
-         0,  0, -1, 0, 255,
-         0,  0,  0, 1,   0,
-      ]),
-      child: tileWidget,
-    );
-  }
 }

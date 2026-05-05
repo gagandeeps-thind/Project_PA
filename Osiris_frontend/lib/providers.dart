@@ -14,11 +14,13 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 });
 
 // --- Session Manager / Auth Provider ---
-class AuthNotifier extends StateNotifier<UserProfile?> {
-  final Ref ref;
+class AuthNotifier extends Notifier<UserProfile?> {
   
-  AuthNotifier(this.ref) : super(null) {
-    _loadSession();
+  @override
+  UserProfile? build() {
+    // Delay session load until after initial build to prevent async state mutation during init
+    Future.microtask(() => _loadSession());
+    return null;
   }
 
   Future<void> _loadSession() async {
@@ -48,9 +50,25 @@ class AuthNotifier extends StateNotifier<UserProfile?> {
       deviceTimestamp: deviceTimestamp
     );
     
-    final profile = UserProfile.fromJson(data);
-    await prefs.setInt('user_id', profile.id);
-    state = profile;
+    final baseProfile = UserProfile.fromJson(data);
+    await prefs.setInt('user_id', baseProfile.id);
+    
+    if (baseProfile.role == 'player') {
+      // The auth endpoint only returns a minimal payload.
+      // We must fetch the full player profile for the game UI.
+      try {
+        final fullProfileData = await client.getUserProfile(baseProfile.id);
+        // Merge the role into the full profile data before parsing
+        fullProfileData['role'] = baseProfile.role;
+        state = UserProfile.fromJson(fullProfileData);
+      } catch (e) {
+        print('Warning: Failed to fetch full player profile after login: $e');
+        state = baseProfile;
+      }
+    } else {
+      // Admins and Merchants don't have full game profiles, the base is enough.
+      state = baseProfile;
+    }
   }
 
   Future<void> register(String email, String password, double weightKg, double heightM, String preferredPath) async {
@@ -80,6 +98,6 @@ class AuthNotifier extends StateNotifier<UserProfile?> {
   }
 }
 
-final authProvider = StateNotifierProvider<AuthNotifier, UserProfile?>((ref) {
-  return AuthNotifier(ref);
+final authProvider = NotifierProvider<AuthNotifier, UserProfile?>(() {
+  return AuthNotifier();
 });
