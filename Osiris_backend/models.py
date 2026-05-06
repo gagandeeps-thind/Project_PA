@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -94,7 +94,18 @@ class SiegeDiscount(Base):
 # --- Epic 1: Bounty Board ---
 
 class Merchant(Base):
-    """B2B partner (local business) that can sponsor merchant_chest-type bounties at their storefront."""
+    """B2B partner (local business) that can sponsor merchant_chest-type bounties at their storefront.
+
+    Activation lifecycle (v2.9):
+      - On register: is_active=False, payment_status='payment_pending'.
+      - Merchant calls /payments/intent → provider_payment_id is recorded.
+      - Provider hits /payments/webhook with terminal status:
+          * 'payment_successful' → is_active=True, last_payment_at set.
+          * 'payment_pending'    → no change (still inactive).
+          * 'payment_declined'   → stays inactive; merchant can retry.
+      - Admin manual /admin/merchants/{id}/{activate,deactivate} endpoints exist as fallbacks
+        for refunds, disputes, and demo seeding.
+    """
     __tablename__ = "merchants"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
@@ -102,6 +113,12 @@ class Merchant(Base):
     hashed_password = Column(String)
     business_type = Column(String, default="general")  # e.g., 'gym', 'cafe', 'retail'
     is_active = Column(Boolean, default=False)  # True once pilot fee is paid
+    # Payment tracking (v2.9). payment_status is the source of truth; is_active is derived
+    # by the webhook handler so legacy reads of is_active stay correct.
+    payment_status = Column(String, default="payment_pending")  # payment_pending | payment_successful | payment_declined
+    payment_provider_id = Column(String, nullable=True)         # e.g., Stripe PaymentIntent ID
+    pilot_fee_cents = Column(Integer, default=5000)             # $50 USD default; per-merchant override possible
+    last_payment_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_default_now_naive_utc)
 
     bounties = relationship("Bounty", back_populates="merchant")

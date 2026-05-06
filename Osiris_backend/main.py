@@ -15,6 +15,10 @@ import bcrypt
 # APScheduler: Runs background tasks automatically (like a cron job) while the server is running.
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 # Import our newly created database connection and models
 import database
@@ -45,6 +49,59 @@ async def lifespan(app: FastAPI):
 
 # Initialize the FastAPI application
 app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+SECRET_KEY = "dummy-secret-key-for-mvp-phase"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_current_user_token(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        role: str = payload.get("role")
+        user_id_str: str = payload.get("sub")
+        if role is None or user_id_str is None:
+            raise HTTPException(status_code=401, detail="Could not validate credentials")
+        return {"id": int(user_id_str), "role": role}
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+def get_current_player(token_data: dict = Depends(get_current_user_token)):
+    if token_data["role"] != "player":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return token_data
+
+def get_current_admin(token_data: dict = Depends(get_current_user_token)):
+    if token_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return token_data
+
+def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
+    if token_data["role"] != "merchant":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return token_data
+
+def get_current_admin_or_merchant(token_data: dict = Depends(get_current_user_token)):
+    if token_data["role"] not in ["admin", "merchant"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return token_data
+
 
 # A simple root endpoint to verify the server is running
 @app.get("/")
@@ -115,6 +172,8 @@ class AuthLoginResponse(BaseModel):
     email: EmailStr
     name: str          # display name
     message: str
+    access_token: str
+    token_type: str = "bearer"
 
 # The JSON shape for a single GPS point in our Domain trace
 class Coordinate(BaseModel):
@@ -260,6 +319,71 @@ class MerchantResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- v2.9: Merchant payment lifecycle Pydantic shapes ---
+
+class MerchantProfile(BaseModel):
+    """Full merchant profile including activation + payment status. Returned to the merchant
+    themselves (post-login refresh) and to admins."""
+    id: int
+    name: str
+    email: EmailStr
+    business_type: str
+    is_active: bool
+    payment_status: str
+    pilot_fee_cents: int
+    payment_provider_id: Optional[str] = None
+    last_payment_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PaymentIntentResponse(BaseModel):
+    """Returned when a merchant initiates payment. In Phase 2 with a real provider this would
+    include a client_secret for Stripe Elements; in MVP it's a stub UUID."""
+    merchant_id: int
+    pilot_fee_cents: int
+    provider_payment_id: str
+    payment_status: str
+    next_action: str
+
+class PaymentWebhookRequest(BaseModel):
+    """Payload from the payment provider when a payment terminal-state is reached.
+    Production will additionally verify a signature header against the provider's public key
+    before trusting the body — for MVP we accept any well-formed JSON."""
+    merchant_id: int
+    payment_status: str       # 'payment_successful' | 'payment_pending' | 'payment_declined'
+    provider_payment_id: str
+    amount_cents: int
+    occurred_at: datetime
+
+class PaymentWebhookResponse(BaseModel):
+    merchant_id: int
+    payment_status: str
+    is_active: bool
+    message: str
+
+class AdminMerchantListItem(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    business_type: str
+    is_active: bool
+    payment_status: str
+    pilot_fee_cents: int
+    last_payment_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AdminMerchantToggleResponse(BaseModel):
+    merchant_id: int
+    is_active: bool
+    payment_status: str
+    message: str
 
 # JSON to seed a Bounty (admin / merchant)
 class BountyCreate(BaseModel):
@@ -522,54 +646,55 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/login", response_model=AuthLoginResponse)
 async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db)):
-    """Role-aware login. Probes Admin → Merchant → User in that order; the first table that
-    contains the email **and** matches the password wins. Returns `{role, id, email, name}`
-    so the Flutter app can route into admin / merchant / game UI accordingly.
+    try:
+        device_ts = _to_naive_utc(credentials.device_timestamp)
 
-    Probe order matters: admins are most privileged, so they're checked first to ensure
-    that if Gagan accidentally creates a player account with the same email as the admin
-    account (very unlikely), admin still wins."""
-    device_ts = _to_naive_utc(credentials.device_timestamp)
+        # 1. Admin probe (no public registration; rows are seeded via scripts/seed_admin.py).
+        admin = db.query(models.Admin).filter(models.Admin.email == credentials.email).first()
+        if admin and verify_password(credentials.password, admin.hashed_password):
+            admin.last_login_at = device_ts
+            db.commit()
+            return AuthLoginResponse(
+                role="admin",
+                id=admin.id,
+                email=admin.email,
+                name=admin.name or admin.email,
+                message="Admin authenticated. Open admin portal.",
+                access_token=create_access_token({"sub": str(admin.id), "role": "admin"})
+            )
 
-    # 1. Admin probe (no public registration; rows are seeded via scripts/seed_admin.py).
-    admin = db.query(models.Admin).filter(models.Admin.email == credentials.email).first()
-    if admin and verify_password(credentials.password, admin.hashed_password):
-        admin.last_login_at = device_ts
-        db.commit()
-        return AuthLoginResponse(
-            role="admin",
-            id=admin.id,
-            email=admin.email,
-            name=admin.name or admin.email,
-            message="Admin authenticated. Open admin portal.",
-        )
+        # 2. Merchant probe (registered via /api/v1/merchants/register).
+        merchant = db.query(models.Merchant).filter(models.Merchant.email == credentials.email).first()
+        if merchant and verify_password(credentials.password, merchant.hashed_password):
+            return AuthLoginResponse(
+                role="merchant",
+                id=merchant.id,
+                email=merchant.email,
+                name=merchant.name or merchant.email,
+                message="Merchant authenticated. Open merchant portal.",
+                access_token=create_access_token({"sub": str(merchant.id), "role": "merchant"})
+            )
 
-    # 2. Merchant probe (registered via /api/v1/merchants/register).
-    merchant = db.query(models.Merchant).filter(models.Merchant.email == credentials.email).first()
-    if merchant and verify_password(credentials.password, merchant.hashed_password):
-        return AuthLoginResponse(
-            role="merchant",
-            id=merchant.id,
-            email=merchant.email,
-            name=merchant.name or merchant.email,
-            message="Merchant authenticated. Open merchant portal.",
-        )
+        # 3. Player probe (registered via /api/v1/onboard).
+        user = db.query(models.User).filter(models.User.email == credentials.email).first()
+        if user and verify_password(credentials.password, user.hashed_password):
+            user.last_activity_date = device_ts
+            db.commit()
+            return AuthLoginResponse(
+                role="player",
+                id=user.id,
+                email=user.email,
+                name=user.email,  # Users don't have a separate display name yet
+                message="Player authenticated. Open game.",
+                access_token=create_access_token({"sub": str(user.id), "role": "player"})
+            )
 
-    # 3. Player probe (registered via /api/v1/onboard).
-    user = db.query(models.User).filter(models.User.email == credentials.email).first()
-    if user and verify_password(credentials.password, user.hashed_password):
-        user.last_activity_date = device_ts
-        db.commit()
-        return AuthLoginResponse(
-            role="player",
-            id=user.id,
-            email=user.email,
-            name=user.email,  # Users don't have a separate display name yet
-            message="Player authenticated. Open game.",
-        )
-
-    # No match in any table — return 401 with a generic message so callers can't enumerate.
-    raise HTTPException(status_code=401, detail="Invalid email or password")
+        # No match in any table — return 401 with a generic message so callers can't enumerate.
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    except Exception as e:
+        import traceback
+        # Return 500 but log exception
+        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}\n{traceback.format_exc()}")
 
 @app.get("/api/v1/users/{user_id}", response_model=UserProfile)
 async def get_user_profile(user_id: int, db: Session = Depends(get_db)):
@@ -581,9 +706,12 @@ async def get_user_profile(user_id: int, db: Session = Depends(get_db)):
     return user
 
 @app.post("/api/v1/domains", response_model=DomainResponse)
-async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db)):
+async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Processes a completed Domain Trace, validates anti-cheat, and claims the territory."""
     
+    if token_data["id"] != domain_req.owner_id:
+        raise HTTPException(status_code=403, detail="Not authorized to act as this user")
+
     # 0. Verify the user exists
     user = db.query(models.User).filter(models.User.id == domain_req.owner_id).first()
     if not user:
@@ -686,10 +814,13 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db))
     )
 
 @app.post("/api/v1/domains/{domain_id}/vault", response_model=VaultLockResponse)
-async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db)):
+async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Lock (or top up) an Ownership Fee on a domain. Crystals are deducted from the owner's
     wallet and added to the domain's Vault. Vault balance doubles as the required Challenger
     Match amount. Topping up is allowed; unlocking (lowering) is deferred to Phase 2."""
+    
+    if token_data["id"] != req.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to act as this user")
 
     domain = db.query(models.Domain).filter(models.Domain.id == domain_id).first()
     if not domain:
@@ -727,7 +858,7 @@ async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depend
 
 
 @app.post("/api/v1/sieges/{siege_id}/resolve", response_model=SiegeResolveResponse)
-async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db)):
+async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Resolve a pending siege. Challenger submits their Defense Feat score.
     WIN: defender's polygon erased, pot (defender vault + challenger match) paid 80/20 to
          challenger/system.
@@ -741,6 +872,9 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
         raise HTTPException(status_code=404, detail="Siege not found.")
     if siege.status != "pending_feat":
         raise HTTPException(status_code=400, detail=f"Siege already resolved (status={siege.status}).")
+
+    if token_data["id"] != siege.challenger_id:
+        raise HTTPException(status_code=403, detail="Not authorized to resolve this siege")
 
     challenger = db.query(models.User).filter(models.User.id == siege.challenger_id).first()
     target_domain = db.query(models.Domain).filter(models.Domain.id == siege.target_domain_id).first()
@@ -907,7 +1041,10 @@ async def get_user_party_role(
     user_id: int,
     window_days: Optional[int] = None,
     db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
 ):
+    if token_data["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this user's role")
     """Returns the user's Party Role. Two modes:
        - default (no `window_days`)  → lifetime totals on `User.{str/agi/end/con}_stat`
        - `?window_days=N`            → rolling sum of `ActivityLog.score` per stat over the
@@ -1053,7 +1190,7 @@ class PlatformRevenueSummary(BaseModel):
 
 
 @app.get("/api/v1/platform/revenue", response_model=PlatformRevenueSummary)
-async def get_platform_revenue(db: Session = Depends(get_db)):
+async def get_platform_revenue(db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin)):
     """Aggregates the PlatformRevenue ledger so admins can audit total platform earnings and
     the breakdown by source. Read-only; safe to expose internally during MVP. Production will
     gate this behind an admin role."""
@@ -1070,7 +1207,9 @@ async def get_platform_revenue(db: Session = Depends(get_db)):
 @app.post("/api/v1/merchants/register", response_model=MerchantResponse)
 async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
     """Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.
-    For MVP this is unauthenticated; production will gate it behind a Merchant Portal admin login."""
+    Newly-registered merchants start `is_active=False` / `payment_status='payment_pending'`;
+    they must complete the pilot-fee flow (or be activated by an admin) before they can
+    create merchant_chest bounties."""
     if db.query(models.Merchant).filter(models.Merchant.email == merchant.email).first():
         raise HTTPException(status_code=400, detail="Merchant email already registered")
     new = models.Merchant(
@@ -1085,16 +1224,227 @@ async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_
     return new
 
 
+# --- v2.9: Merchant payment + activation endpoints ---
+
+@app.get("/api/v1/merchants/{merchant_id}", response_model=MerchantProfile)
+async def get_merchant_profile(
+    merchant_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """Fetch a merchant's full profile (incl. activation + payment status). Accessible to
+    the merchant themselves (same-id check) and to any admin. Used post-login by the
+    Flutter app to refresh state and decide whether to show the 'pay your pilot fee' UI."""
+    role = token_data["role"]
+    caller_id = token_data["id"]
+    if role == "merchant" and caller_id != merchant_id:
+        raise HTTPException(status_code=403, detail="Merchants can only view their own profile")
+    if role not in ("merchant", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    return merchant
+
+
+@app.post("/api/v1/merchants/{merchant_id}/payments/intent", response_model=PaymentIntentResponse)
+async def create_payment_intent(
+    merchant_id: int,
+    token_data: dict = Depends(get_current_merchant),
+    db: Session = Depends(get_db),
+):
+    """Initiate the pilot-fee payment. In production this calls the payment provider (e.g.,
+    Stripe) and returns a client_secret for the front-end to redirect to a payment form.
+    For MVP we stub a unique provider_payment_id and leave payment_status='payment_pending'
+    until the webhook fires."""
+    if token_data["id"] != merchant_id:
+        raise HTTPException(status_code=403, detail="Merchants can only pay their own pilot fee")
+
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    if merchant.is_active:
+        raise HTTPException(status_code=400, detail="Merchant is already active; nothing to pay")
+
+    # Stub provider integration. Replace with provider SDK in Phase 2.
+    provider_payment_id = f"mvp_intent_{secrets.token_urlsafe(12)}"
+    merchant.payment_provider_id = provider_payment_id
+    merchant.payment_status = "payment_pending"
+    db.commit()
+
+    return PaymentIntentResponse(
+        merchant_id=merchant.id,
+        pilot_fee_cents=merchant.pilot_fee_cents,
+        provider_payment_id=provider_payment_id,
+        payment_status=merchant.payment_status,
+        next_action=(
+            "MVP stub: simulate the provider by POSTing a webhook to "
+            "/api/v1/payments/webhook with the same provider_payment_id and "
+            "payment_status='payment_successful'."
+        ),
+    )
+
+
+@app.post("/api/v1/payments/webhook", response_model=PaymentWebhookResponse)
+async def payment_webhook(req: PaymentWebhookRequest, db: Session = Depends(get_db)):
+    """Endpoint the payment provider POSTs to when a payment reaches a terminal state.
+    NOT JWT-gated — providers don't carry our JWTs. Production MUST verify a signature
+    header against the provider's public key before trusting the payload; for MVP we
+    accept any well-formed JSON.
+
+    Activation rule: only `payment_status='payment_successful'` flips `is_active=True`
+    and writes a PlatformRevenue row. `payment_pending` and `payment_declined` update
+    the merchant's status but leave `is_active=False`."""
+    valid_statuses = {"payment_successful", "payment_pending", "payment_declined"}
+    if req.payment_status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid payment_status. Expected one of {sorted(valid_statuses)}",
+        )
+
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == req.merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+
+    # Cross-check provider_payment_id if one was previously stored — guards against
+    # webhooks for a different intent landing on this merchant.
+    if merchant.payment_provider_id and merchant.payment_provider_id != req.provider_payment_id:
+        raise HTTPException(
+            status_code=400,
+            detail="provider_payment_id does not match the merchant's last payment intent",
+        )
+
+    occurred_at = _to_naive_utc(req.occurred_at)
+    merchant.payment_status = req.payment_status
+    merchant.payment_provider_id = req.provider_payment_id
+
+    if req.payment_status == "payment_successful":
+        # Idempotency: don't double-record revenue if the same successful webhook fires twice.
+        already_active = bool(merchant.is_active)
+        merchant.is_active = True
+        merchant.last_payment_at = occurred_at
+        if not already_active and req.amount_cents > 0:
+            db.add(models.PlatformRevenue(
+                source="merchant_pilot_fee",
+                amount=req.amount_cents,
+                user_id=None,
+                note=f"Merchant {merchant.id} pilot fee via {req.provider_payment_id}",
+            ))
+        message = "Merchant activated. Pilot fee recorded."
+    else:
+        # Pending or declined: do NOT flip is_active. Merchant can retry.
+        message = f"Status updated to {req.payment_status}; merchant remains inactive."
+
+    db.commit()
+    return PaymentWebhookResponse(
+        merchant_id=merchant.id,
+        payment_status=merchant.payment_status,
+        is_active=bool(merchant.is_active),
+        message=message,
+    )
+
+
+# --- v2.9: Admin merchant management (manual fallback for refunds / disputes / demos) ---
+
+@app.get("/api/v1/admin/merchants", response_model=List[AdminMerchantListItem])
+async def admin_list_merchants(
+    status: Optional[str] = None,           # 'pending' | 'active' | 'declined' | 'all' (default 'all')
+    token_data: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin-only triage view. Filter by activation status; sorted newest-first."""
+    q = db.query(models.Merchant)
+    if status == "active":
+        q = q.filter(models.Merchant.is_active == True)  # noqa: E712
+    elif status == "pending":
+        q = q.filter(models.Merchant.payment_status == "payment_pending")
+    elif status == "declined":
+        q = q.filter(models.Merchant.payment_status == "payment_declined")
+    elif status not in (None, "all"):
+        raise HTTPException(status_code=400, detail="status must be one of: pending, active, declined, all")
+    rows = q.order_by(models.Merchant.created_at.desc()).all()
+    return rows
+
+
+@app.post("/api/v1/admin/merchants/{merchant_id}/activate", response_model=AdminMerchantToggleResponse)
+async def admin_activate_merchant(
+    merchant_id: int,
+    token_data: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Manual activation fallback. Use when payment was confirmed out-of-band (e.g., bank
+    transfer for a pilot merchant) or to re-activate after a deactivate. Records a
+    PlatformRevenue row only if the merchant wasn't already active."""
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+
+    already_active = bool(merchant.is_active)
+    merchant.is_active = True
+    merchant.payment_status = "payment_successful"
+    merchant.last_payment_at = _now_naive_utc()
+    if not already_active and (merchant.pilot_fee_cents or 0) > 0:
+        db.add(models.PlatformRevenue(
+            source="merchant_pilot_fee",
+            amount=merchant.pilot_fee_cents,
+            user_id=None,
+            note=f"Manual admin activation of merchant {merchant.id}",
+        ))
+    db.commit()
+    return AdminMerchantToggleResponse(
+        merchant_id=merchant.id,
+        is_active=True,
+        payment_status=merchant.payment_status,
+        message="Merchant activated by admin.",
+    )
+
+
+@app.post("/api/v1/admin/merchants/{merchant_id}/deactivate", response_model=AdminMerchantToggleResponse)
+async def admin_deactivate_merchant(
+    merchant_id: int,
+    token_data: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Manual deactivation. Use for refunds, policy violations, or to remove a merchant
+    from the pilot. Does not write a PlatformRevenue row (no money flowed)."""
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    merchant.is_active = False
+    db.commit()
+    return AdminMerchantToggleResponse(
+        merchant_id=merchant.id,
+        is_active=False,
+        payment_status=merchant.payment_status,
+        message="Merchant deactivated by admin.",
+    )
+
+
 @app.post("/api/v1/bounties", response_model=BountySummary)
-async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db)):
+async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
+    if token_data["role"] == "merchant" and token_data["id"] != bounty.merchant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to create bounty for this merchant")
     """Seed a bounty. Used by admins for daily quests and by merchants for storefront chests.
     Geofence radius is in metres; distance to caller is filled with 0 since the creator may not
     be on-site."""
     if bounty.bounty_type == "merchant_chest" and bounty.merchant_id is None:
         raise HTTPException(status_code=400, detail="merchant_chest requires merchant_id")
     if bounty.merchant_id is not None:
-        if not db.query(models.Merchant).filter(models.Merchant.id == bounty.merchant_id).first():
+        merchant_row = db.query(models.Merchant).filter(models.Merchant.id == bounty.merchant_id).first()
+        if not merchant_row:
             raise HTTPException(status_code=404, detail="Merchant not found")
+        # v2.9 gate: merchant_chest bounties require an active merchant. Daily/system bounties
+        # may carry a merchant_id for attribution but don't require active status.
+        if bounty.bounty_type == "merchant_chest" and not merchant_row.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Merchant {merchant_row.id} is not active "
+                    f"(payment_status={merchant_row.payment_status}). "
+                    "Complete the pilot-fee payment before creating merchant_chest bounties."
+                ),
+            )
 
     new = models.Bounty(
         title=bounty.title,
@@ -1134,7 +1484,7 @@ async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
-async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db)):
+async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
     nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
     `ST_DWithin` in Phase 2."""
@@ -1175,7 +1525,9 @@ async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db
 
 
 @app.post("/api/v1/bounties/{bounty_id}/complete", response_model=BountyCompleteResponse)
-async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db)):
+async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+    if token_data["id"] != req.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to complete bounty for this user")
     """Validates proximity + score, awards XP/crystals, increments the matching attribute stat,
     and (for merchant chests) issues a single-use coupon code. One claim per user per bounty."""
     bounty = db.query(models.Bounty).filter(models.Bounty.id == bounty_id).first()
@@ -1273,6 +1625,32 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
         message=f"Bounty cleared. +{bounty.xp_reward} XP" + (f", +{bounty.crystal_reward} crystals" if bounty.crystal_reward else "") + (f", coupon {coupon_code}" if coupon_code else "") + ".",
     )
 
+@app.get("/api/v1/merchants/{merchant_id}/bounties", response_model=List[BountySummary])
+async def get_merchant_bounties(merchant_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_current_merchant)):
+    if token_data["id"] != merchant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view these bounties")
+    
+    bounties = db.query(models.Bounty).filter(models.Bounty.merchant_id == merchant_id).all()
+    
+    result = []
+    for b in bounties:
+        result.append(BountySummary(
+            id=b.id,
+            title=b.title,
+            description=b.description,
+            bounty_type=b.bounty_type,
+            target_lat=b.target_lat,
+            target_lng=b.target_lng,
+            radius_m=b.radius_m,
+            activity_type=b.activity_type,
+            target_score=b.target_score,
+            xp_reward=b.xp_reward,
+            crystal_reward=b.crystal_reward,
+            has_coupon=bool(b.coupon_text),
+            completions_remaining=max(0, b.max_completions - b.completions_count),
+            distance_km=0.0,
+        ))
+    return result
 
 # --- Background Tasks (Cron Logic) ---
 
