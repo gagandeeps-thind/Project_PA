@@ -8,6 +8,7 @@ import '../providers.dart';
 import '../services/location_service.dart';
 import '../theme.dart';
 import 'package:dio/dio.dart';
+import '../api/api_error.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -47,7 +48,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _mapController.move(LatLng(pos.latitude, pos.longitude), 16.0);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiError.getMessage(e))));
       }
     }
   }
@@ -203,7 +204,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ));
         } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Network Error: ${e.message}'),
+            content: Text('Failed to claim domain: ${ApiError.getMessage(e)}'),
             backgroundColor: AppTheme.error,
           ));
         }
@@ -211,7 +212,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'),
+          content: Text('Failed: ${ApiError.getMessage(e)}'),
           backgroundColor: AppTheme.error,
         ));
       }

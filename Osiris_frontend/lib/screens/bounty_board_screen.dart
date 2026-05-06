@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../providers.dart';
 import '../services/location_service.dart';
 import '../theme.dart';
+import '../api/api_error.dart';
 
 class BountyBoardScreen extends ConsumerStatefulWidget {
   const BountyBoardScreen({super.key});
@@ -42,7 +43,7 @@ class _BountyBoardScreenState extends ConsumerState<BountyBoardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to load bounties: $e'),
+          content: Text('Failed to load bounties: ${ApiError.getMessage(e)}'),
           backgroundColor: AppTheme.error,
         ));
       }

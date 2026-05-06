@@ -78,6 +78,96 @@
         "title": "ActivityProof",
         "type": "object"
       },
+      "AdminMerchantListItem": {
+        "properties": {
+          "business_type": {
+            "title": "Business Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "last_payment_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Payment At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          },
+          "pilot_fee_cents": {
+            "title": "Pilot Fee Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "business_type",
+          "is_active",
+          "payment_status",
+          "pilot_fee_cents",
+          "created_at"
+        ],
+        "title": "AdminMerchantListItem",
+        "type": "object"
+      },
+      "AdminMerchantToggleResponse": {
+        "properties": {
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "merchant_id": {
+            "title": "Merchant Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchant_id",
+          "is_active",
+          "payment_status",
+          "message"
+        ],
+        "title": "AdminMerchantToggleResponse",
+        "type": "object"
+      },
       "AuthLoginRequest": {
         "properties": {
           "device_timestamp": {
@@ -107,6 +197,10 @@
       },
       "AuthLoginResponse": {
         "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
           "email": {
             "format": "email",
             "title": "Email",
@@ -127,6 +221,11 @@
           "role": {
             "title": "Role",
             "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
           }
         },
         "required": [
@@ -134,7 +233,8 @@
           "id",
           "email",
           "name",
-          "message"
+          "message",
+          "access_token"
         ],
         "title": "AuthLoginResponse",
         "type": "object"
@@ -590,6 +690,80 @@
         "title": "MerchantCreate",
         "type": "object"
       },
+      "MerchantProfile": {
+        "description": "Full merchant profile including activation + payment status. Returned to the merchant\nthemselves (post-login refresh) and to admins.",
+        "properties": {
+          "business_type": {
+            "title": "Business Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "last_payment_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Payment At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payment_provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Provider Id"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          },
+          "pilot_fee_cents": {
+            "title": "Pilot Fee Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "business_type",
+          "is_active",
+          "payment_status",
+          "pilot_fee_cents",
+          "created_at"
+        ],
+        "title": "MerchantProfile",
+        "type": "object"
+      },
       "MerchantResponse": {
         "properties": {
           "business_type": {
@@ -660,6 +834,103 @@
           "leading_stat"
         ],
         "title": "PartyRoleResponse",
+        "type": "object"
+      },
+      "PaymentIntentResponse": {
+        "description": "Returned when a merchant initiates payment. In Phase 2 with a real provider this would\ninclude a client_secret for Stripe Elements; in MVP it's a stub UUID.",
+        "properties": {
+          "merchant_id": {
+            "title": "Merchant Id",
+            "type": "integer"
+          },
+          "next_action": {
+            "title": "Next Action",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          },
+          "pilot_fee_cents": {
+            "title": "Pilot Fee Cents",
+            "type": "integer"
+          },
+          "provider_payment_id": {
+            "title": "Provider Payment Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchant_id",
+          "pilot_fee_cents",
+          "provider_payment_id",
+          "payment_status",
+          "next_action"
+        ],
+        "title": "PaymentIntentResponse",
+        "type": "object"
+      },
+      "PaymentWebhookRequest": {
+        "description": "Payload from the payment provider when a payment terminal-state is reached.\nProduction will additionally verify a signature header against the provider's public key\nbefore trusting the body \u2014 for MVP we accept any well-formed JSON.",
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "merchant_id": {
+            "title": "Merchant Id",
+            "type": "integer"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          },
+          "provider_payment_id": {
+            "title": "Provider Payment Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchant_id",
+          "payment_status",
+          "provider_payment_id",
+          "amount_cents",
+          "occurred_at"
+        ],
+        "title": "PaymentWebhookRequest",
+        "type": "object"
+      },
+      "PaymentWebhookResponse": {
+        "properties": {
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "merchant_id": {
+            "title": "Merchant Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchant_id",
+          "payment_status",
+          "is_active",
+          "message"
+        ],
+        "title": "PaymentWebhookResponse",
         "type": "object"
       },
       "PlatformRevenueSummary": {
@@ -1105,6 +1376,17 @@
         "title": "VerificationResult",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "api/v1/auth/login"
+          }
+        },
+        "type": "oauth2"
+      }
     }
   },
   "info": {
@@ -1168,9 +1450,154 @@
         "summary": "Verify Activity Endpoint"
       }
     },
+    "/api/v1/admin/merchants": {
+      "get": {
+        "description": "Admin-only triage view. Filter by activation status; sorted newest-first.",
+        "operationId": "admin_list_merchants_api_v1_admin_merchants_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminMerchantListItem"
+                  },
+                  "title": "Response Admin List Merchants Api V1 Admin Merchants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin List Merchants"
+      }
+    },
+    "/api/v1/admin/merchants/{merchant_id}/activate": {
+      "post": {
+        "description": "Manual activation fallback. Use when payment was confirmed out-of-band (e.g., bank\ntransfer for a pilot merchant) or to re-activate after a deactivate. Records a\nPlatformRevenue row only if the merchant wasn't already active.",
+        "operationId": "admin_activate_merchant_api_v1_admin_merchants__merchant_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "merchant_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantToggleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Activate Merchant"
+      }
+    },
+    "/api/v1/admin/merchants/{merchant_id}/deactivate": {
+      "post": {
+        "description": "Manual deactivation. Use for refunds, policy violations, or to remove a merchant\nfrom the pilot. Does not write a PlatformRevenue row (no money flowed).",
+        "operationId": "admin_deactivate_merchant_api_v1_admin_merchants__merchant_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "merchant_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantToggleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Deactivate Merchant"
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
-        "description": "Role-aware login. Probes Admin \u2192 Merchant \u2192 User in that order; the first table that\ncontains the email **and** matches the password wins. Returns `{role, id, email, name}`\nso the Flutter app can route into admin / merchant / game UI accordingly.\n\nProbe order matters: admins are most privileged, so they're checked first to ensure\nthat if Gagan accidentally creates a player account with the same email as the admin\naccount (very unlikely), admin still wins.",
         "operationId": "auth_login_api_v1_auth_login_post",
         "requestBody": {
           "content": {
@@ -1209,7 +1636,6 @@
     },
     "/api/v1/bounties": {
       "post": {
-        "description": "Seed a bounty. Used by admins for daily quests and by merchants for storefront chests.\nGeofence radius is in metres; distance to caller is filled with 0 since the creator may not\nbe on-site.",
         "operationId": "create_bounty_api_v1_bounties_post",
         "requestBody": {
           "content": {
@@ -1243,6 +1669,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Create Bounty"
       }
     },
@@ -1306,12 +1737,16 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Get Nearby Bounties"
       }
     },
     "/api/v1/bounties/{bounty_id}/complete": {
       "post": {
-        "description": "Validates proximity + score, awards XP/crystals, increments the matching attribute stat,\nand (for merchant chests) issues a single-use coupon code. One claim per user per bounty.",
         "operationId": "complete_bounty_api_v1_bounties__bounty_id__complete_post",
         "parameters": [
           {
@@ -1356,6 +1791,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Complete Bounty"
       }
     },
@@ -1395,6 +1835,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Submit Domain"
       }
     },
@@ -1445,6 +1890,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Lock Vault"
       }
     },
@@ -1489,7 +1939,7 @@
     },
     "/api/v1/merchants/register": {
       "post": {
-        "description": "Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.\nFor MVP this is unauthenticated; production will gate it behind a Merchant Portal admin login.",
+        "description": "Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.\nNewly-registered merchants start `is_active=False` / `payment_status='payment_pending'`;\nthey must complete the pilot-fee flow (or be activated by an admin) before they can\ncreate merchant_chest bounties.",
         "operationId": "register_merchant_api_v1_merchants_register_post",
         "requestBody": {
           "content": {
@@ -1524,6 +1974,144 @@
           }
         },
         "summary": "Register Merchant"
+      }
+    },
+    "/api/v1/merchants/{merchant_id}": {
+      "get": {
+        "description": "Fetch a merchant's full profile (incl. activation + payment status). Accessible to\nthe merchant themselves (same-id check) and to any admin. Used post-login by the\nFlutter app to refresh state and decide whether to show the 'pay your pilot fee' UI.",
+        "operationId": "get_merchant_profile_api_v1_merchants__merchant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "merchant_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Merchant Profile"
+      }
+    },
+    "/api/v1/merchants/{merchant_id}/bounties": {
+      "get": {
+        "operationId": "get_merchant_bounties_api_v1_merchants__merchant_id__bounties_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "merchant_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BountySummary"
+                  },
+                  "title": "Response Get Merchant Bounties Api V1 Merchants  Merchant Id  Bounties Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Merchant Bounties"
+      }
+    },
+    "/api/v1/merchants/{merchant_id}/payments/intent": {
+      "post": {
+        "description": "Initiate the pilot-fee payment. In production this calls the payment provider (e.g.,\nStripe) and returns a client_secret for the front-end to redirect to a payment form.\nFor MVP we stub a unique provider_payment_id and leave payment_status='payment_pending'\nuntil the webhook fires.",
+        "operationId": "create_payment_intent_api_v1_merchants__merchant_id__payments_intent_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "merchant_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentIntentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Payment Intent"
       }
     },
     "/api/v1/onboard": {
@@ -1565,6 +2153,45 @@
         "summary": "Onboard User"
       }
     },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "description": "Endpoint the payment provider POSTs to when a payment reaches a terminal state.\nNOT JWT-gated \u2014 providers don't carry our JWTs. Production MUST verify a signature\nheader against the provider's public key before trusting the payload; for MVP we\naccept any well-formed JSON.\n\nActivation rule: only `payment_status='payment_successful'` flips `is_active=True`\nand writes a PlatformRevenue row. `payment_pending` and `payment_declined` update\nthe merchant's status but leave `is_active=False`.",
+        "operationId": "payment_webhook_api_v1_payments_webhook_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentWebhookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Payment Webhook"
+      }
+    },
     "/api/v1/platform/revenue": {
       "get": {
         "description": "Aggregates the PlatformRevenue ledger so admins can audit total platform earnings and\nthe breakdown by source. Read-only; safe to expose internally during MVP. Production will\ngate this behind an admin role.",
@@ -1581,6 +2208,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Get Platform Revenue"
       }
     },
@@ -1631,6 +2263,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Resolve Siege"
       }
     },
@@ -1676,7 +2313,6 @@
     },
     "/api/v1/users/{user_id}/party-role": {
       "get": {
-        "description": "Returns the user's Party Role. Two modes:\n   - default (no `window_days`)  \u2192 lifetime totals on `User.{str/agi/end/con}_stat`\n   - `?window_days=N`            \u2192 rolling sum of `ActivityLog.score` per stat over the\n                                   last N days, computed from `occurred_at`.\n\nPhase 1 wrote stats only as lifetime totals; v2.7 adds the ActivityLog-backed rolling\npath so the 30-day Party Role can flip even if a user's career totals stay unchanged.",
         "operationId": "get_user_party_role_api_v1_users__user_id__party_role_get",
         "parameters": [
           {
@@ -1727,6 +2363,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Get User Party Role"
       }
     }

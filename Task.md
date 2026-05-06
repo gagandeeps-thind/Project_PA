@@ -3,10 +3,10 @@
 | Field | Value |
 | :--- | :--- |
 | **Document Type** | Project Task Tracker + Onboarding Handoff |
-| **Version** | 2.8 |
+| **Version** | 2.9 |
 | **Last Updated** | 2026-05-04 |
 | **Owner** | Gagandeep Thind |
-| **Phase** | Phase 1 — MVP (Three-portal auth architecture live) |
+| **Phase** | Phase 1 — MVP (Merchant payment lifecycle + JWT live) |
 | **Companion Doc** | `Documentation/Imp_and_US.md` (Master GDD/TDD) |
 
 ---
@@ -395,6 +395,63 @@ python scripts/seed_admin.py
 
 ---
 
+### 2.13 Merchant Payment Lifecycle + JWT *(Shipped v2.9 — newest)*
+
+**What:** Three things shipped together because they're tightly coupled:
+1. **JWT-based auth tokens.** `auth_login` now mints an HS256 JWT alongside the role; FastAPI dependencies (`get_current_player` / `get_current_merchant` / `get_current_admin`) gate per-endpoint access by decoded role.
+2. **Webhook-driven merchant activation.** A merchant who registers starts `is_active=False` / `payment_status='payment_pending'`. The pilot fee is paid via a `/payments/intent` → provider-fires-webhook → `/payments/webhook` flow that flips `is_active=True` only on `payment_successful`.
+3. **Endpoint-level activation gates** (no leakage at login). Inactive merchants log in normally and learn their state from `GET /api/v1/merchants/{id}`; the gate fires only when they try to create a `merchant_chest` bounty.
+
+**Why:**
+- Per Gagan's 2026-05-04 call: gate logic lives at the endpoint (defence-in-depth), activation must auto-flip on payment confirmation (no admin-in-the-loop for the happy path), and the three statuses need explicit semantics — only `payment_successful` activates.
+- JWT was scaffolded in `main.py` (CORS middleware, `oauth2_scheme`, role-specific dependencies) but no endpoints used it yet. Wiring the new merchant endpoints behind those dependencies is the first real exercise of the JWT machinery.
+
+**How:**
+
+1. **Merchant model extended** (`models.py`):
+   - `payment_status` (`'payment_pending'` | `'payment_successful'` | `'payment_declined'`, default `'payment_pending'`)
+   - `payment_provider_id` (Stripe-style intent ID)
+   - `pilot_fee_cents` (default 5000 = $50 USD)
+   - `last_payment_at`
+
+2. **One-time migration** (`scripts/migrate_v2_9.py`) — idempotent ALTER TABLE for the four new columns. Run once after pulling v2.9. SQLAlchemy's `create_all` doesn't add columns to existing tables; Alembic comes in Phase 2.
+
+3. **Activation rules in `payment_webhook`:**
+   - `payment_successful` → flips `is_active=True`, sets `last_payment_at`, writes a `PlatformRevenue('merchant_pilot_fee')` row (idempotent — guards against double-credit if the same successful webhook fires twice).
+   - `payment_pending` → status updated, `is_active` stays False.
+   - `payment_declined` → status updated, `is_active` stays False. Merchant can retry by initiating a new intent.
+   - `provider_payment_id` cross-checked against the merchant's last intent — guards against webhooks for a different intent landing on the wrong merchant.
+
+4. **JWT machinery** (already in `main.py` from Gagan's edit, now actively used):
+   - `create_access_token({"sub": str(id), "role": role})` — 7-day expiry.
+   - `oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")`.
+   - `get_current_admin/merchant/player` dependencies enforce role on individual endpoints.
+
+5. **Merchant_chest gate** in `create_bounty`: if `bounty_type == 'merchant_chest'` and the linked merchant is not active, return 403 with the merchant's current `payment_status` in the error detail. Daily/system bounties are unaffected.
+
+**Files:** `Osiris_backend/models.py` (4 new Merchant columns), `Osiris_backend/main.py` (Pydantic shapes + 6 new endpoints + bounty gate), `Osiris_backend/scripts/migrate_v2_9.py` (one-time SQLite migration).
+
+**New endpoints (6):**
+
+| Method | Path | Auth | Purpose |
+| :--- | :--- | :--- | :--- |
+| GET  | `/api/v1/merchants/{id}` | Merchant (same-id) or Admin | Full profile incl. activation/payment state. Used post-login to refresh state. |
+| POST | `/api/v1/merchants/{id}/payments/intent` | Merchant (same-id) | Initiate pilot-fee payment. Returns stub `provider_payment_id` for MVP; real Stripe in Phase 2. |
+| POST | `/api/v1/payments/webhook` | None (signature verification TODO) | Provider-driven activation. Three terminal statuses; only `payment_successful` activates. |
+| GET  | `/api/v1/admin/merchants` | Admin | Triage view; filter by `?status=pending\|active\|declined\|all`. |
+| POST | `/api/v1/admin/merchants/{id}/activate` | Admin | Manual fallback (out-of-band payment, demo seeding). Writes a `PlatformRevenue` row. |
+| POST | `/api/v1/admin/merchants/{id}/deactivate` | Admin | Manual fallback (refunds, violations). No revenue row. |
+
+**Smoke verified end-to-end** (11 steps, all pass on `fitness_mvp.db`): register → 403 chest → intent → webhook(pending) stays inactive → webhook(successful) flips active → chest creates → admin list → admin deactivate → declined webhook.
+
+**Known simplifications (carry-overs to Phase 2):**
+- **Payment provider is stubbed.** `/payments/intent` returns a UUID-style fake `provider_payment_id`. Real Stripe / payment-provider SDK integration is Phase 2.
+- **Webhook has no signature verification.** Production MUST verify a signature header against the provider's public key before trusting the body. Currently any client can call `/payments/webhook` with a valid merchant_id and flip activation.
+- **JWT secret is hardcoded** (`SECRET_KEY = "dummy-secret-key-for-mvp-phase"`, 30 bytes — pyjwt warns it's below the 32-byte minimum for HS256). Move to an env var (`OSIRIS_JWT_SECRET`) and rotate before any non-pilot deployment.
+- **No idempotency-key on `/payments/intent`.** A merchant calling it twice creates two unrelated intents; only the most recent provider_payment_id is honored. Fine for MVP; harden once real money flows.
+
+---
+
 ### 2.9 Time-Source Policy *(Established v2.2)*
 
 **What:** Activity timestamps come from the user's mobile device via a required `device_timestamp` (ISO 8601) field. Server-owned timestamps (decay, inactivity) use server `now`.
@@ -417,21 +474,19 @@ The carve-outs (decay, inactivity check) use server time because trusting a devi
 ## 3. Active Sprint — Next Up
 
 ### Sprint Goal
-The backend is hardened and the pilot data is seeded. The next major architectural shift is the **Multi-Portal Architecture**. We are implementing Role-Based Access Control (RBAC) so that a single login mechanism securely routes three distinct user types to their respective spaces:
-1. **Admin**: Accessible only via the mobile app using specific admin credentials. Routes to the Admin Dashboard.
-2. **Client/Merchant**: The primary workspace will be a new dedicated Web Page. However, if they log into the mobile app, they are routed to a stripped-down Client/Merchant view, explicitly keeping them out of the game/player UI.
-3. **Player**: Registers and logs into the mobile app and is routed to the standard AR-RPG Dashboard.
+v2.9 closed the loop on the merchant payment lifecycle (auto-activation via webhook, three payment statuses, JWT-gated admin overrides). Next sprint focuses on **wider RBAC enforcement** across already-built endpoints, **merchant analytics** (so the merchant portal can render something useful), and **harden the JWT secret** before any non-pilot deployment.
 
 ### Sprint Backlog
 
 **Backend**
-- ✅ **Data Models**: New `Admin` table; `POST /api/v1/auth/login` returns `{role, id, email, name}` after probing Admin → Merchant → Player. *(v2.8)*
-- ✅ **Admin Seeding**: `scripts/seed_admin.py` creates the single admin row out-of-band. Public admin registration intentionally absent. *(v2.8)*
-- 📋 **RBAC enforcement**: Implement JWT-based middleware so per-endpoint gating is real (e.g., `/platform/revenue` admin-only, `/bounties` create restricted to admin/merchant). Currently `/auth/login` only routes the *initial* UI choice — individual API calls are still un-gated.
-- 📋 **CORS for web merchant portal**: Once the web registration page is in scope, configure FastAPI CORS middleware to allow the merchant portal's origin.
-- 📋 **Merchant analytics endpoints**: `GET /api/v1/merchants/{id}/bounties` (own bounties + completion stats) — needed before merchant dashboard can render anything useful.
+- ✅ **Multi-portal auth (v2.8)**, **JWT machinery (v2.9)**, **Merchant payment lifecycle (v2.9)** — all shipped. See §§ 2.12–2.13.
+- ✅ **CORS middleware** — already added (`allow_origins=["*"]`); tighten to specific origins before production.
+- 📋 **Wider RBAC enforcement**: gate `/platform/revenue` to admin (currently un-gated), gate `/bounties` POST to admin OR merchant-self, gate `/users/{id}` reads so a player can only fetch their own profile (or admins can fetch any).
+- 📋 **Merchant analytics endpoints**: `GET /api/v1/merchants/{id}/bounties` (own bounties + completion counts), `GET /api/v1/merchants/{id}/coupons-redeemed` — needed before merchant dashboard can render anything useful.
+- 📋 **JWT secret to env var**: replace hardcoded `SECRET_KEY` with `os.environ.get("OSIRIS_JWT_SECRET")`; document the env var in § 8 of this file. Currently 30 bytes (pyjwt warns < 32).
+- 📋 **Webhook signature verification stub**: add a `X-Provider-Signature` header check that's a no-op in MVP but fails closed once a real provider is wired.
 
-**Frontend (Mobile App)** — *Gagan curates this section in Antigravity. Backend's contribution is already shipped: see § 2.12 for the request/response shapes Antigravity should code against.*
+**Frontend (Mobile App)** — *Gagan curates this section in Antigravity. v2.9 contract for the Flutter side: post-login, call `GET /api/v1/merchants/{id}` to discover `is_active` + `payment_status`. If inactive, surface a "Pay Pilot Fee" CTA that POSTs `/merchants/{id}/payments/intent` and shows the returned `next_action` instructions. Show one of three banners based on `payment_status`: pending / successful / declined.*
 
 ---
 
@@ -624,3 +679,4 @@ For a cheaper preview (no DB writes), `POST /api/v1/activities/verify` accepts t
 | 2.6 | 2026-04-30 | G. Thind | Hardening sprint shipped — `PlatformRevenue` ledger + `/platform/revenue` audit endpoint; `lifespan` migration replacing `@app.on_event`; `tests/test_ml_referee.py` (10/10 pass); `scripts/export_openapi.py` writing `Documentation/openapi.json` (14 paths); verified-flow curl example added to § 8.3. |
 | 2.7 | 2026-04-30 | G. Thind | `ActivityLog` table + `record_activity` helper wired through all three action endpoints; `?window_days=N` opt-in rolling Party Stats on `/users/{id}/party-role`; `ProofConsumed` table + replay-attack guard (409 on duplicate proof key) hashing user_id+timestamp+activity+score+accel samples; `_enforce_proof` refactored to surface confidence to call sites. Two open economy decisions ratified pending ack. |
 | 2.8 | 2026-05-04 | G. Thind | Three-portal auth architecture — new `Admin` table; `POST /api/v1/auth/login` probes Admin → Merchant → Player and returns the matching `role` for Flutter UI routing; `scripts/seed_admin.py` for out-of-band admin creation (no public admin registration endpoint). End-to-end smoke verified all four cases (admin / merchant / player / 401) on `fitness_mvp.db`. |
+| 2.9 | 2026-05-04 | G. Thind | Merchant payment lifecycle + JWT — Merchant model extended with `payment_status` / `payment_provider_id` / `pilot_fee_cents` / `last_payment_at`; new endpoints `/merchants/{id}` (self-profile), `/merchants/{id}/payments/intent`, `/payments/webhook`, `/admin/merchants` (list + activate + deactivate); `merchant_chest` bounty creation now 403s for inactive merchants; JWT actively used by `get_current_admin/merchant/player` dependencies; one-time `scripts/migrate_v2_9.py` adds the four new columns to existing SQLite. End-to-end smoke verified the full webhook flow (pending / successful / declined). |

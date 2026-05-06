@@ -6,6 +6,7 @@ import '../providers.dart';
 import '../services/location_service.dart';
 import '../theme.dart';
 import 'package:dio/dio.dart';
+import '../api/api_error.dart';
 
 class BountyDetailScreen extends ConsumerStatefulWidget {
   const BountyDetailScreen({super.key});
@@ -155,7 +156,7 @@ class _BountyDetailScreenState extends ConsumerState<BountyDetailScreen> {
           ));
         } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Network Error: ${e.message}'),
+            content: Text('Failed: ${ApiError.getMessage(e)}'),
             backgroundColor: AppTheme.error,
           ));
         }
@@ -163,7 +164,7 @@ class _BountyDetailScreenState extends ConsumerState<BountyDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Claim failed: $e'),
+          content: Text('Claim failed: ${ApiError.getMessage(e)}'),
           backgroundColor: AppTheme.error,
         ));
       }

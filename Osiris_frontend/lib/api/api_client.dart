@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 class ApiClient {
   late final Dio _dio;
+  String? _accessToken;
 
   ApiClient({String baseUrl = 'http://10.0.2.2:8000'}) {
     // 10.0.2.2 is standard for Android Emulator to hit localhost
@@ -13,6 +14,18 @@ class ApiClient {
         'Content-Type': 'application/json',
       },
     ));
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        if (_accessToken != null) {
+          options.headers['Authorization'] = 'Bearer $_accessToken';
+        }
+        return handler.next(options);
+      },
+    ));
+  }
+
+  void setToken(String? token) {
+    _accessToken = token;
   }
 
   Dio get dio => _dio;

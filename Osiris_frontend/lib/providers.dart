@@ -26,15 +26,21 @@ class AuthNotifier extends Notifier<UserProfile?> {
   Future<void> _loadSession() async {
     final prefs = ref.read(sharedPreferencesProvider);
     final userId = prefs.getInt('user_id');
-    if (userId != null) {
+    final token = prefs.getString('access_token');
+    
+    if (userId != null && token != null) {
       try {
-        final profileData = await ref.read(apiClientProvider).getUserProfile(userId);
+        final client = ref.read(apiClientProvider);
+        client.setToken(token);
+        final profileData = await client.getUserProfile(userId);
         state = UserProfile.fromJson(profileData);
       } catch (e) {
         // Token/Session expired or network error
         print('Failed to load session: $e');
         await logout();
       }
+    } else {
+      await logout();
     }
   }
 
@@ -52,6 +58,12 @@ class AuthNotifier extends Notifier<UserProfile?> {
     
     final baseProfile = UserProfile.fromJson(data);
     await prefs.setInt('user_id', baseProfile.id);
+    
+    final token = data['access_token'];
+    if (token != null) {
+      await prefs.setString('access_token', token);
+      client.setToken(token);
+    }
     
     if (baseProfile.role == 'player') {
       // The auth endpoint only returns a minimal payload.
@@ -72,12 +84,11 @@ class AuthNotifier extends Notifier<UserProfile?> {
   }
 
   Future<void> register(String email, String password, double weightKg, double heightM, String preferredPath) async {
-    final prefs = ref.read(sharedPreferencesProvider);
     final client = ref.read(apiClientProvider);
     
     final deviceTimestamp = DateTime.now().toUtc().toIso8601String();
     
-    final data = await client.onboardUser(
+    await client.onboardUser(
       email: email, 
       password: password, 
       weightKg: weightKg, 
@@ -86,14 +97,14 @@ class AuthNotifier extends Notifier<UserProfile?> {
       deviceTimestamp: deviceTimestamp
     );
     
-    final profile = UserProfile.fromJson(data);
-    await prefs.setInt('user_id', profile.id);
-    state = profile;
+    await login(email, password);
   }
 
   Future<void> logout() async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.remove('user_id');
+    await prefs.remove('access_token');
+    ref.read(apiClientProvider).setToken(null);
     state = null;
   }
 }

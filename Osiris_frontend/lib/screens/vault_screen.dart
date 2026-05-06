@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../api/api_error.dart';
 
 class VaultScreen extends ConsumerStatefulWidget {
   const VaultScreen({super.key});
@@ -48,7 +49,7 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to lock vault: $e'),
+          content: Text('Failed to lock vault: ${ApiError.getMessage(e)}'),
           backgroundColor: AppTheme.error,
         ));
       }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../api/api_error.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -39,7 +40,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Awakening failed: ${e.toString()}'),
+            content: Text('Awakening failed: ${ApiError.getMessage(e)}'),
             backgroundColor: AppTheme.error,
           ),
         );
