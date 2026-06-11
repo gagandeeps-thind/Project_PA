@@ -21,9 +21,11 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     env:
-      # Deterministic test env. A fixed JWT secret keeps tokens stable across the run;
-      # OSIRIS_ENV stays unset (dev) so the app boots without prod-only secrets.
+      # Deterministic test env. A fixed JWT secret keeps tokens stable across the run.
+      # OSIRIS_ENV=test marks an explicit dev/test environment so the fail-closed webhook
+      # boot check (audit §2.1) does not demand a webhook secret for the test job.
       OSIRIS_JWT_SECRET: ci-fixed-secret-not-for-production-use-only
+      OSIRIS_ENV: test
       OSIRIS_LOG_JSON: "1"
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +56,9 @@ jobs:
 
       - name: Tests — v2.10 backend flows suite
         run: python tests/test_v2_10_flows.py
+
+      - name: Tests — Phase 2 security suite (webhook/CORS/nearby-auth)
+        run: python tests/test_phase2_security.py
 
       - name: OpenAPI contract drift check
         run: python scripts/check_openapi_drift.py

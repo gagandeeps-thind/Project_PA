@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Phase 2: webhook fail-closed boot check (audit §2.1) requires an explicit dev/test env.
+os.environ.setdefault("OSIRIS_ENV", "test")
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

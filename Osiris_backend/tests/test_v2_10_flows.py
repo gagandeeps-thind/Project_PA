@@ -25,6 +25,10 @@ import bcrypt
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
+# Phase 2: the webhook fail-closed boot check (audit §2.1) requires an explicit dev/test env,
+# otherwise importing `main` raises (it would be serving a wide-open webhook in prod).
+os.environ.setdefault("OSIRIS_ENV", "test")
+
 import database
 import models
 import main

@@ -111,9 +111,18 @@ _configure_logging()
 # Initialize the FastAPI application
 app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
 
+# Phase 2 / audit §2.5: explicit CORS allowlist. `allow_origins=["*"]` with
+# `allow_credentials=True` is invalid (browsers refuse credentialed requests to a wildcard
+# origin) and signals "any site may call us with the user's session." Origins come from
+# OSIRIS_CORS_ORIGINS (comma-separated) with a localhost dev default for the Vite admin web.
+# Native mobile apps (customer/merchant) are not subject to browser CORS, so they need no entry.
+_default_cors = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+_cors_origins = [
+    o.strip() for o in os.environ.get("OSIRIS_CORS_ORIGINS", _default_cors).split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -262,12 +271,21 @@ def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
 # Production safety: when OSIRIS_ENV=production, the secret is required at boot. Without it
 # the webhook endpoint would accept any payload — indistinguishable from a forged-webhook
 # attacker activating an arbitrary merchant. Mirrors the JWT secret pattern above.
+# Phase 2 / audit §2.1: FAIL CLOSED. The webhook secret is REQUIRED unless OSIRIS_ENV is an
+# *explicit* dev/test value. A forgotten or unknown OSIRIS_ENV is treated as production and
+# must refuse to boot — the old behavior (fail open whenever the secret was unset, only
+# fail-fast when OSIRIS_ENV was *explicitly* "production") meant a deploy that forgot the env
+# var served a wide-open, forgeable payment webhook. Inverted here.
+_DEV_ENVS = {"dev", "development", "test", "testing", "local"}
+_IS_DEV_ENV = os.environ.get("OSIRIS_ENV", "").lower() in _DEV_ENVS
 _WEBHOOK_SECRET = os.environ.get("OSIRIS_WEBHOOK_SECRET")
-if not _WEBHOOK_SECRET and os.environ.get("OSIRIS_ENV", "").lower() == "production":
+if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
     raise RuntimeError(
-        "OSIRIS_WEBHOOK_SECRET is required when OSIRIS_ENV=production. "
-        "Without it the payment webhook accepts any payload. "
-        "Generate one with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
+        "OSIRIS_WEBHOOK_SECRET is required unless OSIRIS_ENV is one of "
+        f"{sorted(_DEV_ENVS)}. An unset or unknown OSIRIS_ENV is treated as production: "
+        "the app refuses to boot rather than serve an unauthenticated, forgeable payment "
+        "webhook (audit §2.1). For local development set OSIRIS_ENV=dev. "
+        "Generate a secret with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
         "and configure the same value on the payment provider's webhook settings."
     )
 
@@ -1064,11 +1082,19 @@ async def get_nearby_domains(
     lng: float,
     radius_km: float = 5.0,
     db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
 ):
     """Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),
-    sorted nearest-first. Public game state — no auth required (any player can see who owns
-    what land, the same way a Strava heatmap is public). MVP uses an in-memory haversine
-    sweep; PostGIS `ST_DWithin` will replace this in Phase 2."""
+    sorted nearest-first.
+
+    Phase 2 / audit §2.2: this is now AUTHENTICATED (a player JWT is required). Previously it
+    was public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any
+    lat/lng to any unauthenticated caller — a stalking + economic-recon primitive. Requiring
+    auth closes the unauthenticated leak. NOTE (residual risk, see register): the response
+    still exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an
+    opaque handle + centroid-only for non-owners is a follow-up that changes the client
+    contract and is deferred for a product decision. MVP uses an in-memory haversine sweep;
+    PostGIS `ST_DWithin` replaces this in Phase 4."""
     candidates = db.query(models.Domain).all()
     out: List[DomainSummary] = []
     for d in candidates:
