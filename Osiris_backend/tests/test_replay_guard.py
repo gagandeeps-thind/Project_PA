@@ -93,7 +93,7 @@ def test_replay_attack_guard():
         }
         
         # 1. First submission should succeed (200 OK)
-        resp1 = client.post("/api/v1/domains", json=payload)
+        client.post("/api/v1/domains", json=payload)
         # Note: the heuristic ml_referee might reject our fake accelerometer trace
         # with a 400 Bad Request depending on its internal math. But if the replay
         # guard works, the SECOND request must be 409 regardless, or if the first

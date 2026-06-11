@@ -15,7 +15,6 @@ Run it from the Osiris_backend dir:
     python scripts/migrate_v2_9.py
 """
 import os
-import sys
 import sqlite3
 
 HERE = os.path.dirname(os.path.abspath(__file__))

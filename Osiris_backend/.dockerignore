@@ -1,0 +1,16 @@
+# Keep the image lean and reproducible: no dev DB, caches, venvs, or VCS metadata.
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+# Dev SQLite DB — the entrypoint runs `alembic upgrade head` to build a fresh DB.
+*.db
+*.sqlite3
+.git/
+.gitignore
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Dev-only tooling manifest (the image installs from requirements.lock.txt)
+requirements-dev.txt
+*.md

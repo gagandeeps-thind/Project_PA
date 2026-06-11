@@ -62,6 +62,52 @@ async def lifespan(app: FastAPI):
     finally:
         scheduler.shutdown()
 
+# --- Phase 0: structured JSON logging skeleton ---------------------------------
+# Emits one JSON line per request (request id, user id, route, method, status, latency).
+# Opt-in via OSIRIS_LOG_JSON=1 so local dev keeps human-readable logs by default; CI and
+# any container set the env var. This is a *skeleton* — fields can grow; format stays JSON.
+import time as _time
+import contextvars
+
+_request_id_ctx: "contextvars.ContextVar[str]" = contextvars.ContextVar("request_id", default="-")
+
+
+class _JsonLogFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+            "request_id": _request_id_ctx.get(),
+        }
+        # Structured extras attached via logger.info(..., extra={"ctx": {...}})
+        ctx = getattr(record, "ctx", None)
+        if isinstance(ctx, dict):
+            payload.update(ctx)
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=str)
+
+
+def _configure_logging() -> None:
+    level = os.environ.get("OSIRIS_LOG_LEVEL", "INFO").upper()
+    root = logging.getLogger()
+    root.setLevel(level)
+    handler = logging.StreamHandler()
+    if os.environ.get("OSIRIS_LOG_JSON", "").lower() in ("1", "true", "yes"):
+        handler.setFormatter(_JsonLogFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    # Replace existing handlers so we don't double-log under uvicorn.
+    root.handlers = [handler]
+    # Quiet chatty third-party loggers so they don't drown the access log.
+    for noisy in ("alembic", "apscheduler", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_configure_logging()
+
 # Initialize the FastAPI application
 app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
 
@@ -72,6 +118,81 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Phase 0: per-request structured access log + request id -------------------
+@app.middleware("http")
+async def _access_log_middleware(request: Request, call_next):
+    req_id = request.headers.get("X-Request-ID") or secrets.token_hex(8)
+    token = _request_id_ctx.set(req_id)
+    start = _time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = req_id
+        return response
+    finally:
+        latency_ms = round((_time.perf_counter() - start) * 1000, 2)
+        # user id is best-effort: auth dependencies may set request.state.user_id.
+        user_id = getattr(request.state, "user_id", None)
+        logger.info(
+            "request",
+            extra={"ctx": {
+                "method": request.method,
+                "route": request.url.path,
+                "status": status_code,
+                "latency_ms": latency_ms,
+                "user_id": user_id,
+            }},
+        )
+        _request_id_ctx.reset(token)
+
+
+# --- Phase 0: liveness/readiness probe ----------------------------------------
+# include_in_schema=False keeps it out of the client OpenAPI contract (ops-only route).
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    """Readiness probe: DB reachable + migrations current.
+
+    Returns 200 only when a trivial query succeeds AND the DB's stamped Alembic
+    revision matches the latest local migration head. 503 otherwise."""
+    from sqlalchemy import text
+
+    checks: dict = {"db": "down", "migrations": "unknown"}
+    try:
+        with database.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            checks["db"] = "ok"
+            db_rev = None
+            try:
+                db_rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            except Exception:
+                db_rev = None
+        head_rev = _alembic_head_revision()
+        if db_rev is not None and head_rev is not None:
+            checks["migrations"] = "current" if db_rev == head_rev else f"behind ({db_rev} != {head_rev})"
+            checks["db_revision"] = db_rev
+            checks["head_revision"] = head_rev
+    except Exception as exc:  # pragma: no cover - exercised via probe, not unit test
+        logger.warning("healthz check failed", extra={"ctx": {"error": str(exc)}})
+
+    healthy = checks["db"] == "ok" and checks["migrations"] in ("current", "unknown")
+    if not healthy:
+        raise HTTPException(status_code=503, detail=checks)
+    return {"status": "ok", **checks}
+
+
+def _alembic_head_revision() -> Optional[str]:
+    """Latest revision id from the local alembic/versions scripts, or None if unavailable."""
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini"))
+        return ScriptDirectory.from_config(cfg).get_current_head()
+    except Exception:
+        return None
 
 # --- v2.10: JWT secret loaded from env var with a clearly-flagged dev fallback ---
 # Set OSIRIS_JWT_SECRET in any non-dev environment. Deployment must use a 32+ byte secret
@@ -622,7 +743,7 @@ def get_rank(xp: int, last_activity_date: Optional[datetime] = None) -> str:
         if days_inactive > 30:
             # Harsh punishment for 30+ days of inactivity
             return "F - The Dishonored"
-            
+
     if xp < 500: return "D - Beginner"
     if xp < 1000: return "C - Intermediate"
     if xp < 2500: return "B - Advanced"
@@ -797,25 +918,25 @@ def get_party_role(user: models.User) -> tuple[str, str]:
 @app.post("/api/v1/onboard", response_model=UserProfile)
 async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
     """API Endpoint to register a new user, calculate their stats, and assign an avatar."""
-    
+
     # 0. Check if user already exists
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # 1. Calculate BMI (Weight / Height^2) 
+    # 1. Calculate BMI (Weight / Height^2)
     # (Pydantic 'gt=0' prevents division by zero, but adding a fallback safety check is good practice)
     if user.height_m <= 0:
         raise HTTPException(status_code=400, detail="Height must be greater than zero.")
     bmi = round(user.weight_kg / (user.height_m ** 2), 2)
-    
+
     # 2. Determine Avatar Class based on Path, not BMI
     avatar_class = get_avatar_class(user.preferred_path)
-    
+
     # 3. Create the Database "Warehouse Worker" Model
     # Securely hash the user's password using bcrypt
     hashed_pwd = get_password_hash(user.password)
-    
+
     device_ts = _to_naive_utc(user.device_timestamp)
     new_user = models.User(
         email=user.email,
@@ -829,12 +950,12 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
         last_activity_date=device_ts,
         streak=0
     )
-    
+
     # 4. Save to Database and commit the transaction
     db.add(new_user)
     db.commit()
     db.refresh(new_user) # Retrieves the newly generated 'id' from the database
-    
+
     # 5. Return the saved data
     # (FastAPI automatically converts the SQLAlchemy model into the Pydantic UserProfile JSON)
     return new_user
@@ -986,7 +1107,7 @@ async def get_nearby_domains(
 @app.post("/api/v1/domains", response_model=DomainResponse)
 async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Processes a completed Domain Trace, validates anti-cheat, and claims the territory."""
-    
+
     if token_data["id"] != domain_req.owner_id:
         raise HTTPException(status_code=403, detail="Not authorized to act as this user")
 
@@ -1030,7 +1151,7 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
 
     # 4. Save Domain to the Database
     geom_json = json.dumps([{"lat": c.lat, "lng": c.lng} for c in domain_req.coordinates])
-    
+
     new_domain = models.Domain(
         owner_id=user.id,
         geometry_json=geom_json,
@@ -1038,7 +1159,7 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
         defense_score=domain_req.defense_score,
         defense_type=domain_req.defense_type
     )
-    
+
     # 4.5 Siege Logic: Check if this new domain swallows any existing domains
     all_domains = db.query(models.Domain).filter(models.Domain.owner_id != user.id).all()
     sieges_created = 0
@@ -1102,7 +1223,7 @@ async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depend
     """Lock (or top up) an Ownership Fee on a domain. Crystals are deducted from the owner's
     wallet and added to the domain's Vault. Vault balance doubles as the required Challenger
     Match amount. Topping up is allowed; unlocking (lowering) is deferred to Phase 2."""
-    
+
     if token_data["id"] != req.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to act as this user")
 

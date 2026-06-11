@@ -1,0 +1,84 @@
+name: backend-ci
+
+# Phase 0 build baseline. Nothing in later phases merges without this pipeline passing.
+# Gate order (per the Delegation Playbook): lint -> type-check -> tests -> build image ->
+# OpenAPI drift check against the committed contract.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - "Osiris_backend/**"
+      - "Documentation/openapi.json"
+      - ".github/workflows/ci.yml"
+
+defaults:
+  run:
+    working-directory: Osiris_backend
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      # Deterministic test env. A fixed JWT secret keeps tokens stable across the run;
+      # OSIRIS_ENV stays unset (dev) so the app boots without prod-only secrets.
+      OSIRIS_JWT_SECRET: ci-fixed-secret-not-for-production-use-only
+      OSIRIS_LOG_JSON: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies (exact lock + dev tooling)
+        run: pip install -r requirements.lock.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type-check (mypy)
+        # Non-blocking for now: the legacy monolith is largely untyped. The gate exists so
+        # the signal is visible; it tightens to blocking after the Phase 5 refactor adds
+        # type coverage to services/. Tracked, not ignored.
+        continue-on-error: true
+        run: mypy --ignore-missing-imports --no-strict-optional main.py models.py spatial_utils.py ml_referee.py
+
+      - name: Build fresh DB (migrations from zero — proves a clean clone boots)
+        run: python -m alembic upgrade head
+
+      - name: Tests — ML referee suite
+        run: python tests/test_ml_referee.py
+
+      - name: Tests — v2.10 backend flows suite
+        run: python tests/test_v2_10_flows.py
+
+      - name: OpenAPI contract drift check
+        run: python scripts/check_openapi_drift.py
+
+  docker-image:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build runtime image from a clean checkout
+        run: docker build -t osiris-backend:ci Osiris_backend
+
+      - name: Boot the container and hit /healthz (zero manual steps)
+        run: |
+          docker run -d --name osiris_ci -p 8000:8000 \
+            -e OSIRIS_JWT_SECRET=ci-fixed-secret-not-for-production-use-only \
+            -e OSIRIS_WEBHOOK_SECRET=ci-fixed-webhook-secret \
+            osiris-backend:ci
+          for i in $(seq 1 20); do
+            if curl -fs http://127.0.0.1:8000/healthz; then echo "healthz OK"; exit 0; fi
+            sleep 2
+          done
+          echo "healthz never came up"; docker logs osiris_ci; exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f osiris_ci || true
