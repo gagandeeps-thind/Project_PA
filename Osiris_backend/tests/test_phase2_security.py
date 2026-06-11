@@ -116,11 +116,24 @@ def test_cors_no_wildcard_reflection():
            acao_ok == "http://localhost:5173")
 
 
+# --- B3 (§4.3): auth/login is rate limited --------------------------------------------------
+def test_login_rate_limited():
+    client, _models, _db = _client_and_models()
+    body = {
+        "email": "nobody-ph2@example.com", "password": "wrongpass",
+        "device_timestamp": "2026-06-11T00:00:00+00:00",
+    }
+    codes = [client.post("/api/v1/auth/login", json=body).status_code for _ in range(15)]
+    # Limit is 10/60s; a 15-call burst from one IP must hit 429 (old code: all 401, never 429).
+    _check("B3 §4.3 /auth/login is rate limited (429 after a burst)", 429 in codes)
+
+
 if __name__ == "__main__":
     test_webhook_fail_closed_boot()
     test_unsigned_webhook_rejected()
     test_domains_nearby_requires_auth()
     test_cors_no_wildcard_reflection()
+    test_login_rate_limited()
     print()
     if _FAILURES:
         print(f"{len(_FAILURES)} check(s) FAILED: {_FAILURES}")

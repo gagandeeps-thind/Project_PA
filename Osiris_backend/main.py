@@ -325,6 +325,51 @@ async def root():
 async def favicon():
     return {}
 
+# --- Phase 2 / audit §4.3: rate limiting ------------------------------------------------
+# Dependency-free, in-memory sliding-window limiter keyed on client IP + scope. Sufficient for
+# the single-VM pilot; at horizontal scale this must move to a shared store (Redis) because the
+# buckets are per-process. Disabled in dev/test (OSIRIS_ENV dev/test) so the suites and local
+# work aren't throttled — it protects the real deployment, where OSIRIS_ENV is prod-like.
+import threading as _threading
+
+_rate_buckets: "dict[str, list[float]]" = {}
+_rate_lock = _threading.Lock()
+
+
+def _rate_limit(max_requests: int, window_s: int, scope: str):
+    """Returns a FastAPI dependency that raises 429 when an IP exceeds `max_requests` in
+    `window_s` seconds for the given `scope`."""
+    def _dep(request: Request) -> None:
+        if _IS_DEV_ENV:
+            return  # no throttling in dev/test
+        ip = request.client.host if request.client else "unknown"
+        key = f"{scope}:{ip}"
+        now = _time.monotonic()
+        cutoff = now - window_s
+        with _rate_lock:
+            bucket = _rate_buckets.setdefault(key, [])
+            # Drop timestamps outside the window.
+            i = 0
+            for ts in bucket:
+                if ts >= cutoff:
+                    break
+                i += 1
+            if i:
+                del bucket[:i]
+            if len(bucket) >= max_requests:
+                raise HTTPException(status_code=429, detail="Too many requests. Slow down.")
+            bucket.append(now)
+    return _dep
+
+
+# Prod defaults; tuned for the Bedford pilot. Auth + payment + proof endpoints are the
+# brute-force / spam / CPU-burn (triple-bcrypt) targets named in the audit.
+_rl_login = _rate_limit(10, 60, "login")
+_rl_onboard = _rate_limit(5, 60, "onboard")
+_rl_verify = _rate_limit(30, 60, "verify")
+_rl_webhook = _rate_limit(60, 60, "webhook")
+
+
 # --- Security ---
 def _now_naive_utc() -> datetime:
     """Server-side 'now' as a naive UTC datetime (tz stripped) for SQLite-compatible storage."""
@@ -934,7 +979,7 @@ def get_party_role(user: models.User) -> tuple[str, str]:
 # --- Endpoints ---
 
 @app.post("/api/v1/onboard", response_model=UserProfile)
-async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
+async def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
     """API Endpoint to register a new user, calculate their stats, and assign an avatar."""
 
     # 0. Check if user already exists
@@ -999,7 +1044,7 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/auth/login", response_model=AuthLoginResponse)
-async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db)):
+async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl: None = Depends(_rl_login)):
     try:
         device_ts = _to_naive_utc(credentials.device_timestamp)
 
@@ -1676,7 +1721,7 @@ def _enforce_proof_gps_in_geofence(
 
 
 @app.post("/api/v1/activities/verify", response_model=VerificationResult)
-async def verify_activity_endpoint(proof: ActivityProof):
+async def verify_activity_endpoint(proof: ActivityProof, _rl: None = Depends(_rl_verify)):
     """Stateless preview of the ML Referee. The frontend can call this to confirm a workout
     will pass before submitting the real action (claim, siege, bounty). No DB writes.
     Note: the co-location check is NOT applied here — that requires the target polygon /
@@ -1848,6 +1893,7 @@ async def create_payment_intent(
 async def payment_webhook(
     body: bytes = Depends(verify_webhook_signature),
     db: Session = Depends(get_db),
+    _rl: None = Depends(_rl_webhook),
 ):
     """Endpoint the payment provider POSTs to when a payment reaches a terminal state.
     NOT JWT-gated — providers don't carry our JWTs. Signature verification (`X-Provider-
