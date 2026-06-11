@@ -36,12 +36,21 @@
             "items": {
               "$ref": "#/components/schemas/AccelerometerSample"
             },
+            "maxItems": 20000,
             "title": "Accelerometer",
             "type": "array"
           },
           "activity_type": {
             "title": "Activity Type",
             "type": "string"
+          },
+          "barometer": {
+            "items": {
+              "$ref": "#/components/schemas/BarometerSample"
+            },
+            "maxItems": 20000,
+            "title": "Barometer",
+            "type": "array"
           },
           "declared_score": {
             "minimum": 0.0,
@@ -57,6 +66,30 @@
             "exclusiveMinimum": 0.0,
             "title": "Duration Seconds",
             "type": "number"
+          },
+          "gps": {
+            "items": {
+              "$ref": "#/components/schemas/GpsSample"
+            },
+            "maxItems": 20000,
+            "title": "Gps",
+            "type": "array"
+          },
+          "gyroscope": {
+            "items": {
+              "$ref": "#/components/schemas/GyroscopeSample"
+            },
+            "maxItems": 20000,
+            "title": "Gyroscope",
+            "type": "array"
+          },
+          "magnetometer": {
+            "items": {
+              "$ref": "#/components/schemas/MagnetometerSample"
+            },
+            "maxItems": 20000,
+            "title": "Magnetometer",
+            "type": "array"
           },
           "pose": {
             "anyOf": [
@@ -182,7 +215,7 @@
             "type": "string"
           },
           "password": {
-            "maxLength": 12,
+            "maxLength": 72,
             "title": "Password",
             "type": "string"
           }
@@ -237,6 +270,25 @@
           "access_token"
         ],
         "title": "AuthLoginResponse",
+        "type": "object"
+      },
+      "BarometerSample": {
+        "properties": {
+          "pressure_hpa": {
+            "title": "Pressure Hpa",
+            "type": "number"
+          },
+          "t_ms": {
+            "minimum": 0.0,
+            "title": "T Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "t_ms",
+          "pressure_hpa"
+        ],
+        "title": "BarometerSample",
         "type": "object"
       },
       "BountyCompleteRequest": {
@@ -561,6 +613,122 @@
         "title": "Coordinate",
         "type": "object"
       },
+      "CouponLookupResponse": {
+        "description": "Pre-redeem validation payload \u2014 lets a merchant scan the code and see what it is\nbefore committing the redemption. Same RBAC as the redeem endpoint.",
+        "properties": {
+          "bounty_id": {
+            "title": "Bounty Id",
+            "type": "integer"
+          },
+          "bounty_title": {
+            "title": "Bounty Title",
+            "type": "string"
+          },
+          "coupon_code": {
+            "title": "Coupon Code",
+            "type": "string"
+          },
+          "coupon_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Text"
+          },
+          "customer_user_id": {
+            "title": "Customer User Id",
+            "type": "integer"
+          },
+          "is_redeemed": {
+            "title": "Is Redeemed",
+            "type": "boolean"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "merchant_id": {
+            "title": "Merchant Id",
+            "type": "integer"
+          },
+          "redeemed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemed At"
+          },
+          "redeemed_by_merchant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemed By Merchant Id"
+          }
+        },
+        "required": [
+          "coupon_code",
+          "bounty_id",
+          "bounty_title",
+          "merchant_id",
+          "customer_user_id",
+          "coupon_text",
+          "issued_at",
+          "redeemed_at",
+          "redeemed_by_merchant_id",
+          "is_redeemed"
+        ],
+        "title": "CouponLookupResponse",
+        "type": "object"
+      },
+      "CouponRedeemResponse": {
+        "properties": {
+          "bounty_id": {
+            "title": "Bounty Id",
+            "type": "integer"
+          },
+          "coupon_code": {
+            "title": "Coupon Code",
+            "type": "string"
+          },
+          "customer_user_id": {
+            "title": "Customer User Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "redeemed_at": {
+            "format": "date-time",
+            "title": "Redeemed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coupon_code",
+          "bounty_id",
+          "customer_user_id",
+          "redeemed_at",
+          "message"
+        ],
+        "title": "CouponRedeemResponse",
+        "type": "object"
+      },
       "DomainCreate": {
         "properties": {
           "coordinates": {
@@ -647,6 +815,159 @@
         "title": "DomainResponse",
         "type": "object"
       },
+      "DomainSummary": {
+        "properties": {
+          "area_sqkm": {
+            "title": "Area Sqkm",
+            "type": "number"
+          },
+          "centroid_lat": {
+            "title": "Centroid Lat",
+            "type": "number"
+          },
+          "centroid_lng": {
+            "title": "Centroid Lng",
+            "type": "number"
+          },
+          "defense_score": {
+            "title": "Defense Score",
+            "type": "integer"
+          },
+          "defense_type": {
+            "title": "Defense Type",
+            "type": "string"
+          },
+          "distance_km": {
+            "title": "Distance Km",
+            "type": "number"
+          },
+          "geometry": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Geometry",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_protected": {
+            "title": "Is Protected",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "title": "Owner Id",
+            "type": "integer"
+          },
+          "vault_balance": {
+            "title": "Vault Balance",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "owner_id",
+          "area_sqkm",
+          "defense_score",
+          "defense_type",
+          "vault_balance",
+          "is_protected",
+          "geometry",
+          "centroid_lat",
+          "centroid_lng",
+          "distance_km"
+        ],
+        "title": "DomainSummary",
+        "type": "object"
+      },
+      "GpsSample": {
+        "properties": {
+          "accuracy_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy M"
+          },
+          "altitude_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude M"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "title": "Lng",
+            "type": "number"
+          },
+          "speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mps"
+          },
+          "t_ms": {
+            "minimum": 0.0,
+            "title": "T Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "t_ms",
+          "lat",
+          "lng"
+        ],
+        "title": "GpsSample",
+        "type": "object"
+      },
+      "GyroscopeSample": {
+        "properties": {
+          "gx": {
+            "title": "Gx",
+            "type": "number"
+          },
+          "gy": {
+            "title": "Gy",
+            "type": "number"
+          },
+          "gz": {
+            "title": "Gz",
+            "type": "number"
+          },
+          "t_ms": {
+            "minimum": 0.0,
+            "title": "T Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "t_ms",
+          "gx",
+          "gy",
+          "gz"
+        ],
+        "title": "GyroscopeSample",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -658,6 +979,116 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MagnetometerSample": {
+        "properties": {
+          "mx": {
+            "title": "Mx",
+            "type": "number"
+          },
+          "my": {
+            "title": "My",
+            "type": "number"
+          },
+          "mz": {
+            "title": "Mz",
+            "type": "number"
+          },
+          "t_ms": {
+            "minimum": 0.0,
+            "title": "T Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "t_ms",
+          "mx",
+          "my",
+          "mz"
+        ],
+        "title": "MagnetometerSample",
+        "type": "object"
+      },
+      "MerchantBountyAnalytics": {
+        "properties": {
+          "bounty_type": {
+            "title": "Bounty Type",
+            "type": "string"
+          },
+          "completions_count": {
+            "title": "Completions Count",
+            "type": "integer"
+          },
+          "completions_remaining": {
+            "title": "Completions Remaining",
+            "type": "integer"
+          },
+          "coupons_issued": {
+            "title": "Coupons Issued",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "crystal_reward": {
+            "title": "Crystal Reward",
+            "type": "integer"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "target_lat": {
+            "title": "Target Lat",
+            "type": "number"
+          },
+          "target_lng": {
+            "title": "Target Lng",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "xp_reward": {
+            "title": "Xp Reward",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "bounty_type",
+          "target_lat",
+          "target_lng",
+          "is_active",
+          "completions_count",
+          "completions_remaining",
+          "coupons_issued",
+          "xp_reward",
+          "crystal_reward",
+          "created_at"
+        ],
+        "title": "MerchantBountyAnalytics",
         "type": "object"
       },
       "MerchantCreate": {
@@ -677,7 +1108,8 @@
             "type": "string"
           },
           "password": {
-            "maxLength": 12,
+            "maxLength": 72,
+            "minLength": 8,
             "title": "Password",
             "type": "string"
           }
@@ -868,41 +1300,6 @@
           "next_action"
         ],
         "title": "PaymentIntentResponse",
-        "type": "object"
-      },
-      "PaymentWebhookRequest": {
-        "description": "Payload from the payment provider when a payment terminal-state is reached.\nProduction will additionally verify a signature header against the provider's public key\nbefore trusting the body \u2014 for MVP we accept any well-formed JSON.",
-        "properties": {
-          "amount_cents": {
-            "title": "Amount Cents",
-            "type": "integer"
-          },
-          "merchant_id": {
-            "title": "Merchant Id",
-            "type": "integer"
-          },
-          "occurred_at": {
-            "format": "date-time",
-            "title": "Occurred At",
-            "type": "string"
-          },
-          "payment_status": {
-            "title": "Payment Status",
-            "type": "string"
-          },
-          "provider_payment_id": {
-            "title": "Provider Payment Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "merchant_id",
-          "payment_status",
-          "provider_payment_id",
-          "amount_cents",
-          "occurred_at"
-        ],
-        "title": "PaymentWebhookRequest",
         "type": "object"
       },
       "PaymentWebhookResponse": {
@@ -1108,8 +1505,9 @@
             "type": "number"
           },
           "password": {
-            "description": "Password cannot exceed 72 characters",
-            "maxLength": 12,
+            "description": "8-72 characters (bcrypt's byte limit).",
+            "maxLength": 72,
+            "minLength": 8,
             "title": "Password",
             "type": "string"
           },
@@ -1149,7 +1547,7 @@
             "type": "string"
           },
           "password": {
-            "maxLength": 12,
+            "maxLength": 72,
             "title": "Password",
             "type": "string"
           }
@@ -1413,7 +1811,7 @@
     },
     "/api/v1/activities/verify": {
       "post": {
-        "description": "Stateless preview of the ML Referee. The frontend can call this to confirm a workout\nwill pass before submitting the real action (claim, siege, bounty). No DB writes.",
+        "description": "Stateless preview of the ML Referee. The frontend can call this to confirm a workout\nwill pass before submitting the real action (claim, siege, bounty). No DB writes.\nNote: the co-location check is NOT applied here \u2014 that requires the target polygon /\ngeofence which only the calling endpoint knows.",
         "operationId": "verify_activity_endpoint_api_v1_activities_verify_post",
         "requestBody": {
           "content": {
@@ -1636,6 +2034,7 @@
     },
     "/api/v1/bounties": {
       "post": {
+        "description": "Seed a bounty. Admins can create both 'daily' (system-issued) and 'merchant_chest'\n(any merchant). Merchants can only create 'merchant_chest' bounties keyed to their own\nmerchant_id. Geofence radius is in metres; distance to caller is filled with 0 since\nthe creator may not be on-site.",
         "operationId": "create_bounty_api_v1_bounties_post",
         "requestBody": {
           "content": {
@@ -1799,6 +2198,96 @@
         "summary": "Complete Bounty"
       }
     },
+    "/api/v1/coupons/{code}": {
+      "get": {
+        "description": "Pre-redemption check. Use this to validate a code shown at the till before tapping\nthe redeem button \u2014 surfaces 'already redeemed' and 'wrong merchant' before a write.",
+        "operationId": "lookup_coupon_api_v1_coupons__code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponLookupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Lookup Coupon"
+      }
+    },
+    "/api/v1/coupons/{code}/redeem": {
+      "post": {
+        "description": "Stamps a coupon as redeemed at the till. RBAC: only the merchant who owns the\nbounty (or an admin) can redeem; a re-redeem returns 409 so the customer can't\nre-use the code at another visit.",
+        "operationId": "redeem_coupon_api_v1_coupons__code__redeem_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponRedeemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Redeem Coupon"
+      }
+    },
     "/api/v1/domains": {
       "post": {
         "description": "Processes a completed Domain Trace, validates anti-cheat, and claims the territory.",
@@ -1841,6 +2330,69 @@
           }
         ],
         "summary": "Submit Domain"
+      }
+    },
+    "/api/v1/domains/nearby": {
+      "get": {
+        "description": "Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),\nsorted nearest-first. Public game state \u2014 no auth required (any player can see who owns\nwhat land, the same way a Strava heatmap is public). MVP uses an in-memory haversine\nsweep; PostGIS `ST_DWithin` will replace this in Phase 2.",
+        "operationId": "get_nearby_domains_api_v1_domains_nearby_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "radius_km",
+            "required": false,
+            "schema": {
+              "default": 5.0,
+              "title": "Radius Km",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DomainSummary"
+                  },
+                  "title": "Response Get Nearby Domains Api V1 Domains Nearby Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Nearby Domains"
       }
     },
     "/api/v1/domains/{domain_id}/vault": {
@@ -2023,6 +2575,7 @@
     },
     "/api/v1/merchants/{merchant_id}/bounties": {
       "get": {
+        "description": "Returns every bounty owned by the merchant with completion + coupon-issued counts.\nPowers the merchant portal's analytics view. Auth: merchant must be the owner, or\ncaller must be admin.",
         "operationId": "get_merchant_bounties_api_v1_merchants__merchant_id__bounties_get",
         "parameters": [
           {
@@ -2041,7 +2594,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/BountySummary"
+                    "$ref": "#/components/schemas/MerchantBountyAnalytics"
                   },
                   "title": "Response Get Merchant Bounties Api V1 Merchants  Merchant Id  Bounties Get",
                   "type": "array"
@@ -2155,18 +2708,8 @@
     },
     "/api/v1/payments/webhook": {
       "post": {
-        "description": "Endpoint the payment provider POSTs to when a payment reaches a terminal state.\nNOT JWT-gated \u2014 providers don't carry our JWTs. Production MUST verify a signature\nheader against the provider's public key before trusting the payload; for MVP we\naccept any well-formed JSON.\n\nActivation rule: only `payment_status='payment_successful'` flips `is_active=True`\nand writes a PlatformRevenue row. `payment_pending` and `payment_declined` update\nthe merchant's status but leave `is_active=False`.",
+        "description": "Endpoint the payment provider POSTs to when a payment reaches a terminal state.\nNOT JWT-gated \u2014 providers don't carry our JWTs. Signature verification (`X-Provider-\nSignature` HMAC-SHA256 over the raw body) is performed via the `verify_webhook_signature`\ndependency, gated by the `OSIRIS_WEBHOOK_SECRET` env var (off in dev/MVP, on in prod).\n\nActivation rule: only `payment_status='payment_successful'` flips `is_active=True`\nand writes a PlatformRevenue row. `payment_pending` and `payment_declined` update\nthe merchant's status but leave `is_active=False`.",
         "operationId": "payment_webhook_api_v1_payments_webhook_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PaymentWebhookRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -2177,16 +2720,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "Payment Webhook"
@@ -2273,7 +2806,7 @@
     },
     "/api/v1/users/{user_id}": {
       "get": {
-        "description": "Fetches the latest stats, Rank, and XP for the app dashboard.",
+        "description": "Fetches the latest stats, Rank, and XP for the app dashboard. RBAC: a player can\nonly fetch their own profile; admins can fetch any. Merchants get 403 \u2014 they have no\nlegitimate reason to read player profiles.",
         "operationId": "get_user_profile_api_v1_users__user_id__get",
         "parameters": [
           {
@@ -2308,6 +2841,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "Get User Profile"
       }
     },

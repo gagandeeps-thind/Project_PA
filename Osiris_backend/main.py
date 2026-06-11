@@ -1,15 +1,21 @@
 # --- Library Imports ---
 # FastAPI: The core web framework. HTTPException: Used to return errors (like 404 Not Found). Depends: Used to inject database sessions.
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 # Pydantic: Used for validating the shape of JSON data coming in and going out of our API.
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 import json
+import logging
+import os
 import secrets
 import hashlib
+import hmac
+
+logger = logging.getLogger(__name__)
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 # bcrypt: Used to securely scramble (hash) passwords so they aren't saved as plain text.
 import bcrypt
 # APScheduler: Runs background tasks automatically (like a cron job) while the server is running.
@@ -26,8 +32,15 @@ import models
 import spatial_utils
 import ml_referee
 
-# This line tells SQLAlchemy to look at our models and actually CREATE the tables
-# in the SQLite database file if they don't exist yet.
+# Bootstrap convenience: creates any missing tables on first run. Alembic is the schema
+# source-of-truth going forward (see `alembic/` + `alembic.ini`). For new dev DBs, run
+# `alembic upgrade head` instead. This line is kept so the existing test scripts in
+# `tests/` that use the live DB still work without an extra setup step.
+#
+# WARNING: every model change still needs an Alembic revision —
+#   `alembic revision --autogenerate -m "..."` then `alembic upgrade head`.
+# `create_all` only creates *missing* tables; it never alters existing ones, so a forgotten
+# migration will silently let dev drift away from prod.
 models.Base.metadata.create_all(bind=database.engine)
 
 # Background scheduler — runs the daily-decay cron. Defined before the app so the lifespan
@@ -37,10 +50,12 @@ scheduler = BackgroundScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan handler — replaces the deprecated @app.on_event("startup"/"shutdown")
-    pattern. The hourly decay job (process_daily_decay) is wired up on startup and torn down
-    cleanly on shutdown. process_daily_decay is defined later in the module; that's fine
-    because lifespan only runs once the server starts (after full module import)."""
+    pattern. Background jobs are wired up on startup and torn down cleanly on shutdown.
+    The job functions are defined later in the module; that's fine because lifespan only
+    runs once the server starts (after full module import)."""
     scheduler.add_job(process_daily_decay, 'interval', hours=24)
+    # v2.11 telemetry retention: nightly cleanup of raw sample blobs older than TTL.
+    scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)
     scheduler.start()
     try:
         yield
@@ -58,7 +73,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SECRET_KEY = "dummy-secret-key-for-mvp-phase"
+# --- v2.10: JWT secret loaded from env var with a clearly-flagged dev fallback ---
+# Set OSIRIS_JWT_SECRET in any non-dev environment. Deployment must use a 32+ byte secret
+# (HS256 minimum per RFC 7518 § 3.2). Setting OSIRIS_ENV=production makes a missing secret
+# fatal at boot — that's the production-safety check.
+_jwt_secret_from_env = os.environ.get("OSIRIS_JWT_SECRET")
+if _jwt_secret_from_env:
+    SECRET_KEY = _jwt_secret_from_env
+elif os.environ.get("OSIRIS_ENV", "").lower() == "production":
+    raise RuntimeError(
+        "OSIRIS_JWT_SECRET is required when OSIRIS_ENV=production. "
+        "Generate one with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"`."
+    )
+else:
+    # Dev fallback: ephemeral 48-byte secret regenerated each boot. Existing tokens become
+    # invalid on every reload, which is what we want during local development.
+    SECRET_KEY = secrets.token_urlsafe(48)
+    print(
+        "WARNING: OSIRIS_JWT_SECRET not set — using an ephemeral dev secret. "
+        "Tokens will not survive a server restart."
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 
@@ -96,6 +131,41 @@ def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
     if token_data["role"] != "merchant":
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return token_data
+
+
+# --- v2.10: webhook signature verification ---
+# Off by default during MVP so manual webhook calls work in smoke tests. To enable, set
+# OSIRIS_WEBHOOK_SECRET=<hex-bytes>. With it set, every /payments/webhook call MUST carry
+# `X-Provider-Signature: <hex hmac-sha256 over the raw body>` or it 401s.
+#
+# Production safety: when OSIRIS_ENV=production, the secret is required at boot. Without it
+# the webhook endpoint would accept any payload — indistinguishable from a forged-webhook
+# attacker activating an arbitrary merchant. Mirrors the JWT secret pattern above.
+_WEBHOOK_SECRET = os.environ.get("OSIRIS_WEBHOOK_SECRET")
+if not _WEBHOOK_SECRET and os.environ.get("OSIRIS_ENV", "").lower() == "production":
+    raise RuntimeError(
+        "OSIRIS_WEBHOOK_SECRET is required when OSIRIS_ENV=production. "
+        "Without it the payment webhook accepts any payload. "
+        "Generate one with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
+        "and configure the same value on the payment provider's webhook settings."
+    )
+
+async def verify_webhook_signature(request: Request) -> bytes:
+    """Reads the raw body once, validates the X-Provider-Signature HMAC, and returns the
+    body bytes so the calling endpoint can re-parse them (FastAPI's body() consumes the
+    stream — we do it here so signature + parsing share one read)."""
+    body = await request.body()
+    if _WEBHOOK_SECRET is None:
+        return body  # MVP / dev: signature checking disabled
+    sig = request.headers.get("X-Provider-Signature", "")
+    expected = hmac.new(
+        _WEBHOOK_SECRET.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    return body
 
 def get_current_admin_or_merchant(token_data: dict = Depends(get_current_user_token)):
     if token_data["role"] not in ["admin", "merchant"]:
@@ -144,7 +214,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # The JSON shape we expect when a user registers
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., max_length=12, description="Password cannot exceed 72 characters")
+    password: str = Field(..., min_length=8, max_length=72, description="8-72 characters (bcrypt's byte limit).")
     weight_kg: float = Field(..., gt=0, description="Weight in kg must be greater than 0")
     height_m: float = Field(..., gt=0, description="Height in meters must be greater than 0")
     preferred_path: str = "Balance"  # Options: Strength, Cardio, Balance
@@ -153,7 +223,7 @@ class UserCreate(BaseModel):
 # The JSON shape we expect when a user logs in
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str = Field(..., max_length=12)
+    password: str = Field(..., max_length=72)
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
 
 # --- Unified auth (v2.8): role-aware login ---
@@ -163,7 +233,7 @@ class UserLogin(BaseModel):
 
 class AuthLoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., max_length=12)
+    password: str = Field(..., max_length=72)
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
 
 class AuthLoginResponse(BaseModel):
@@ -192,6 +262,34 @@ class AccelerometerSample(BaseModel):
     ay: float
     az: float
 
+# Gyroscope: rotational rate in rad/s on each device axis.
+class GyroscopeSample(BaseModel):
+    t_ms: int = Field(..., ge=0)
+    gx: float
+    gy: float
+    gz: float
+
+# Magnetometer: magnetic field strength on each device axis (μT).
+class MagnetometerSample(BaseModel):
+    t_ms: int = Field(..., ge=0)
+    mx: float
+    my: float
+    mz: float
+
+# GPS sample: world position + accuracy + optional speed/altitude.
+class GpsSample(BaseModel):
+    t_ms: int = Field(..., ge=0)
+    lat: float
+    lng: float
+    accuracy_m: Optional[float] = None
+    speed_mps: Optional[float] = None
+    altitude_m: Optional[float] = None
+
+# Barometer: atmospheric pressure (hPa) — useful for stair-climb / altitude-change inference.
+class BarometerSample(BaseModel):
+    t_ms: int = Field(..., ge=0)
+    pressure_hpa: float
+
 # Summary of MediaPipe pose data extracted on-device. Sent for camera-verified exercises only.
 class PoseSummary(BaseModel):
     rep_count: int = Field(..., ge=0)
@@ -199,12 +297,24 @@ class PoseSummary(BaseModel):
     max_joint_angle_deg: Optional[float] = None
     avg_rep_duration_ms: Optional[float] = None
 
-# The proof envelope a client posts to vouch for an activity.
+# Per-channel sample cap (DoS guard, v2.11). 20000 samples comfortably accommodates a
+# ~7-minute workout at 50 Hz; longer activities should be chunked client-side. Without
+# this cap a malicious client could OOM the server with multi-megabyte payloads.
+MAX_SAMPLES_PER_CHANNEL = 20000
+
+# The proof envelope a client posts to vouch for an activity. v2.10 expanded the sensor
+# suite: ml_referee still gates on accelerometer + pose (cheap, well-understood), but the
+# full payload is persisted in TelemetrySession + TelemetryData for ML training and richer
+# fraud-detection in Phase 2.
 class ActivityProof(BaseModel):
     activity_type: str                                     # pushups | squats | sprint | run | walk | burpees | plank | hold
     declared_score: int = Field(..., ge=0)
     duration_seconds: float = Field(..., gt=0)
-    accelerometer: List[AccelerometerSample] = Field(default_factory=list)
+    accelerometer: List[AccelerometerSample] = Field(default_factory=list, max_length=MAX_SAMPLES_PER_CHANNEL)
+    gyroscope: List[GyroscopeSample] = Field(default_factory=list, max_length=MAX_SAMPLES_PER_CHANNEL)
+    magnetometer: List[MagnetometerSample] = Field(default_factory=list, max_length=MAX_SAMPLES_PER_CHANNEL)
+    gps: List[GpsSample] = Field(default_factory=list, max_length=MAX_SAMPLES_PER_CHANNEL)
+    barometer: List[BarometerSample] = Field(default_factory=list, max_length=MAX_SAMPLES_PER_CHANNEL)
     pose: Optional[PoseSummary] = None
     device_timestamp: datetime
 
@@ -259,6 +369,22 @@ class DomainResponse(BaseModel):
     sieges_triggered: int = 0
     xp_awarded: int = 0
 
+# v2.10 — public read shape used by GET /api/v1/domains/nearby for the Flutter map render.
+# Excludes hashed secrets and ownership internals; exposes everything a player needs to
+# decide whether to siege.
+class DomainSummary(BaseModel):
+    id: int
+    owner_id: int
+    area_sqkm: float
+    defense_score: int
+    defense_type: str
+    vault_balance: int
+    is_protected: bool                  # vault_balance > 0
+    geometry: List[dict]                # parsed polygon coords [{lat, lng}, ...]
+    centroid_lat: float
+    centroid_lng: float
+    distance_km: float
+
 # The JSON shape a user posts to lock (or top up) an Ownership Fee in a Domain's Vault
 class VaultLockRequest(BaseModel):
     user_id: int
@@ -308,7 +434,7 @@ class PartyRoleResponse(BaseModel):
 class MerchantCreate(BaseModel):
     name: str
     email: EmailStr
-    password: str = Field(..., max_length=12)
+    password: str = Field(..., min_length=8, max_length=72)
     business_type: str = "general"
 
 class MerchantResponse(BaseModel):
@@ -351,13 +477,17 @@ class PaymentIntentResponse(BaseModel):
 
 class PaymentWebhookRequest(BaseModel):
     """Payload from the payment provider when a payment terminal-state is reached.
-    Production will additionally verify a signature header against the provider's public key
-    before trusting the body — for MVP we accept any well-formed JSON."""
+
+    `provider_event_id` is the provider's top-level event id (Stripe sends `event.id` —
+    distinct from `payment_intent.id`). Optional during MVP smoke tests; required by real
+    providers since they all retry failed deliveries. When present, we dedup against the
+    `payment_webhook_events` table so a duplicate delivery is a no-op."""
     merchant_id: int
     payment_status: str       # 'payment_successful' | 'payment_pending' | 'payment_declined'
     provider_payment_id: str
     amount_cents: int
     occurred_at: datetime
+    provider_event_id: Optional[str] = None
 
 class PaymentWebhookResponse(BaseModel):
     merchant_id: int
@@ -384,6 +514,22 @@ class AdminMerchantToggleResponse(BaseModel):
     is_active: bool
     payment_status: str
     message: str
+
+# v2.10 — merchant analytics row, returned by GET /api/v1/merchants/{id}/bounties.
+class MerchantBountyAnalytics(BaseModel):
+    id: int
+    title: str
+    bounty_type: str
+    target_lat: float
+    target_lng: float
+    is_active: bool
+    completions_count: int
+    completions_remaining: int
+    coupons_issued: int                  # subset of completions where a coupon was minted
+    xp_reward: int
+    crystal_reward: int
+    created_at: datetime
+    expires_at: Optional[datetime] = None
 
 # JSON to seed a Bounty (admin / merchant)
 class BountyCreate(BaseModel):
@@ -544,10 +690,16 @@ def record_activity(
     related_id: Optional[int] = None,
     verified: bool = False,
     confidence: float = 1.0,
+    proof: Optional["ActivityProof"] = None,
 ) -> Optional[models.ActivityLog]:
-    """Single entry point for the activity history table. Increments the lifetime stat AND
-    appends an `ActivityLog` row so the 30-day rolling window can be reconstructed.
-    Returns the new log row (uncommitted) or None when score is non-positive."""
+    """Single entry point for the activity history table. Three writes happen here:
+
+    1. **Lifetime stat increment** on the User row (cheap aggregate read path).
+    2. **`ActivityLog` row** for the 30-day rolling Party-Stats window.
+    3. **`TelemetrySession` + per-sensor `TelemetryData` rows** if a `proof` is attached —
+       gives the ML training pipeline raw sensor data linked back to the gameplay outcome.
+
+    Returns the new ActivityLog row (uncommitted) or None when score is non-positive."""
     if score <= 0:
         return None
     stat_col = increment_stat_from_activity(user, activity_type, score)
@@ -563,7 +715,70 @@ def record_activity(
         occurred_at=occurred_at,
     )
     db.add(log)
+
+    # If the caller also gave us the raw proof, archive sensor data linked to this log row.
+    if proof is not None:
+        db.flush()  # need log.id before linking telemetry rows
+        _persist_telemetry(db, user.id, log.id, proof, occurred_at, verified, confidence)
+
     return log
+
+
+def _persist_telemetry(
+    db: Session,
+    user_id: int,
+    activity_log_id: int,
+    proof: "ActivityProof",
+    occurred_at: datetime,
+    verified: bool,
+    confidence: float,
+) -> None:
+    """Writes one TelemetrySession (metadata) + N TelemetryData rows (one per non-empty
+    sensor channel). Pose, when present, is stored as a single-element JSON array under
+    sensor_type='pose'."""
+    session = models.TelemetrySession(
+        user_id=user_id,
+        activity_log_id=activity_log_id,
+        activity_type=(proof.activity_type or "").lower(),
+        declared_score=proof.declared_score,
+        duration_seconds=proof.duration_seconds,
+        confidence=confidence,
+        verified=1 if verified else 0,
+        sample_count_accel=len(proof.accelerometer),
+        sample_count_gyro=len(proof.gyroscope),
+        sample_count_mag=len(proof.magnetometer),
+        sample_count_gps=len(proof.gps),
+        sample_count_barometer=len(proof.barometer),
+        has_pose=proof.pose is not None,
+        occurred_at=occurred_at,
+    )
+    db.add(session)
+    db.flush()  # session.id needed for child rows
+
+    # Per-sensor archives. Empty channels skipped to avoid noise rows.
+    sensor_blobs = [
+        ("accel",        [s.model_dump() for s in proof.accelerometer]),
+        ("gyro",         [s.model_dump() for s in proof.gyroscope]),
+        ("magnetometer", [s.model_dump() for s in proof.magnetometer]),
+        ("gps",          [s.model_dump() for s in proof.gps]),
+        ("barometer",    [s.model_dump() for s in proof.barometer]),
+    ]
+    for sensor_type, samples in sensor_blobs:
+        if not samples:
+            continue
+        db.add(models.TelemetryData(
+            session_id=session.id,
+            sensor_type=sensor_type,
+            sample_count=len(samples),
+            samples_json=json.dumps(samples, default=str),
+        ))
+    if proof.pose is not None:
+        db.add(models.TelemetryData(
+            session_id=session.id,
+            sensor_type="pose",
+            sample_count=1,
+            samples_json=json.dumps(proof.pose.model_dump(), default=str),
+        ))
 
 def get_party_role(user: models.User) -> tuple[str, str]:
     """Returns (role, leading_stat_name) based on the user's highest attribute.
@@ -691,19 +906,82 @@ async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db
 
         # No match in any table — return 401 with a generic message so callers can't enumerate.
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    except Exception as e:
-        import traceback
-        # Return 500 but log exception
-        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}\n{traceback.format_exc()}")
+    except HTTPException:
+        # Auth-flow HTTPExceptions (e.g., the 401 above) are intentional — let them through
+        # rather than re-wrapping them as 500s.
+        raise
+    except Exception:
+        # Log the full stack trace server-side; return an opaque 500 to the client so we
+        # don't leak internals (DB errors, secrets) over the wire.
+        logger.exception("auth_login: unexpected error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/v1/users/{user_id}", response_model=UserProfile)
-async def get_user_profile(user_id: int, db: Session = Depends(get_db)):
-    """Fetches the latest stats, Rank, and XP for the app dashboard."""
-    # Query the database for a user matching the ID passed in the URL path
+async def get_user_profile(
+    user_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """Fetches the latest stats, Rank, and XP for the app dashboard. RBAC: a player can
+    only fetch their own profile; admins can fetch any. Merchants get 403 — they have no
+    legitimate reason to read player profiles."""
+    role = token_data["role"]
+    caller_id = token_data["id"]
+    if role == "player" and caller_id != user_id:
+        raise HTTPException(status_code=403, detail="Players can only fetch their own profile")
+    if role not in ("player", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+@app.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
+async def get_nearby_domains(
+    lat: float,
+    lng: float,
+    radius_km: float = 5.0,
+    db: Session = Depends(get_db),
+):
+    """Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),
+    sorted nearest-first. Public game state — no auth required (any player can see who owns
+    what land, the same way a Strava heatmap is public). MVP uses an in-memory haversine
+    sweep; PostGIS `ST_DWithin` will replace this in Phase 2."""
+    candidates = db.query(models.Domain).all()
+    out: List[DomainSummary] = []
+    for d in candidates:
+        if not d.geometry_json:
+            continue
+        try:
+            coords = json.loads(d.geometry_json)
+        except Exception:
+            continue
+        if not coords:
+            continue
+        # Centroid as the simple average of vertex coords. Fine for park-sized polygons;
+        # PostGIS `ST_Centroid` will be exact in Phase 2.
+        c_lat = sum(c["lat"] for c in coords) / len(coords)
+        c_lng = sum(c["lng"] for c in coords) / len(coords)
+        dist = spatial_utils.haversine_distance(lat, lng, c_lat, c_lng)
+        if dist > radius_km:
+            continue
+        out.append(DomainSummary(
+            id=d.id,
+            owner_id=d.owner_id,
+            area_sqkm=d.area_sqkm or 0.0,
+            defense_score=d.defense_score or 0,
+            defense_type=d.defense_type or "pushups",
+            vault_balance=d.vault_balance or 0,
+            is_protected=(d.vault_balance or 0) > 0,
+            geometry=coords,
+            centroid_lat=c_lat,
+            centroid_lng=c_lng,
+            distance_km=round(dist, 4),
+        ))
+    out.sort(key=lambda x: x.distance_km)
+    return out
+
 
 @app.post("/api/v1/domains", response_model=DomainResponse)
 async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
@@ -722,6 +1000,11 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
     verification = _enforce_proof(domain_req.defense_proof, expected_activity_type=domain_req.defense_type)
     if verification is not None:
         domain_req.defense_score = verification.verified_score
+    # 0.55. Co-location: if the proof carries GPS samples, they must land inside the polygon
+    # the user is trying to claim. Cheapest big anti-cheat win — without this a verified
+    # workout from anywhere can be attached to any polygon.
+    claim_polygon = [{"lat": c.lat, "lng": c.lng} for c in domain_req.coordinates]
+    _enforce_proof_gps_in_polygon(domain_req.defense_proof, claim_polygon, context="domain_claim")
     # 0.6. Replay-attack guard: every proof can be consumed exactly once across the system.
     _consume_proof_or_409(db, user.id, domain_req.defense_proof, source="domain_claim")
 
@@ -799,6 +1082,7 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
         related_id=new_domain.id,
         verified=bool(verification and verification.verified),
         confidence=verification.confidence if verification else 1.0,
+        proof=domain_req.defense_proof,
     )
 
     db.commit()
@@ -892,6 +1176,15 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     verification = _enforce_proof(req.challenger_proof, expected_activity_type=target_defense_type)
     if verification is not None:
         req.challenger_score = verification.verified_score
+    # Co-location: the challenger's GPS samples (if present) must land inside the polygon
+    # being sieged — you can't take someone's land from another time zone.
+    if req.challenger_proof is not None and target_domain.geometry_json:
+        try:
+            target_polygon = json.loads(target_domain.geometry_json)
+            _enforce_proof_gps_in_polygon(req.challenger_proof, target_polygon, context="siege_resolve")
+        except (ValueError, json.JSONDecodeError):
+            # Corrupted polygon JSON — skip the check rather than block the resolve.
+            pass
     # Replay-attack guard
     _consume_proof_or_409(db, challenger.id, req.challenger_proof, source="siege_resolve")
 
@@ -923,7 +1216,11 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
         discount_row.consumed_at = device_ts
 
     defender_score = siege.defender_score_snapshot or 0
-    challenger_won = req.challenger_score > defender_score
+    is_time_trial = target_defense_type in ("run", "walk", "sprint")
+    if is_time_trial:
+        challenger_won = req.challenger_score <= defender_score and req.challenger_score > 0
+    else:
+        challenger_won = req.challenger_score > defender_score
 
     crystals_awarded = 0
     new_discount_banked = 0
@@ -1015,6 +1312,7 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
         related_id=siege.id,
         verified=bool(verification and verification.verified),
         confidence=verification.confidence if verification else 1.0,
+        proof=req.challenger_proof,
     )
 
     siege.challenger_fee = out_of_pocket
@@ -1174,10 +1472,68 @@ def _enforce_proof(proof: Optional[ActivityProof], expected_activity_type: Optio
     return result
 
 
+def _enforce_proof_gps_in_polygon(
+    proof: Optional[ActivityProof],
+    polygon: list,
+    context: str,
+) -> None:
+    """Co-location guard: if the proof carries GPS samples, their centroid must fall
+    inside `polygon`. Without this, a verified workout from one city can be attached to
+    a Domain in another — the ML referee only checks rhythm, not location.
+
+    Permissive on purpose: an empty GPS channel is treated as 'no check' so legacy clients
+    that don't ship GPS yet still work. Once the frontend reliably samples GPS during all
+    activities, swap this to require samples for outdoor activity_types.
+
+    `polygon` is a list of {lat, lng} dicts (the JSON shape stored in Domain.geometry_json).
+    Raises 400 with a referee-style flag on mismatch."""
+    if proof is None or not proof.gps or not polygon:
+        return
+    avg_lat = sum(s.lat for s in proof.gps) / len(proof.gps)
+    avg_lng = sum(s.lng for s in proof.gps) / len(proof.gps)
+    if spatial_utils.point_in_polygon(avg_lng, avg_lat, polygon):
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"ML Referee rejected proof ({context}): GPS centroid "
+            f"({avg_lat:.6f}, {avg_lng:.6f}) outside expected polygon."
+        ),
+    )
+
+
+def _enforce_proof_gps_in_geofence(
+    proof: Optional[ActivityProof],
+    center_lat: float,
+    center_lng: float,
+    radius_m: float,
+    context: str,
+) -> None:
+    """Geofence variant of the co-location guard for circular bounty zones. Same
+    permissive contract: empty GPS channel skips the check."""
+    if proof is None or not proof.gps or radius_m <= 0:
+        return
+    avg_lat = sum(s.lat for s in proof.gps) / len(proof.gps)
+    avg_lng = sum(s.lng for s in proof.gps) / len(proof.gps)
+    dist_km = spatial_utils.haversine_distance(avg_lat, avg_lng, center_lat, center_lng)
+    if dist_km * 1000.0 <= radius_m:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"ML Referee rejected proof ({context}): GPS centroid "
+            f"({avg_lat:.6f}, {avg_lng:.6f}) is {dist_km*1000:.0f}m from geofence "
+            f"center (radius {radius_m:.0f}m)."
+        ),
+    )
+
+
 @app.post("/api/v1/activities/verify", response_model=VerificationResult)
 async def verify_activity_endpoint(proof: ActivityProof):
     """Stateless preview of the ML Referee. The frontend can call this to confirm a workout
-    will pass before submitting the real action (claim, siege, bounty). No DB writes."""
+    will pass before submitting the real action (claim, siege, bounty). No DB writes.
+    Note: the co-location check is NOT applied here — that requires the target polygon /
+    geofence which only the calling endpoint knows."""
     return _run_verification(proof)
 
 
@@ -1248,6 +1604,61 @@ async def get_merchant_profile(
     return merchant
 
 
+@app.get("/api/v1/merchants/{merchant_id}/bounties", response_model=List[MerchantBountyAnalytics])
+async def get_merchant_bounties(
+    merchant_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """Returns every bounty owned by the merchant with completion + coupon-issued counts.
+    Powers the merchant portal's analytics view. Auth: merchant must be the owner, or
+    caller must be admin."""
+    role = token_data["role"]
+    caller_id = token_data["id"]
+    if role == "merchant" and caller_id != merchant_id:
+        raise HTTPException(status_code=403, detail="Merchants can only view their own bounties")
+    if role not in ("merchant", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+
+    bounties = (
+        db.query(models.Bounty)
+        .filter(models.Bounty.merchant_id == merchant_id)
+        .order_by(models.Bounty.created_at.desc())
+        .all()
+    )
+
+    out: List[MerchantBountyAnalytics] = []
+    for b in bounties:
+        coupon_count = (
+            db.query(models.BountyCompletion)
+            .filter(
+                models.BountyCompletion.bounty_id == b.id,
+                models.BountyCompletion.coupon_code_issued.isnot(None),
+            )
+            .count()
+        )
+        out.append(MerchantBountyAnalytics(
+            id=b.id,
+            title=b.title,
+            bounty_type=b.bounty_type,
+            target_lat=b.target_lat,
+            target_lng=b.target_lng,
+            is_active=bool(b.is_active),
+            completions_count=b.completions_count or 0,
+            completions_remaining=max(0, (b.max_completions or 0) - (b.completions_count or 0)),
+            coupons_issued=coupon_count,
+            xp_reward=b.xp_reward or 0,
+            crystal_reward=b.crystal_reward or 0,
+            created_at=b.created_at,
+            expires_at=b.expires_at,
+        ))
+    return out
+
+
 @app.post("/api/v1/merchants/{merchant_id}/payments/intent", response_model=PaymentIntentResponse)
 async def create_payment_intent(
     merchant_id: int,
@@ -1287,21 +1698,62 @@ async def create_payment_intent(
 
 
 @app.post("/api/v1/payments/webhook", response_model=PaymentWebhookResponse)
-async def payment_webhook(req: PaymentWebhookRequest, db: Session = Depends(get_db)):
+async def payment_webhook(
+    body: bytes = Depends(verify_webhook_signature),
+    db: Session = Depends(get_db),
+):
     """Endpoint the payment provider POSTs to when a payment reaches a terminal state.
-    NOT JWT-gated — providers don't carry our JWTs. Production MUST verify a signature
-    header against the provider's public key before trusting the payload; for MVP we
-    accept any well-formed JSON.
+    NOT JWT-gated — providers don't carry our JWTs. Signature verification (`X-Provider-
+    Signature` HMAC-SHA256 over the raw body) is performed via the `verify_webhook_signature`
+    dependency, gated by the `OSIRIS_WEBHOOK_SECRET` env var (off in dev/MVP, on in prod).
 
     Activation rule: only `payment_status='payment_successful'` flips `is_active=True`
     and writes a PlatformRevenue row. `payment_pending` and `payment_declined` update
     the merchant's status but leave `is_active=False`."""
+    try:
+        req = PaymentWebhookRequest.model_validate_json(body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid webhook payload: {e}")
+
     valid_statuses = {"payment_successful", "payment_pending", "payment_declined"}
     if req.payment_status not in valid_statuses:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid payment_status. Expected one of {sorted(valid_statuses)}",
         )
+
+    # Production requires a provider_event_id — real Stripe always sends `event.id`, and
+    # without it we can't dedupe retries. Dev / MVP can omit it (no real provider yet).
+    if not req.provider_event_id and os.environ.get("OSIRIS_ENV", "").lower() == "production":
+        raise HTTPException(
+            status_code=400,
+            detail="provider_event_id is required in production (needed for retry dedup).",
+        )
+
+    # Event-level idempotency: if we've already processed this provider_event_id, return
+    # the merchant's current state without re-running side effects (no double revenue, no
+    # double activate). Stripe and most providers retry 5xx responses; this guard is what
+    # makes the webhook safe to retry.
+    if req.provider_event_id:
+        prior_event = (
+            db.query(models.PaymentWebhookEvent)
+            .filter(models.PaymentWebhookEvent.provider_event_id == req.provider_event_id)
+            .first()
+        )
+        if prior_event:
+            existing = db.query(models.Merchant).filter(models.Merchant.id == prior_event.merchant_id).first()
+            if not existing:
+                # Event row points at a merchant that no longer exists — degenerate.
+                raise HTTPException(status_code=404, detail="Merchant from prior event not found")
+            return PaymentWebhookResponse(
+                merchant_id=existing.id,
+                payment_status=existing.payment_status,
+                is_active=bool(existing.is_active),
+                message=(
+                    f"Duplicate event {req.provider_event_id} ignored "
+                    f"(already processed at {prior_event.received_at.isoformat()})."
+                ),
+            )
 
     merchant = db.query(models.Merchant).filter(models.Merchant.id == req.merchant_id).first()
     if not merchant:
@@ -1336,7 +1788,34 @@ async def payment_webhook(req: PaymentWebhookRequest, db: Session = Depends(get_
         # Pending or declined: do NOT flip is_active. Merchant can retry.
         message = f"Status updated to {req.payment_status}; merchant remains inactive."
 
-    db.commit()
+    # Record the event AFTER side effects but in the same transaction. The unique index on
+    # provider_event_id makes a concurrent duplicate delivery fail at commit time; we catch
+    # the IntegrityError and treat it as a replay.
+    if req.provider_event_id:
+        db.add(models.PaymentWebhookEvent(
+            provider_event_id=req.provider_event_id,
+            merchant_id=merchant.id,
+            payment_status=req.payment_status,
+            provider_payment_id=req.provider_payment_id,
+            amount_cents=req.amount_cents,
+            received_at=_now_naive_utc(),
+        ))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent retry beat us to the unique-index insert. Roll back and replay
+        # the prior outcome instead.
+        db.rollback()
+        existing = db.query(models.Merchant).filter(models.Merchant.id == req.merchant_id).first()
+        return PaymentWebhookResponse(
+            merchant_id=existing.id if existing else req.merchant_id,
+            payment_status=existing.payment_status if existing else req.payment_status,
+            is_active=bool(existing.is_active) if existing else False,
+            message=(
+                f"Duplicate event {req.provider_event_id} raced — earlier delivery won."
+            ),
+        )
     return PaymentWebhookResponse(
         merchant_id=merchant.id,
         payment_status=merchant.payment_status,
@@ -1423,11 +1902,21 @@ async def admin_deactivate_merchant(
 
 @app.post("/api/v1/bounties", response_model=BountySummary)
 async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
-    if token_data["role"] == "merchant" and token_data["id"] != bounty.merchant_id:
-        raise HTTPException(status_code=403, detail="Not authorized to create bounty for this merchant")
-    """Seed a bounty. Used by admins for daily quests and by merchants for storefront chests.
-    Geofence radius is in metres; distance to caller is filled with 0 since the creator may not
-    be on-site."""
+    """Seed a bounty. Admins can create both 'daily' (system-issued) and 'merchant_chest'
+    (any merchant). Merchants can only create 'merchant_chest' bounties keyed to their own
+    merchant_id. Geofence radius is in metres; distance to caller is filled with 0 since
+    the creator may not be on-site."""
+    role = token_data["role"]
+    # v2.10 RBAC tightening: merchants can only create their own merchant_chest bounties.
+    if role == "merchant":
+        if bounty.bounty_type != "merchant_chest":
+            raise HTTPException(status_code=403, detail="Merchants can only create merchant_chest bounties")
+        if token_data["id"] != bounty.merchant_id:
+            raise HTTPException(status_code=403, detail="Merchant can only create bounties keyed to their own merchant_id")
+    # Daily bounties are admin-only; this also lets admins seed merchant_chest bounties for any merchant.
+    if bounty.bounty_type == "daily" and role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can create daily bounties")
+
     if bounty.bounty_type == "merchant_chest" and bounty.merchant_id is None:
         raise HTTPException(status_code=400, detail="merchant_chest requires merchant_id")
     if bounty.merchant_id is not None:
@@ -1567,6 +2056,16 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
     verification = _enforce_proof(req.score_proof, expected_activity_type=bounty.activity_type)
     if verification is not None:
         req.score = verification.verified_score
+    # Co-location: GPS samples in the proof must land inside the bounty's geofence —
+    # mirrors the proximity check we already do on req.user_lat/lng but against the
+    # workout's own GPS trace rather than the moment-of-submission position.
+    _enforce_proof_gps_in_geofence(
+        req.score_proof,
+        center_lat=bounty.target_lat,
+        center_lng=bounty.target_lng,
+        radius_m=bounty.radius_m or 0,
+        context="bounty_complete",
+    )
     # Replay-attack guard
     _consume_proof_or_409(db, user.id, req.score_proof, source="bounty_complete")
 
@@ -1591,6 +2090,7 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
         related_id=bounty.id,
         verified=bool(verification and verification.verified),
         confidence=verification.confidence if verification else 1.0,
+        proof=req.score_proof,
     )
     stat_touched = log_row.stat_column if log_row else None
 
@@ -1625,32 +2125,128 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
         message=f"Bounty cleared. +{bounty.xp_reward} XP" + (f", +{bounty.crystal_reward} crystals" if bounty.crystal_reward else "") + (f", coupon {coupon_code}" if coupon_code else "") + ".",
     )
 
-@app.get("/api/v1/merchants/{merchant_id}/bounties", response_model=List[BountySummary])
-async def get_merchant_bounties(merchant_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_current_merchant)):
-    if token_data["id"] != merchant_id:
-        raise HTTPException(status_code=403, detail="Not authorized to view these bounties")
-    
-    bounties = db.query(models.Bounty).filter(models.Bounty.merchant_id == merchant_id).all()
-    
-    result = []
-    for b in bounties:
-        result.append(BountySummary(
-            id=b.id,
-            title=b.title,
-            description=b.description,
-            bounty_type=b.bounty_type,
-            target_lat=b.target_lat,
-            target_lng=b.target_lng,
-            radius_m=b.radius_m,
-            activity_type=b.activity_type,
-            target_score=b.target_score,
-            xp_reward=b.xp_reward,
-            crystal_reward=b.crystal_reward,
-            has_coupon=bool(b.coupon_text),
-            completions_remaining=max(0, b.max_completions - b.completions_count),
-            distance_km=0.0,
-        ))
-    return result
+# --- v2.12: Coupon redemption ---
+
+class CouponLookupResponse(BaseModel):
+    """Pre-redeem validation payload — lets a merchant scan the code and see what it is
+    before committing the redemption. Same RBAC as the redeem endpoint."""
+    coupon_code: str
+    bounty_id: int
+    bounty_title: str
+    merchant_id: int
+    customer_user_id: int
+    coupon_text: Optional[str]
+    issued_at: datetime
+    redeemed_at: Optional[datetime]
+    redeemed_by_merchant_id: Optional[int]
+    is_redeemed: bool
+
+
+class CouponRedeemResponse(BaseModel):
+    coupon_code: str
+    bounty_id: int
+    customer_user_id: int
+    redeemed_at: datetime
+    message: str
+
+
+def _load_coupon_for_merchant(
+    db: Session,
+    code: str,
+    token_data: dict,
+) -> tuple[models.BountyCompletion, models.Bounty]:
+    """Shared lookup + authz for the coupon endpoints. Returns the completion row and its
+    bounty, or raises:
+      - 404 if the code doesn't exist
+      - 403 if a merchant calls about another merchant's bounty
+      - 403 if any non-{merchant,admin} role calls"""
+    role = token_data["role"]
+    if role not in ("merchant", "admin"):
+        raise HTTPException(status_code=403, detail="Coupon redemption is merchant-only")
+
+    completion = (
+        db.query(models.BountyCompletion)
+        .filter(models.BountyCompletion.coupon_code_issued == code)
+        .first()
+    )
+    if not completion:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+
+    bounty = db.query(models.Bounty).filter(models.Bounty.id == completion.bounty_id).first()
+    if not bounty:
+        # Bounty was deleted but completion lingered — degenerate state, treat as not found.
+        raise HTTPException(status_code=404, detail="Bounty for this coupon no longer exists")
+
+    if role == "merchant" and bounty.merchant_id != token_data["id"]:
+        raise HTTPException(status_code=403, detail="This coupon belongs to a different merchant")
+
+    return completion, bounty
+
+
+@app.get("/api/v1/coupons/{code}", response_model=CouponLookupResponse)
+async def lookup_coupon(
+    code: str,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_user_token),
+):
+    """Pre-redemption check. Use this to validate a code shown at the till before tapping
+    the redeem button — surfaces 'already redeemed' and 'wrong merchant' before a write."""
+    completion, bounty = _load_coupon_for_merchant(db, code, token_data)
+    return CouponLookupResponse(
+        coupon_code=code,
+        bounty_id=bounty.id,
+        bounty_title=bounty.title,
+        merchant_id=bounty.merchant_id or 0,
+        customer_user_id=completion.user_id,
+        coupon_text=bounty.coupon_text,
+        issued_at=completion.completed_at,
+        redeemed_at=completion.coupon_redeemed_at,
+        redeemed_by_merchant_id=completion.coupon_redeemed_by_merchant_id,
+        is_redeemed=completion.coupon_redeemed_at is not None,
+    )
+
+
+@app.post("/api/v1/coupons/{code}/redeem", response_model=CouponRedeemResponse)
+async def redeem_coupon(
+    code: str,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_user_token),
+):
+    """Stamps a coupon as redeemed at the till. RBAC: only the merchant who owns the
+    bounty (or an admin) can redeem; a re-redeem returns 409 so the customer can't
+    re-use the code at another visit."""
+    completion, bounty = _load_coupon_for_merchant(db, code, token_data)
+
+    if completion.coupon_redeemed_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Coupon already redeemed at {completion.coupon_redeemed_at.isoformat()} "
+                f"by merchant {completion.coupon_redeemed_by_merchant_id}"
+            ),
+        )
+
+    # Admin redemptions stamp the bounty's owning merchant (so the audit trail follows the
+    # storefront, not the admin). Merchant redemptions stamp themselves.
+    redeeming_merchant_id = token_data["id"] if token_data["role"] == "merchant" else (bounty.merchant_id or 0)
+    redeemed_at = _now_naive_utc()
+    completion.coupon_redeemed_at = redeemed_at
+    completion.coupon_redeemed_by_merchant_id = redeeming_merchant_id
+    db.commit()
+
+    return CouponRedeemResponse(
+        coupon_code=code,
+        bounty_id=bounty.id,
+        customer_user_id=completion.user_id,
+        redeemed_at=redeemed_at,
+        message=f"Coupon redeemed for bounty '{bounty.title}'.",
+    )
+
+
+# NOTE (v2.10): a previous duplicate `/api/v1/merchants/{id}/bounties` endpoint was removed
+# here. The canonical implementation now lives near the merchant-profile endpoint and uses
+# `MerchantBountyAnalytics` (richer payload: completions_count + coupons_issued; admins
+# can also call it).
 
 # --- Background Tasks (Cron Logic) ---
 
@@ -1663,18 +2259,52 @@ def process_daily_decay():
         for user in users:
             now = _now_naive_utc()
             hours_since_activity = (now - user.last_activity_date).total_seconds() / 3600
-            
+
             # If they haven't logged in/completed an activity in over a day
             if hours_since_activity > 24:
                 user.streak = 0
                 # Deduct 5% of XP daily as a penalty
                 penalty = int(user.xp * 0.05)
                 user.xp = max(0, user.xp - penalty)
-                
+
             # Re-evaluate rank in case their XP dropped below a tier threshold, or they hit 30-day inactivity
             user.rank = get_rank(user.xp, user.last_activity_date)
         # Save all changes to the database
         db.commit()
+    finally:
+        db.close()
+
+
+def process_telemetry_ttl():
+    """v2.11 nightly job — deletes raw `TelemetryData` sample blobs older than the TTL.
+    `TelemetrySession` metadata stays so analytics queries against
+    'how many workouts per activity_type per week' still work indefinitely; only the
+    expensive raw samples expire.
+
+    Default TTL: 90 days. Override with `OSIRIS_TELEMETRY_TTL_DAYS=<N>`. Set to 0 or
+    negative to disable the job entirely (no expiry — useful for low-volume pilots that
+    want to keep all raw data for ML training)."""
+    ttl_days = int(os.environ.get("OSIRIS_TELEMETRY_TTL_DAYS", "90"))
+    if ttl_days <= 0:
+        return  # disabled
+    cutoff = _now_naive_utc() - timedelta(days=ttl_days)
+    db = database.SessionLocal()
+    try:
+        # Find session ids whose creation predates the cutoff. Joining via session_id keeps
+        # the delete cheap on SQLite (a single IN-list).
+        old_session_ids = [
+            row.id for row in
+            db.query(models.TelemetrySession.id).filter(models.TelemetrySession.created_at < cutoff).all()
+        ]
+        if old_session_ids:
+            deleted = (
+                db.query(models.TelemetryData)
+                .filter(models.TelemetryData.session_id.in_(old_session_ids))
+                .delete(synchronize_session=False)
+            )
+            db.commit()
+            print(f"[telemetry-ttl] purged {deleted} TelemetryData rows older than {ttl_days} days "
+                  f"(across {len(old_session_ids)} sessions; metadata retained).")
     finally:
         db.close()
 

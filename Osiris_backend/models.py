@@ -162,7 +162,14 @@ class Bounty(Base):
 
 class BountyCompletion(Base):
     """One row per (user, bounty) successful completion. Enforces single-claim-per-user and
-    is the source of truth for issued coupon codes."""
+    is the source of truth for issued coupon codes.
+
+    Coupon lifecycle (v2.12):
+      - On bounty complete with `coupon_text` set: `coupon_code_issued` is minted, and
+        `coupon_redeemed_at` stays NULL.
+      - Merchant calls `POST /api/v1/coupons/{code}/redeem` at the till → stamps
+        `coupon_redeemed_at` + `coupon_redeemed_by_merchant_id`. A re-redeem 409s.
+    """
     __tablename__ = "bounty_completions"
     id = Column(Integer, primary_key=True, index=True)
     bounty_id = Column(Integer, ForeignKey("bounties.id"), index=True)
@@ -170,7 +177,9 @@ class BountyCompletion(Base):
     score_submitted = Column(Integer, default=0)
     xp_awarded = Column(Integer, default=0)
     crystals_awarded = Column(Integer, default=0)
-    coupon_code_issued = Column(String, nullable=True)
+    coupon_code_issued = Column(String, nullable=True, index=True)
+    coupon_redeemed_at = Column(DateTime, nullable=True)
+    coupon_redeemed_by_merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True)
     completed_at = Column(DateTime, default=_default_now_naive_utc)
 
 
@@ -231,6 +240,72 @@ class Admin(Base):
     name = Column(String)
     created_at = Column(DateTime, default=_default_now_naive_utc)
     last_login_at = Column(DateTime, nullable=True)
+
+
+class TelemetrySession(Base):
+    """Metadata row per submitted workout/activity. The ML training pipeline reads this to
+    discover which sessions to load samples for. Linked back to the ActivityLog row that
+    represents the gameplay-side outcome (XP awarded, stat incremented, etc.).
+
+    Sensor samples themselves live in TelemetryData (one row per sensor type) so callers
+    can selectively load only the channels they need for a given training task."""
+    __tablename__ = "telemetry_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    activity_log_id = Column(Integer, ForeignKey("activity_log.id"), nullable=True, index=True)
+    activity_type = Column(String, index=True)
+    declared_score = Column(Integer, default=0)
+    duration_seconds = Column(Float, default=0.0)
+    confidence = Column(Float, default=0.0)
+    verified = Column(Integer, default=0)              # 1 if ml_referee passed
+    sample_count_accel = Column(Integer, default=0)
+    sample_count_gyro = Column(Integer, default=0)
+    sample_count_mag = Column(Integer, default=0)
+    sample_count_gps = Column(Integer, default=0)
+    sample_count_barometer = Column(Integer, default=0)
+    has_pose = Column(Boolean, default=False)
+    occurred_at = Column(DateTime, index=True)         # device_timestamp
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+
+class TelemetryData(Base):
+    """Raw sensor samples, JSON-serialized. One row per (session, sensor_type).
+    sensor_type ∈ {'accel', 'gyro', 'magnetometer', 'gps', 'barometer', 'pose'}.
+
+    samples_json shape varies by sensor — see the corresponding Pydantic model in main.py:
+      - accel/gyro/magnetometer: list of {t_ms, ax/gx/mx, ay/gy/my, az/gz/mz}
+      - gps:                     list of {t_ms, lat, lng, accuracy_m, speed_mps, altitude_m}
+      - barometer:               list of {t_ms, pressure_hpa}
+      - pose:                    single object (rep_count, min/max joint angle, avg duration)
+    """
+    __tablename__ = "telemetry_data"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("telemetry_sessions.id"), index=True)
+    sensor_type = Column(String, index=True)
+    sample_count = Column(Integer, default=0)
+    samples_json = Column(String)
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+
+class PaymentWebhookEvent(Base):
+    """Idempotency guard for the payment webhook. Stripe (and most providers) retry failed
+    webhook deliveries; without dedup, the same successful payment can credit revenue twice
+    if the first response is slow or 5xx's. Every inbound webhook records its
+    `provider_event_id` here BEFORE side effects run — a duplicate insert (unique constraint
+    violation) makes the handler return the prior outcome instead of re-processing.
+
+    `provider_event_id` is the provider's top-level event id (Stripe: `event.id`), distinct
+    from `payment_provider_id` (Stripe: `payment_intent.id`) — multiple events can reference
+    the same payment intent, so we dedupe at the event level.
+    """
+    __tablename__ = "payment_webhook_events"
+    id = Column(Integer, primary_key=True, index=True)
+    provider_event_id = Column(String, unique=True, index=True, nullable=False)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
+    payment_status = Column(String, nullable=True)
+    provider_payment_id = Column(String, nullable=True)
+    amount_cents = Column(Integer, default=0)
+    received_at = Column(DateTime, default=_default_now_naive_utc, index=True)
 
 
 class ProofConsumed(Base):

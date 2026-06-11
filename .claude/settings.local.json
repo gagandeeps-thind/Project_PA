@@ -5,7 +5,21 @@
       "Bash(python -c \"import main; print\\('OK; routes:', len\\(main.app.routes\\)\\)\")",
       "Bash(python tests/test_ml_referee.py)",
       "Bash(python scripts/export_openapi.py)",
-      "Bash(python -c \"import main; print\\('routes:', len\\(main.app.routes\\)\\)\")"
+      "Bash(python -c \"import main; print\\('routes:', len\\(main.app.routes\\)\\)\")",
+      "Bash(grep -E \"\\(fitness_mvp\\\\.db|__pycache__|\\\\.pyc$\\)\")",
+      "Bash(git rm *)",
+      "Bash(pip install *)",
+      "Bash(alembic init *)",
+      "Bash(OSIRIS_DATABASE_URL=\"sqlite:///./_alembic_scratch.db\" alembic revision --autogenerate -m \"baseline_v2_11\")",
+      "Bash(alembic stamp *)",
+      "Bash(alembic current *)",
+      "Bash(alembic history *)",
+      "Bash(alembic revision *)",
+      "Bash(alembic upgrade *)",
+      "Bash(python -c \"import main; print\\('import OK'\\); print\\(f'routes: {len\\(main.app.routes\\)}'\\)\")",
+      "Bash(python tests/test_v2_10_flows.py)",
+      "Bash(python tests/test_party_stats.py)",
+      "Bash(python tests/test_replay_guard.py)"
     ]
   }
 }

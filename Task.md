@@ -3,10 +3,10 @@
 | Field | Value |
 | :--- | :--- |
 | **Document Type** | Project Task Tracker + Onboarding Handoff |
-| **Version** | 2.9 |
+| **Version** | 2.11 |
 | **Last Updated** | 2026-05-04 |
 | **Owner** | Gagandeep Thind |
-| **Phase** | Phase 1 — MVP (Merchant payment lifecycle + JWT live) |
+| **Phase** | Phase 1 — MVP (Pilot demo data seeded; v2.10 flows regression-tested) |
 | **Companion Doc** | `Documentation/Imp_and_US.md` (Master GDD/TDD) |
 
 ---
@@ -32,19 +32,21 @@
 **Repository layout (this workspace):**
 - `Osiris_backend/` — Backend Python application (FastAPI + SQLAlchemy + SQLite for MVP).
   - `database.py` — SQLAlchemy engine + session factory. Currently SQLite at `./fitness_mvp.db`.
-  - `models.py` — All ORM models (User, Domain, SiegeLog, SiegeDiscount, Merchant, Bounty, BountyCompletion, PlatformRevenue, ActivityLog, ProofConsumed, Admin *(v2.8)*).
+  - `models.py` — All ORM models (User, Domain, SiegeLog, SiegeDiscount, Merchant, Bounty, BountyCompletion, PlatformRevenue, ActivityLog, ProofConsumed, Admin, TelemetrySession *(v2.10)*, TelemetryData *(v2.10)*).
   - `spatial_utils.py` — Pure-math helpers: `haversine_distance`, `calculate_polygon_area_sqkm` (Shoelace), `point_in_polygon` (ray casting), `is_polygon_swallowed`, `check_velocity_violation`.
   - `ml_referee.py` *(v2.5)* — Heuristic anti-cheat verifier. Pure-Python accelerometer cadence + rhythm analysis, MediaPipe pose summary checks, score-vs-duration plausibility. No SQLAlchemy, no I/O — drop-in replaceable in Phase 2 with a trained Scikit-learn model.
   - `main.py` — FastAPI app: Pydantic schemas, business logic, all REST endpoints, `process_daily_decay` cron (now wired via `lifespan` handler — v2.6), and economy/stat constants.
-  - `tests/` *(v2.6)* — runnable test scripts (no pytest dependency). Currently `test_ml_referee.py`. Run with `python tests/test_ml_referee.py`.
-  - `scripts/` *(v2.6)* — operational helpers. Currently `export_openapi.py` (writes the spec to `Documentation/openapi.json`).
+  - `tests/` *(v2.6)* — runnable test scripts (no pytest dependency). `test_ml_referee.py` (10/10) covers heuristic verification; `test_v2_10_flows.py` *(v2.11)* (7/7) covers telemetry persistence + replay-attack guard + DoS cap + RBAC matrix.
+  - `scripts/` *(v2.6)* — operational helpers. `export_openapi.py` writes the spec to `Documentation/openapi.json`; `seed_admin.py` provisions admin accounts; `seed_pilot.py` *(v2.11)* populates a Bedford-pilot demo dataset (3 players, 1 active merchant, 2 domains, 5 bounties); `migrate_v2_9.py` is the one-time SQLite ALTER for v2.9 columns.
 - `Documentation/Imp_and_US.md` — Master Game Design + Technical Design Document. Source of truth for mechanics & user stories.
-- `Documentation/openapi.json` *(v2.6)* — Generated OpenAPI 3 spec; consumed by the Flutter project in Google Antigravity.
+- `Documentation/openapi.json` *(v2.6)* — Generated OpenAPI 3 spec; consumed by the frontend projects.
 - `Task.md` — *(this file)* — execution tracker + onboarding doc.
 
 **Stack:**
 - **Backend:** Python 3, FastAPI, SQLAlchemy ORM, bcrypt (passwords), APScheduler (cron), SQLite (MVP) → PostgreSQL+PostGIS (Phase 2).
-- **Frontend:** Flutter — built in **Google Antigravity** as a parallel workstream (not in this repo).
+- **Frontend / Customer (Mobile):** Flutter project in `Osiris_customer/`.
+- **Frontend / Merchant (Mobile):** Flutter project in `Osiris_merchant/`.
+- **Frontend / Admin (Web):** React + Vite project in `Osiris_admin_web/`.
 
 **Currency model (Phase 1):** Virtual **Mana Crystals** only. Phase 2 introduces real-money convertibility.
 
@@ -452,6 +454,111 @@ python scripts/seed_admin.py
 
 ---
 
+### 2.14 Pilot-Ready Backend *(Shipped v2.10 — newest)*
+
+**What:** Five things shipped together because they're all on the path between "feature-complete backend" and "Bedford-pilot-ready":
+1. **Full sensor telemetry capture** (accel, gyro, magnetometer, GPS, barometer, pose) persisted via `TelemetrySession` + `TelemetryData` linked to every `ActivityLog`.
+2. **`GET /api/v1/domains/nearby`** — public read endpoint that unblocks the Flutter map.
+3. **`GET /api/v1/merchants/{id}/bounties`** — merchant analytics with `completions_count` + `coupons_issued` for the merchant portal.
+4. **JWT secret hardened** to env var (`OSIRIS_JWT_SECRET`); fail-fast in production via `OSIRIS_ENV=production`.
+5. **Webhook signature verification** (`X-Provider-Signature` HMAC-SHA256) wired in but disabled by default; flips on with `OSIRIS_WEBHOOK_SECRET`. Wider RBAC gates added on `/users/{id}` and tightened on `/bounties`.
+
+**Why:**
+- **Telemetry** was flagged earlier as the single highest-leverage data investment. Without it, every pilot workout is unlabeled training data thrown away on the spot. Capturing the full sensor suite (not just accel + pose) lets future ML use richer features — GPS during a run validates run-vs-treadmill; barometer during stair climbs gives altitude deltas; gyroscope catches the rotational signature of burpees. It's far cheaper to capture too much now than to ask 50 pilot testers to redo their workouts later.
+- **`/domains/nearby`** is the frontend bottleneck. The Flutter map literally cannot render territory until this endpoint exists. Shipping it now removes the blocker for cycle F1.
+- **Merchant analytics** lets the merchant portal show something more interesting than "your activation status is X." Without `coupons_issued`, merchants pay $50 and see no payoff.
+- **JWT secret + webhook signature** are the two hard-requirements to flip the production switch. Both were docs-only TODOs in v2.9; v2.10 makes them actually wired.
+
+**How:**
+
+1. **`models.TelemetrySession`** — metadata row per submitted workout. Tracks `activity_log_id` link, `activity_type`, per-sensor sample counts, `confidence`, `verified` flag, `occurred_at` from device clock.
+2. **`models.TelemetryData`** — sidecar JSON blob, one row per `(session, sensor_type)`. `sensor_type ∈ {accel, gyro, magnetometer, gps, barometer, pose}`. Lets ML training selectively load only the channels it needs.
+3. **`ActivityProof` extended** with `gyroscope: List[GyroscopeSample]`, `magnetometer: List[MagnetometerSample]`, `gps: List[GpsSample]`, `barometer: List[BarometerSample]`. Each sample type is a Pydantic model with `t_ms` (ms since activity start) plus the sensor-specific fields. ML referee continues to read only accelerometer + pose for verification — the rest is captured for archive only.
+4. **`record_activity()` extended** with an optional `proof: ActivityProof` parameter. When provided, calls `_persist_telemetry()` after writing the ActivityLog row. All three call sites (`submit_domain`, `resolve_siege`, `complete_bounty`) plumb the proof through.
+5. **`GET /api/v1/domains/nearby`** — public (no auth). In-memory haversine sweep over all domains, filtered by centroid distance. Returns owner_id, polygon, area, vault_balance, is_protected. PostGIS `ST_DWithin` replaces this in Phase 2.
+6. **`GET /api/v1/merchants/{id}/bounties`** — merchant-self (same id from JWT) or admin. For each bounty, runs a single COUNT(*) for `coupons_issued`. Phase 2 should denormalize to `bounties.coupons_issued_count` if N+1 hits scale.
+7. **JWT secret loading**:
+   - `OSIRIS_JWT_SECRET` env var if set.
+   - In production (`OSIRIS_ENV=production`), missing var raises `RuntimeError` at boot.
+   - In dev, falls back to a 48-byte ephemeral secret regenerated each restart (existing tokens become invalid — desired behaviour).
+8. **Webhook signature verification** via `verify_webhook_signature` dependency: reads raw body once, HMAC-SHA256 over the bytes using `OSIRIS_WEBHOOK_SECRET`, `compare_digest` against `X-Provider-Signature` header. Disabled when secret unset.
+9. **RBAC tightening**:
+   - `GET /api/v1/users/{user_id}` — players self-only, admins any, merchants 403.
+   - `POST /api/v1/bounties` — daily admin-only; merchant_chest must match `merchant_id` from JWT (or admin).
+   - Cleaned up a duplicate `/api/v1/merchants/{id}/bounties` registration that was emitting an OpenAPI warning.
+
+**Files:** `Osiris_backend/models.py` (TelemetrySession, TelemetryData), `Osiris_backend/main.py` (sensor Pydantic shapes; `_persist_telemetry()`; new endpoints; JWT/webhook env-var wiring; RBAC tightening; duplicate cleanup).
+
+**New / changed endpoints:**
+
+| Method | Path | Auth | Purpose |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/v1/domains/nearby?lat=&lng=&radius_km=` | None (public) | Map render — list domains within radius. |
+| GET | `/api/v1/merchants/{id}/bounties` | Merchant (same-id) or Admin | Merchant analytics: bounties + completions + coupons. |
+| GET | `/api/v1/users/{user_id}` | Player (same-id) or Admin | Tightened from un-gated. |
+| POST | `/api/v1/bounties` | Admin (daily) or Merchant-self (chest) | Tightened from admin-or-any-merchant. |
+| POST | `/api/v1/payments/webhook` | Optional `X-Provider-Signature` | When `OSIRIS_WEBHOOK_SECRET` set, verifies HMAC; otherwise accepts as before. |
+
+**Smoke verified end-to-end** (9 steps on `fitness_mvp.db`): onboard player → login (gets JWT) → other-user profile 403 → own profile 200 → /platform/revenue 403 (RBAC) → submit domain w/ full 5-sensor proof → TelemetrySession row created with all 6 channels (300/300/300/30/30/1) → `/domains/nearby` returns the new domain.
+
+**Known simplifications (carry-overs):**
+- **Telemetry stored as JSON strings** in SQLite. Phase 2 should consider a columnar store (Parquet on S3?) for the raw samples once volumes grow — `TelemetryData.samples_json` won't scale to millions of rows.
+- **No TTL on telemetry archive** yet. Pilot data is small enough to keep forever; production needs a retention policy.
+- **`/domains/nearby` is unauth and uncached.** Public game state can be hot — every map pan triggers a fresh scan. Cache-on-edge or PostGIS-with-spatial-index will be needed at scale.
+- **Webhook signature verification only checks HMAC.** Real Stripe integration also needs replay protection (timestamp tolerance) — add when wiring the real provider.
+- **Pilot-fee ledger logged in cents** but Mana Crystals are unitless. Phase 2 currency layer needs to reconcile.
+
+---
+
+### 2.15 Pilot Demo Prep + v2.10 Regression Tests *(Shipped v2.11 — newest)*
+
+**What:** Four operational additions that turn the v2.10 backend from "feature-complete" into "demoable":
+1. **`scripts/seed_pilot.py`** — populates `fitness_mvp.db` with a Bedford-pilot fixture set (3 players, 1 pre-activated merchant, 2 domains around DeWolf Park, 3 daily bounties, 2 merchant_chests).
+2. **DoS guard on `ActivityProof`** — Pydantic `max_length=20000` on every sensor channel rejects oversized payloads with 422 before any server CPU is spent.
+3. **Telemetry TTL job** — `process_telemetry_ttl()` runs nightly via APScheduler, purging `TelemetryData` rows older than `OSIRIS_TELEMETRY_TTL_DAYS` (default 90). `TelemetrySession` metadata is retained indefinitely so analytics queries never lose history. Setting the env var to 0 disables the job.
+4. **`tests/test_v2_10_flows.py`** — 7-case regression suite covering the v2.10 flows we'd previously only smoke-tested by hand: telemetry persistence, replay-attack 409, DoS cap rejection, RBAC matrix (player-self / player-other / player→/platform/revenue / admin→/platform/revenue).
+
+**Why:**
+- A demoable seed cuts onboarding friction: a new contributor or pitch-meeting participant runs *one command* and has a live world to point at, instead of curl-seeding 8 endpoints in order.
+- Without the DoS cap, a malicious or buggy client could submit a multi-megabyte sensor payload and OOM the server. The cap is a Pydantic validator, so it fires before any server logic runs — pure win.
+- Without the TTL job, `TelemetryData` grows unbounded. Each verified workout writes ~5 KB of accelerometer JSON; a busy pilot easily hits hundreds of MBs. We don't need every raw sample forever — once an ML model is trained, the value of older raw data approaches zero.
+- The regression tests catch silent breakages we couldn't catch before. Specifically, the replay-attack guard depends on a hash that includes the full accelerometer trace; if anyone tweaks `_proof_dedup_key()` later and accidentally weakens it, the test fires immediately.
+
+**How:**
+
+1. **`scripts/seed_pilot.py`** — idempotent on the `vanguard@example.com` user (early-exit if exists). Creates 3 players (vanguard / striker / strategist), 2 demo domains around DeWolf Park (one paid Vault, one free), 1 merchant **pre-activated** with `is_active=True` + `payment_status='payment_successful'` so demo flows work end-to-end without walking the webhook lifecycle. All passwords are `'password'` — fixture creds, never use in prod.
+2. **DoS guard** — single new constant `MAX_SAMPLES_PER_CHANNEL = 20000` plus `Field(..., max_length=MAX_SAMPLES_PER_CHANNEL)` on the five sensor arrays in `ActivityProof`. Justification for the number: 20000 samples = ~7 minutes of 50 Hz capture. Longer activities should chunk.
+3. **`process_telemetry_ttl()`** — opens its own DB session (runs outside HTTP request context), queries `TelemetrySession.id` for rows older than the cutoff, deletes matching `TelemetryData` rows in one bulk DELETE. Logs a single line per cleanup. Wired into the existing lifespan handler alongside `process_daily_decay`.
+4. **`tests/test_v2_10_flows.py`** — uses the same pytest-free runnable-script pattern as `test_ml_referee.py`. Each test calls a fresh `TestClient(main.app)` against the real `fitness_mvp.db`, isolating fixtures by an `v210test_` email prefix and cleaning up at start + end. 7 cases, all currently green.
+
+**Files:** `Osiris_backend/main.py` (`MAX_SAMPLES_PER_CHANNEL` constant + Pydantic length validators + `process_telemetry_ttl()` + lifespan-handler registration), `Osiris_backend/scripts/seed_pilot.py` (extended with merchant pre-activation + credentials summary), `Osiris_backend/tests/test_v2_10_flows.py` (new).
+
+**No new endpoints** — this sprint was purely operational hardening.
+
+**Test results:**
+
+```
+ml_referee:        10 / 10 passed
+v2_10_flows:        7 /  7 passed
+```
+
+**One-time setup for a new clone:**
+
+```bash
+cd Osiris_backend
+python scripts/seed_pilot.py        # populates demo data
+python scripts/seed_admin.py        # creates Gagan's admin row
+python tests/test_ml_referee.py
+python tests/test_v2_10_flows.py
+```
+
+**Known simplifications (carry-overs):**
+- TTL job uses `created_at` (server-side wall clock) not `occurred_at` (device clock). For reasonably-clocked devices the difference is seconds; if a device is wildly out of sync we'd rather over-retain than under-retain. Document this if it ever surprises someone.
+- DoS cap is a hard reject — there's no "warn and downsample" path. A legitimate long-distance run would have to chunk client-side. Flutter client should split runs > 7 minutes into multiple ActivityProof submissions, each linked to one `domain_claim` with a separate `device_timestamp`.
+- Seed-script merchant pre-activation skips the PlatformRevenue ledger row that a real webhook activation would write. Demo revenue numbers will be $0 unless someone manually triggers a webhook.
+
+---
+
 ### 2.9 Time-Source Policy *(Established v2.2)*
 
 **What:** Activity timestamps come from the user's mobile device via a required `device_timestamp` (ISO 8601) field. Server-owned timestamps (decay, inactivity) use server `now`.
@@ -473,20 +580,63 @@ The carve-outs (decay, inactivity check) use server time because trusting a devi
 
 ## 3. Active Sprint — Next Up
 
-### Sprint Goal
-v2.9 closed the loop on the merchant payment lifecycle (auto-activation via webhook, three payment statuses, JWT-gated admin overrides). Next sprint focuses on **wider RBAC enforcement** across already-built endpoints, **merchant analytics** (so the merchant portal can render something useful), and **harden the JWT secret** before any non-pilot deployment.
+### Sprint Goal — v2.12 ("Real Payments + Webhook Hardening + Frontend Coordination")
+v2.11 shipped pilot demo data, regression tests, and operational hygiene. Next sprint replaces the stub Stripe-style flow with a real provider integration, hardens the webhook signature path so production can flip on, and gives the merchant portal the analytics it needs to be useful.
 
-### Sprint Backlog
+### Sprint Backlog — Backend
 
-**Backend**
-- ✅ **Multi-portal auth (v2.8)**, **JWT machinery (v2.9)**, **Merchant payment lifecycle (v2.9)** — all shipped. See §§ 2.12–2.13.
-- ✅ **CORS middleware** — already added (`allow_origins=["*"]`); tighten to specific origins before production.
-- 📋 **Wider RBAC enforcement**: gate `/platform/revenue` to admin (currently un-gated), gate `/bounties` POST to admin OR merchant-self, gate `/users/{id}` reads so a player can only fetch their own profile (or admins can fetch any).
-- 📋 **Merchant analytics endpoints**: `GET /api/v1/merchants/{id}/bounties` (own bounties + completion counts), `GET /api/v1/merchants/{id}/coupons-redeemed` — needed before merchant dashboard can render anything useful.
-- 📋 **JWT secret to env var**: replace hardcoded `SECRET_KEY` with `os.environ.get("OSIRIS_JWT_SECRET")`; document the env var in § 8 of this file. Currently 30 bytes (pyjwt warns < 32).
-- 📋 **Webhook signature verification stub**: add a `X-Provider-Signature` header check that's a no-op in MVP but fails closed once a real provider is wired.
+**Real payments**
+- 📋 Wire a real payment-provider SDK (Stripe Elements is the working assumption — confirm before starting). `POST /merchants/{id}/payments/intent` returns a real `client_secret` instead of a UUID stub. `OSIRIS_STRIPE_SECRET_KEY` env var.
+- 📋 Webhook signature: enable production-mode by setting `OSIRIS_WEBHOOK_SECRET` — it's wired but currently bypassed in dev.
+- 📋 Replay-attack guard on the webhook itself: store the provider's `event_id` in a new `PaymentWebhookEvent` table so retries from the provider don't double-credit. Stripe explicitly retries failed webhooks.
 
-**Frontend (Mobile App)** — *Gagan curates this section in Antigravity. v2.9 contract for the Flutter side: post-login, call `GET /api/v1/merchants/{id}` to discover `is_active` + `payment_status`. If inactive, surface a "Pay Pilot Fee" CTA that POSTs `/merchants/{id}/payments/intent` and shows the returned `next_action` instructions. Show one of three banners based on `payment_status`: pending / successful / declined.*
+**Operational deepening**
+- 📋 Structured logging (JSON) via `python-json-logger`. Tag every request with `request_id`, role from JWT claims, and elapsed ms. Sets up CloudWatch / Sentry visibility for v2.13.
+- 📋 Rate limiting on auth + payment endpoints — `slowapi` IP-based limits. `/auth/login` 10/min, `/payments/intent` 5/hr.
+- 📋 Add a `/healthz` endpoint that returns DB connectivity status — needed for k8s/ECS health probes in v2.13 deployment.
+
+**Coordination with Frontend**
+- 📋 If Antigravity blocks on a missing endpoint shape, surface it here before adding it. No drive-by API additions.
+
+### Sprint Backlog — Frontend (Flutter / Antigravity) *(proposed, Gagan curates)*
+
+**Cycle F3 — Merchant + Admin portals**
+- 📋 Merchant dashboard: status banner (active / pending / declined) sourced from `GET /merchants/{id}`; "Pay Pilot Fee" CTA when inactive; analytics card pulling `GET /merchants/{id}/bounties`.
+- 📋 Admin dashboard: revenue summary card (`GET /platform/revenue`); merchants table (`GET /admin/merchants`) with activate/deactivate buttons.
+- 📋 Both portals share the same auth flow already shipped — only the routing target differs based on `role`.
+
+**Cycle F2 carry-overs (if not done)**
+- 📋 Domain Claim Flow as defined last sprint: Start Domain → GPS breadcrumb → Close Domain → Defense Feat → submit.
+
+### Out of scope for v2.12 (deferred to v2.13)
+
+- ML camera flow with on-device MediaPipe — saved for a focused cycle once payment + portal flows are proven.
+- PostgreSQL + PostGIS migration — the bigger production lift; v2.13 sprint topic.
+- App store submissions, privacy policy, TOS — pre-launch only.
+
+---
+
+## 3.5 Roadmap to Bedford Pilot
+
+The pilot needs ~50 local testers playing in DeWolf Park / Sunnyside Mall. To get there, four sprints from v2.10. Backend-led; frontend cycles run in parallel from Antigravity.
+
+| Sprint | Backend Theme | Frontend Theme | Pilot-Demo Bar |
+| :--- | :--- | :--- | :--- |
+| **v2.10** *(shipped)* | Pilot-ready security (RBAC, env JWT, webhook sig) + map-unblocking endpoints (`/domains/nearby`, `/merchants/{id}/bounties`) + telemetry capture (`TelemetrySession` + `TelemetryData`) | Player Core Loop: login → dashboard → map → bounty claim | A tester can register, see nearby bounties on a map, walk to one, and claim it for XP + coupon. |
+| **v2.11** *(shipped)* | Seed-data CLI for pilot demo, DoS guard on `ActivityProof`, telemetry TTL job, regression test suite (`test_v2_10_flows.py`) | Domain Claim Flow: Start Domain → GPS breadcrumb → Close Domain → Defense Feat (manual score input; ML camera deferred) | A tester can claim a polygon and lock crystals into the Vault. |
+| **v2.12** *(active)* | Real Stripe payment integration replacing the intent stub, webhook event-id deduplication, structured JSON logging, rate limiting, `/healthz` | Merchant + Admin portals: status banners, pay CTA, analytics cards, revenue summary | A merchant can pay their pilot fee with a real card and see the activation flip live. |
+| **v2.12** | Real Stripe (or chosen provider) integration in `/payments/intent` + `/payments/webhook` (signature verification active), production logging + Sentry equivalent, CI smoke pipeline | Siege resolution UI + Merchant Portal v0 (login → status → manual pay UX placeholder) + Admin Portal v0 (revenue card + merchant list) | A merchant can register on web, log in to mobile, and see their pending status; an admin can audit revenue. |
+| **v2.13 / v3.0-MVP** | PostgreSQL + PostGIS migration, `geometry_json` → `Geometry('POLYGON')`, `ST_DWithin` replaces in-memory haversine sweep, Alembic for future migrations | ML camera flow: on-device MediaPipe pose estimation + `/activities/verify` preview + proof submission on action endpoints | An end-to-end pilot tester can complete a verified push-up bounty with on-device pose detection. |
+| **Pilot launch** | App-store submissions, privacy policy, TOS, real-money compliance review (still virtual currency at this stage), Bedford onboarding event | Polish, A/B copy, error states, telemetry | First 50 testers in the field. |
+
+**Critical-path dependencies (don't slip these):**
+- Backend `/domains/nearby` blocks the entire frontend Map View. Ship in v2.10.
+- `ActivityProofArchive` blocks any future ML training. Even though no model exists yet, every pilot workout that runs without it is permanently lost data. Ship in v2.10.
+- Real payment provider integration cannot ship before legal sign-off on the pilot's "virtual crystals → real money" framing. Confirm with counsel before v2.12 starts.
+
+**Risks to flag now:**
+- Single-developer frontend (Gagan in Antigravity) is the bottleneck for every cycle's user-visible bar. Backend can ship faster than frontend can consume. Don't accumulate backend velocity at the cost of unintegrated APIs.
+- `fitness_mvp.db` is now schema-divergent across team members each time models change. Phase 2's Alembic migration is overdue.
 
 ---
 
@@ -680,3 +830,5 @@ For a cheaper preview (no DB writes), `POST /api/v1/activities/verify` accepts t
 | 2.7 | 2026-04-30 | G. Thind | `ActivityLog` table + `record_activity` helper wired through all three action endpoints; `?window_days=N` opt-in rolling Party Stats on `/users/{id}/party-role`; `ProofConsumed` table + replay-attack guard (409 on duplicate proof key) hashing user_id+timestamp+activity+score+accel samples; `_enforce_proof` refactored to surface confidence to call sites. Two open economy decisions ratified pending ack. |
 | 2.8 | 2026-05-04 | G. Thind | Three-portal auth architecture — new `Admin` table; `POST /api/v1/auth/login` probes Admin → Merchant → Player and returns the matching `role` for Flutter UI routing; `scripts/seed_admin.py` for out-of-band admin creation (no public admin registration endpoint). End-to-end smoke verified all four cases (admin / merchant / player / 401) on `fitness_mvp.db`. |
 | 2.9 | 2026-05-04 | G. Thind | Merchant payment lifecycle + JWT — Merchant model extended with `payment_status` / `payment_provider_id` / `pilot_fee_cents` / `last_payment_at`; new endpoints `/merchants/{id}` (self-profile), `/merchants/{id}/payments/intent`, `/payments/webhook`, `/admin/merchants` (list + activate + deactivate); `merchant_chest` bounty creation now 403s for inactive merchants; JWT actively used by `get_current_admin/merchant/player` dependencies; one-time `scripts/migrate_v2_9.py` adds the four new columns to existing SQLite. End-to-end smoke verified the full webhook flow (pending / successful / declined). |
+| 2.10 | 2026-05-04 | G. Thind | Pilot-ready backend: full telemetry capture (`TelemetrySession` + `TelemetryData` for accel/gyro/mag/GPS/baro/pose, linked to ActivityLog); `GET /domains/nearby` (Flutter map unblocker); `GET /merchants/{id}/bounties` (analytics); JWT secret to `OSIRIS_JWT_SECRET` env var with prod fail-fast; webhook signature verification (`OSIRIS_WEBHOOK_SECRET` HMAC-SHA256); RBAC on `/users/{id}` and tightened on `/bounties` per-type. 23 OpenAPI paths, 29 routes, smoke verified end-to-end on real DB. |
+| 2.11 | 2026-05-04 | G. Thind | Pilot demo prep: `scripts/seed_pilot.py` (3 players, 1 active merchant, 2 domains, 5 bounties around DeWolf Park, idempotent); `MAX_SAMPLES_PER_CHANNEL=20000` Pydantic DoS cap on `ActivityProof`; `process_telemetry_ttl()` nightly job purging `TelemetryData` older than `OSIRIS_TELEMETRY_TTL_DAYS` (default 90); `tests/test_v2_10_flows.py` (7/7) covering telemetry persistence, replay-attack 409, DoS cap, RBAC matrix. Sprint pivots to v2.12 (real payments + portal frontends). |

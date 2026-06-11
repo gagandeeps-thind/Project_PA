@@ -100,16 +100,23 @@ def seed_pilot_data():
     print("Created 2 Domains in DeWolf Park.")
 
     # --- 3. Seed Merchant ---
+    # Pre-activate so the merchant_chest demo flow works without manually walking the
+    # /payments/intent → /payments/webhook lifecycle. In production this state is reached
+    # only via a payment_successful webhook.
     merchant = models.Merchant(
         name="Bedford Cafe",
         email="cafe@bedford.local",
         hashed_password=get_password_hash("password"),
-        business_type="cafe"
+        business_type="cafe",
+        is_active=True,
+        payment_status="payment_successful",
+        pilot_fee_cents=5000,
+        last_payment_at=now,
     )
     db.add(merchant)
     db.commit()
     db.refresh(merchant)
-    print("Created 1 Merchant.")
+    print(f"Created 1 Merchant (id={merchant.id}, active=True).")
 
     # --- 4. Seed Bounties ---
     bounties = [
@@ -184,7 +191,17 @@ def seed_pilot_data():
     print("Created 5 Bounties.")
 
     db.close()
-    print("Seed complete.")
+    print()
+    print("=" * 60)
+    print("Pilot seed complete. Demo credentials (all use password='password'):")
+    print("  Players:  vanguard@example.com")
+    print("            striker@example.com")
+    print("            strategist@example.com")
+    print("  Merchant: cafe@bedford.local  (pre-activated)")
+    print()
+    print("World location: DeWolf Park, Bedford NS (44.7168, -63.6710)")
+    print("Test the flow via:  http://localhost:8000/docs")
+    print("=" * 60)
 
 if __name__ == "__main__":
     seed_pilot_data()
