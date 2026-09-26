@@ -68,6 +68,24 @@ jobs:
       - name: Tests — Phase 3 Stripe payments suite (price authority / no-double-mint / sig)
         run: python tests/test_phase3_stripe.py
 
+      - name: Tests — crystal ledger suite
+        run: python tests/test_phase2_ledger.py
+
+      - name: Tests — proof replay guard suite
+        run: python tests/test_replay_guard.py
+
+      - name: Tests — party stats suite
+        run: python tests/test_party_stats.py
+
+      - name: Tests — R1 verified run suite
+        run: python tests/test_run_release.py
+
+      - name: Tests — R2 course and challenge suite
+        run: python tests/test_challenge_release.py
+
+      - name: Crystal ledger reconciliation after suites (challenges must not touch crystals)
+        run: python scripts/reconcile_ledger.py --check
+
       - name: OpenAPI contract drift check
         run: python scripts/check_openapi_drift.py
 

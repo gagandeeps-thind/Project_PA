@@ -182,6 +182,1091 @@
         }
       }
     },
+    "/api/v2/runs": {
+      "post": {
+        "summary": "Create Run Session",
+        "description": "Create a run shell. The route is not accepted until it is finished and verified.",
+        "operationId": "create_run_session_api_v2_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSessionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/runs/{run_id}/start": {
+      "post": {
+        "summary": "Start Run Session",
+        "operationId": "start_run_session_api_v2_runs__run_id__start_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSessionStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/runs/{run_id}/points": {
+      "post": {
+        "summary": "Append Run Points",
+        "operationId": "append_run_points_api_v2_runs__run_id__points_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutePointBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/runs/{run_id}/finish": {
+      "post": {
+        "summary": "Finish Run Session",
+        "operationId": "finish_run_session_api_v2_runs__run_id__finish_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSessionFinish"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/runs/{run_id}": {
+      "get": {
+        "summary": "Get Run Session",
+        "operationId": "get_run_session_api_v2_runs__run_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/courses": {
+      "get": {
+        "summary": "List My Courses",
+        "operationId": "list_my_courses_api_v2_courses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CourseSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List My Courses Api V2 Courses Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Register Course",
+        "description": "Turn one accepted run into a course (PRD-005). Idempotent per run: registering the\nsame run again returns the existing course. The first and last stretch of the run are\ntrimmed off as a privacy zone before anything is stored.",
+        "operationId": "register_course_api_v2_courses_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/challenges": {
+      "post": {
+        "summary": "Publish Challenge",
+        "description": "Publish an asynchronous challenge with immutable terms (PRD-006). The target is the\nowner's verified benchmark on the course; no crystals are staked (ADR-005).",
+        "operationId": "publish_challenge_api_v2_challenges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengePublic"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/challenges/nearby": {
+      "get": {
+        "summary": "Nearby Challenges",
+        "description": "Open challenges near a point, as generalized markers only (ADR-004). Distance is\nmeasured to the snapped marker and rounded, so it cannot be used to triangulate a\nroute.",
+        "operationId": "nearby_challenges_api_v2_challenges_nearby_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lng"
+            }
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 5.0,
+              "title": "Radius Km"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChallengePublic"
+                  },
+                  "title": "Response Nearby Challenges Api V2 Challenges Nearby Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/challenges/{challenge_id}": {
+      "get": {
+        "summary": "Get Challenge",
+        "operationId": "get_challenge_api_v2_challenges__challenge_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "challenge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Challenge Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengePublic"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/challenges/{challenge_id}/course": {
+      "get": {
+        "summary": "Get Challenge Course",
+        "description": "The exact course route, released only to the creator and to players who joined.",
+        "operationId": "get_challenge_course_api_v2_challenges__challenge_id__course_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "challenge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Challenge Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeCourseRoute"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/challenges/{challenge_id}/join": {
+      "post": {
+        "summary": "Join Challenge",
+        "description": "Join while the challenge is open (PRD-007). Idempotent: joining twice returns the same\nattempt. The attempt snapshots the terms hash it agreed to.",
+        "operationId": "join_challenge_api_v2_challenges__challenge_id__join_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "challenge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Challenge Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/challenges/{challenge_id}/attempts": {
+      "post": {
+        "summary": "Submit Attempt",
+        "description": "Link a finished run to the player's attempt and decide it from the stored route\nevidence. Idempotent for the same run; a rejected attempt may be retried with a new run\nwhile the challenge accepts submissions.",
+        "operationId": "submit_attempt_api_v2_challenges__challenge_id__attempts_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "challenge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Challenge Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptSubmit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/me/progression": {
+      "get": {
+        "summary": "My Progression",
+        "description": "Transparent progression: XP, versioned performance rank, badges, and the counts\nbehind them.",
+        "operationId": "my_progression_api_v2_me_progression_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/admin/review-queue": {
+      "get": {
+        "summary": "Admin Review Queue",
+        "operationId": "admin_review_queue_api_v2_admin_review_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewQueueItem"
+                  },
+                  "type": "array",
+                  "title": "Response Admin Review Queue Api V2 Admin Review Queue Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/admin/attempts/{attempt_id}/review": {
+      "post": {
+        "summary": "Admin Review Attempt",
+        "operationId": "admin_review_attempt_api_v2_admin_attempts__attempt_id__review_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Attempt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReviewDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/challenges": {
+      "get": {
+        "summary": "Admin List Challenges",
+        "operationId": "admin_list_challenges_api_v2_admin_challenges_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminChallengeItem"
+                  },
+                  "title": "Response Admin List Challenges Api V2 Admin Challenges Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/challenges/{challenge_id}/status": {
+      "post": {
+        "summary": "Admin Challenge Status",
+        "description": "Suspend, resume, or void a challenge without database edits (PRD-010). Voiding\nreverses every XP award the challenge produced and marks all attempts voided.",
+        "operationId": "admin_challenge_status_api_v2_admin_challenges__challenge_id__status_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "challenge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Challenge Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminChallengeAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminChallengeItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/courses/{course_id}/suspend": {
+      "post": {
+        "summary": "Admin Suspend Course",
+        "description": "Take a course off the map (e.g. unsafe or sensitive location) and suspend its live\nchallenges.",
+        "operationId": "admin_suspend_course_api_v2_admin_courses__course_id__suspend_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "course_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Course Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCourseStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/users/{user_id}/suspend": {
+      "post": {
+        "summary": "Admin Suspend User",
+        "operationId": "admin_suspend_user_api_v2_admin_users__user_id__suspend_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/users/{user_id}/unsuspend": {
+      "post": {
+        "summary": "Admin Unsuspend User",
+        "operationId": "admin_unsuspend_user_api_v2_admin_users__user_id__unsuspend_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/admin/audit-events": {
+      "get": {
+        "summary": "Admin Audit Events",
+        "operationId": "admin_audit_events_api_v2_admin_audit_events_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEventOut"
+                  },
+                  "title": "Response Admin Audit Events Api V2 Admin Audit Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/domains/nearby": {
       "get": {
         "summary": "Get Nearby Domains",
@@ -1325,6 +2410,111 @@
         ],
         "title": "ActivityProof"
       },
+      "AdminChallengeAction": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "pattern": "^(suspend|resume|void)$",
+            "title": "Action"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "reason"
+        ],
+        "title": "AdminChallengeAction"
+      },
+      "AdminChallengeItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "creator_id": {
+            "type": "integer",
+            "title": "Creator Id"
+          },
+          "course_id": {
+            "type": "integer",
+            "title": "Course Id"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "title": "Attempt Count"
+          },
+          "closes_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Closes At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "creator_id",
+          "course_id",
+          "attempt_count",
+          "closes_at",
+          "created_at"
+        ],
+        "title": "AdminChallengeItem"
+      },
+      "AdminCourseStatus": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "suspended_challenges": {
+            "type": "integer",
+            "title": "Suspended Challenges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "suspended_challenges"
+        ],
+        "title": "AdminCourseStatus"
+      },
       "AdminMerchantListItem": {
         "properties": {
           "id": {
@@ -1415,6 +2605,259 @@
         ],
         "title": "AdminMerchantToggleResponse"
       },
+      "AdminReason": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "AdminReason"
+      },
+      "AdminReviewDecision": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "pattern": "^(accept|reject)$",
+            "title": "Decision"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "note"
+        ],
+        "title": "AdminReviewDecision"
+      },
+      "AdminUserStatus": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "suspended": {
+            "type": "boolean",
+            "title": "Suspended"
+          },
+          "suspension_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspension Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "suspended"
+        ],
+        "title": "AdminUserStatus"
+      },
+      "AttemptSubmit": {
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "title": "AttemptSubmit"
+      },
+      "AttemptSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "challenge_id": {
+            "type": "integer",
+            "title": "Challenge Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "target_seconds": {
+            "type": "number",
+            "title": "Target Seconds"
+          },
+          "course_coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Coverage"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reason Codes"
+          },
+          "xp_awarded": {
+            "type": "integer",
+            "title": "Xp Awarded"
+          },
+          "terms_hash": {
+            "type": "string",
+            "title": "Terms Hash"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Joined At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "challenge_id",
+          "status",
+          "target_seconds",
+          "reason_codes",
+          "xp_awarded",
+          "terms_hash",
+          "joined_at"
+        ],
+        "title": "AttemptSummary"
+      },
+      "AuditEventOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "actor_type": {
+            "type": "string",
+            "title": "Actor Type"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "actor_type",
+          "action",
+          "entity_type",
+          "details",
+          "created_at"
+        ],
+        "title": "AuditEventOut"
+      },
       "AuthLoginRequest": {
         "properties": {
           "email": {
@@ -1485,6 +2928,30 @@
           "access_token"
         ],
         "title": "AuthLoginResponse"
+      },
+      "BadgeOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "awarded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Awarded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "awarded_at"
+        ],
+        "title": "BadgeOut"
       },
       "BarometerSample": {
         "properties": {
@@ -1803,6 +3270,224 @@
         ],
         "title": "BountySummary"
       },
+      "ChallengeCourseRoute": {
+        "properties": {
+          "challenge_id": {
+            "type": "integer",
+            "title": "Challenge Id"
+          },
+          "course_distance_m": {
+            "type": "number",
+            "title": "Course Distance M"
+          },
+          "start_radius_m": {
+            "type": "number",
+            "title": "Start Radius M"
+          },
+          "route": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Route"
+          }
+        },
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "course_distance_m",
+          "start_radius_m",
+          "route"
+        ],
+        "title": "ChallengeCourseRoute"
+      },
+      "ChallengeCreate": {
+        "properties": {
+          "course_id": {
+            "type": "integer",
+            "title": "Course Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Title"
+          },
+          "window_hours": {
+            "type": "integer",
+            "maximum": 720.0,
+            "minimum": 1.0,
+            "title": "Window Hours"
+          },
+          "safety_notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Notes"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "course_id",
+          "title",
+          "window_hours",
+          "idempotency_key"
+        ],
+        "title": "ChallengeCreate"
+      },
+      "ChallengePublic": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "rules_version": {
+            "type": "string",
+            "title": "Rules Version"
+          },
+          "terms_hash": {
+            "type": "string",
+            "title": "Terms Hash"
+          },
+          "course_distance_m": {
+            "type": "number",
+            "title": "Course Distance M"
+          },
+          "target_seconds": {
+            "type": "number",
+            "title": "Target Seconds"
+          },
+          "entry_crystals": {
+            "type": "integer",
+            "title": "Entry Crystals"
+          },
+          "reward_policy": {
+            "type": "string",
+            "title": "Reward Policy"
+          },
+          "win_xp": {
+            "type": "integer",
+            "title": "Win Xp"
+          },
+          "participation_xp": {
+            "type": "integer",
+            "title": "Participation Xp"
+          },
+          "eligibility": {
+            "type": "string",
+            "title": "Eligibility"
+          },
+          "privacy_mode": {
+            "type": "string",
+            "title": "Privacy Mode"
+          },
+          "safety_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Notes"
+          },
+          "opens_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opens At"
+          },
+          "closes_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Closes At"
+          },
+          "marker_lat": {
+            "type": "number",
+            "title": "Marker Lat"
+          },
+          "marker_lng": {
+            "type": "number",
+            "title": "Marker Lng"
+          },
+          "distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Km"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "title": "Attempt Count"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine"
+          },
+          "my_attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttemptSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "rules_version",
+          "terms_hash",
+          "course_distance_m",
+          "target_seconds",
+          "entry_crystals",
+          "reward_policy",
+          "win_xp",
+          "participation_xp",
+          "eligibility",
+          "privacy_mode",
+          "opens_at",
+          "closes_at",
+          "marker_lat",
+          "marker_lng",
+          "attempt_count",
+          "is_mine"
+        ],
+        "title": "ChallengePublic",
+        "description": "Privacy-safe challenge view (ADR-004): a generalized marker, the immutable terms, and\naggregate participation. No owner identity, no route, no challenger identities."
+      },
       "Coordinate": {
         "properties": {
           "lat": {
@@ -1942,6 +3627,113 @@
           "message"
         ],
         "title": "CouponRedeemResponse"
+      },
+      "CourseCreate": {
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 3,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "name"
+        ],
+        "title": "CourseCreate"
+      },
+      "CourseSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "rules_version": {
+            "type": "string",
+            "title": "Rules Version"
+          },
+          "distance_m": {
+            "type": "number",
+            "title": "Distance M"
+          },
+          "benchmark_seconds": {
+            "type": "number",
+            "title": "Benchmark Seconds"
+          },
+          "is_loop": {
+            "type": "boolean",
+            "title": "Is Loop"
+          },
+          "public_lat": {
+            "type": "number",
+            "title": "Public Lat"
+          },
+          "public_lng": {
+            "type": "number",
+            "title": "Public Lng"
+          },
+          "route": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Route"
+          },
+          "open_challenge_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Challenge Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "version",
+          "rules_version",
+          "distance_m",
+          "benchmark_seconds",
+          "is_loop",
+          "public_lat",
+          "public_lng",
+          "route",
+          "created_at"
+        ],
+        "title": "CourseSummary",
+        "description": "Owner view of a course. Includes the private route; never returned to other players."
       },
       "CrystalPackInfo": {
         "properties": {
@@ -2741,6 +4533,373 @@
           "rep_count"
         ],
         "title": "PoseSummary"
+      },
+      "ProgressionResponse": {
+        "properties": {
+          "xp": {
+            "type": "integer",
+            "title": "Xp"
+          },
+          "performance_rank": {
+            "type": "string",
+            "title": "Performance Rank"
+          },
+          "rank_ladder_version": {
+            "type": "string",
+            "title": "Rank Ladder Version"
+          },
+          "next_rank_xp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Rank Xp"
+          },
+          "verified_runs": {
+            "type": "integer",
+            "title": "Verified Runs"
+          },
+          "courses": {
+            "type": "integer",
+            "title": "Courses"
+          },
+          "challenges_won": {
+            "type": "integer",
+            "title": "Challenges Won"
+          },
+          "defenses": {
+            "type": "integer",
+            "title": "Defenses"
+          },
+          "badges": {
+            "items": {
+              "$ref": "#/components/schemas/BadgeOut"
+            },
+            "type": "array",
+            "title": "Badges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "xp",
+          "performance_rank",
+          "rank_ladder_version",
+          "verified_runs",
+          "courses",
+          "challenges_won",
+          "defenses",
+          "badges"
+        ],
+        "title": "ProgressionResponse"
+      },
+      "ReviewQueueItem": {
+        "properties": {
+          "attempt_id": {
+            "type": "integer",
+            "title": "Attempt Id"
+          },
+          "challenge_id": {
+            "type": "integer",
+            "title": "Challenge Id"
+          },
+          "challenge_title": {
+            "type": "string",
+            "title": "Challenge Title"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "target_seconds": {
+            "type": "number",
+            "title": "Target Seconds"
+          },
+          "course_coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Coverage"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "challenge_id",
+          "challenge_title",
+          "user_id",
+          "target_seconds"
+        ],
+        "title": "ReviewQueueItem"
+      },
+      "RoutePointBatch": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/RoutePointInput"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "points"
+        ],
+        "title": "RoutePointBatch"
+      },
+      "RoutePointInput": {
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Sequence"
+          },
+          "t_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "T Ms"
+          },
+          "lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat"
+          },
+          "lng": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng"
+          },
+          "accuracy_m": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy M"
+          },
+          "speed_mps": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mps"
+          },
+          "altitude_m": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -1000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sequence",
+          "t_ms",
+          "lat",
+          "lng"
+        ],
+        "title": "RoutePointInput"
+      },
+      "RunSessionCreate": {
+        "properties": {
+          "activity_type": {
+            "type": "string",
+            "pattern": "^(run|jog)$",
+            "title": "Activity Type",
+            "default": "run"
+          },
+          "device_started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Device Started At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_started_at"
+        ],
+        "title": "RunSessionCreate"
+      },
+      "RunSessionFinish": {
+        "properties": {
+          "device_finished_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Device Finished At"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_finished_at",
+          "idempotency_key"
+        ],
+        "title": "RunSessionFinish"
+      },
+      "RunSessionStart": {
+        "properties": {
+          "device_started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Device Started At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_started_at"
+        ],
+        "title": "RunSessionStart"
+      },
+      "RunSessionSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "activity_type": {
+            "type": "string",
+            "title": "Activity Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "verification_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Status"
+          },
+          "point_count": {
+            "type": "integer",
+            "title": "Point Count"
+          },
+          "distance_m": {
+            "type": "number",
+            "title": "Distance M"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "title": "Duration Seconds"
+          },
+          "route_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Hash"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "xp_awarded": {
+            "type": "integer",
+            "title": "Xp Awarded",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "activity_type",
+          "status",
+          "point_count",
+          "distance_m",
+          "duration_seconds",
+          "message"
+        ],
+        "title": "RunSessionSummary"
       },
       "SiegeResolveRequest": {
         "properties": {

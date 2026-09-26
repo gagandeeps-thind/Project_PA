@@ -40,6 +40,7 @@ import spatial_utils
 import ml_referee
 import run_verifier
 from services import ledger, stripe_gateway
+from services import challenges as challenge_rules
 
 # Bootstrap convenience: creates any missing tables on first run. Alembic is the schema
 # source-of-truth going forward (see `alembic/` + `alembic.ini`). For new dev DBs, run
@@ -65,6 +66,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(process_daily_decay, 'interval', hours=24)
     # v2.11 telemetry retention: nightly cleanup of raw sample blobs older than TTL.
     scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)
+    scheduler.add_job(process_challenge_settlement, 'interval', hours=1)
     scheduler.start()
     try:
         yield
@@ -382,6 +384,9 @@ _rl_login = _rate_limit(10, 60, "login")
 _rl_onboard = _rate_limit(5, 60, "onboard")
 _rl_verify = _rate_limit(30, 60, "verify")
 _rl_webhook = _rate_limit(60, 60, "webhook")
+# Security §2: route upload, challenge join/submit, and publish are abuse targets too.
+_rl_route = _rate_limit(120, 60, "route")
+_rl_challenge = _rate_limit(30, 60, "challenge")
 
 
 # --- Security ---
@@ -1250,6 +1255,53 @@ async def get_user_profile(
 
 # --- First-release API v2: verified running -----------------------------------
 
+def _api_error(status_code: int, code: str, message: str) -> HTTPException:
+    """v2 structured error: `detail` is {code, message} so clients can branch on `code`."""
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def get_active_player(
+    token_data: dict = Depends(get_current_player),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Player auth plus the PRD-010 suspension check. Every v2 player endpoint uses this, so
+    an admin suspension takes effect on the player's next request without revoking tokens."""
+    user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    if user.suspended_at is not None:
+        raise _api_error(403, "ACCOUNT_SUSPENDED", "This account is suspended. Contact support.")
+    return token_data
+
+
+def _audit(
+    db: Session, *, actor_type: str, actor_id: Optional[int], action: str,
+    entity_type: str, entity_id: Optional[int], details: Optional[dict] = None,
+) -> None:
+    """Append an AuditEvent in the caller's transaction. Never pass coordinates here."""
+    db.add(models.AuditEvent(
+        actor_type=actor_type, actor_id=actor_id, action=action,
+        entity_type=entity_type, entity_id=entity_id,
+        details_json=json.dumps(details or {}, default=str, sort_keys=True),
+    ))
+
+
+def _award_badge(db: Session, user_id: int, badge_code: str) -> bool:
+    """Idempotently grant a badge. Returns True only when newly awarded."""
+    exists = db.query(models.UserBadge).filter(
+        models.UserBadge.user_id == user_id, models.UserBadge.badge_code == badge_code,
+    ).first()
+    if exists:
+        return False
+    db.add(models.UserBadge(user_id=user_id, badge_code=badge_code))
+    return True
+
+
+def _adjust_xp(user: models.User, delta: int) -> None:
+    user.xp = max(0, (user.xp or 0) + delta)
+    user.rank = get_rank(user.xp, user.last_activity_date)
+
+
 def _get_player_run(db: Session, run_id: int, player_id: int) -> models.RunSession:
     session = db.query(models.RunSession).filter(models.RunSession.id == run_id).first()
     if not session:
@@ -1263,7 +1315,7 @@ def _get_player_run(db: Session, run_id: int, player_id: int) -> models.RunSessi
 async def create_run_session(
     req: RunSessionCreate,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     """Create a run shell. The route is not accepted until it is finished and verified."""
     session = models.RunSession(
@@ -1283,7 +1335,7 @@ async def start_run_session(
     run_id: int,
     req: RunSessionStart,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     session = _get_player_run(db, run_id, token_data["id"])
     if session.status == "active":
@@ -1304,7 +1356,8 @@ async def append_run_points(
     run_id: int,
     req: RoutePointBatch,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_route),
 ):
     session = _get_player_run(db, run_id, token_data["id"])
     if session.status != "active":
@@ -1342,7 +1395,7 @@ async def finish_run_session(
     run_id: int,
     req: RunSessionFinish,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     session = _get_player_run(db, run_id, token_data["id"])
     if session.status in ("submitted", "verifying", "closed"):
@@ -1408,6 +1461,13 @@ async def finish_run_session(
                 session.finished_at, "run_session", related_id=session.id,
                 verified=True, confidence=1.0,
             )
+            _award_badge(db, user.id, "FIRST_VERIFIED_RUN")
+    _audit(
+        db, actor_type="player", actor_id=token_data["id"], action="run.verified",
+        entity_type="run_session", entity_id=session.id,
+        details={"status": result.status, "reason_codes": result.reason_codes,
+                 "rules_version": run_verifier.RULES_VERSION},
+    )
     db.commit()
     db.refresh(session)
     message = "Run verified and accepted" if result.status == "accepted" else "Run rejected by verification rules"
@@ -1418,10 +1478,899 @@ async def finish_run_session(
 async def get_run_session(
     run_id: int,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     session = _get_player_run(db, run_id, token_data["id"])
     return _run_summary(session, message="Run session status")
+
+
+# --- R2 API v2: courses and challenges (PRD-005..008, ADR-004/005) -------------------
+
+class CourseCreate(BaseModel):
+    run_id: int
+    name: str = Field(..., min_length=3, max_length=60)
+
+
+class CourseSummary(BaseModel):
+    """Owner view of a course. Includes the private route; never returned to other players."""
+    id: int
+    name: str
+    status: str
+    version: int
+    rules_version: str
+    distance_m: float
+    benchmark_seconds: float
+    is_loop: bool
+    public_lat: float
+    public_lng: float
+    route: List[List[float]]
+    open_challenge_id: Optional[int] = None
+    created_at: datetime
+
+
+class ChallengeCreate(BaseModel):
+    course_id: int
+    title: str = Field(..., min_length=3, max_length=80)
+    window_hours: int = Field(..., ge=challenge_rules.MIN_WINDOW_HOURS, le=challenge_rules.MAX_WINDOW_HOURS)
+    safety_notes: Optional[str] = Field(default=None, max_length=500)
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
+
+
+class AttemptSummary(BaseModel):
+    id: int
+    challenge_id: int
+    status: str
+    outcome: Optional[str] = None
+    run_id: Optional[int] = None
+    elapsed_seconds: Optional[float] = None
+    target_seconds: float
+    course_coverage: Optional[float] = None
+    reason_codes: List[str]
+    xp_awarded: int
+    terms_hash: str
+    joined_at: datetime
+    decided_at: Optional[datetime] = None
+
+
+class ChallengePublic(BaseModel):
+    """Privacy-safe challenge view (ADR-004): a generalized marker, the immutable terms, and
+    aggregate participation. No owner identity, no route, no challenger identities."""
+    id: int
+    title: str
+    status: str
+    rules_version: str
+    terms_hash: str
+    course_distance_m: float
+    target_seconds: float
+    entry_crystals: int
+    reward_policy: str
+    win_xp: int
+    participation_xp: int
+    eligibility: str
+    privacy_mode: str
+    safety_notes: Optional[str] = None
+    opens_at: datetime
+    closes_at: datetime
+    marker_lat: float
+    marker_lng: float
+    distance_km: Optional[float] = None
+    attempt_count: int
+    is_mine: bool
+    my_attempt: Optional[AttemptSummary] = None
+
+
+class ChallengeCourseRoute(BaseModel):
+    challenge_id: int
+    course_distance_m: float
+    start_radius_m: float
+    route: List[List[float]]
+
+
+class AttemptSubmit(BaseModel):
+    run_id: int
+
+
+class BadgeOut(BaseModel):
+    code: str
+    label: str
+    awarded_at: datetime
+
+
+class ProgressionResponse(BaseModel):
+    xp: int
+    performance_rank: str
+    rank_ladder_version: str
+    next_rank_xp: Optional[int] = None
+    verified_runs: int
+    courses: int
+    challenges_won: int
+    defenses: int
+    badges: List[BadgeOut]
+
+
+def _run_points(db: Session, run_id: int) -> "list[tuple[float, float, int]]":
+    rows = (
+        db.query(models.RoutePoint)
+        .filter(models.RoutePoint.run_session_id == run_id)
+        .order_by(models.RoutePoint.sequence.asc())
+        .all()
+    )
+    return [(r.lat, r.lng, r.t_ms) for r in rows]
+
+
+def _course_route(course: models.Course) -> "list[tuple[float, float]]":
+    return [(p[0], p[1]) for p in json.loads(course.route_json)]
+
+
+def _course_summary(db: Session, course: models.Course) -> CourseSummary:
+    open_ch = db.query(models.Challenge).filter(
+        models.Challenge.course_id == course.id, models.Challenge.status == "open",
+    ).first()
+    return CourseSummary(
+        id=course.id, name=course.name, status=course.status, version=course.version,
+        rules_version=course.rules_version, distance_m=round(course.distance_m, 2),
+        benchmark_seconds=round(course.benchmark_seconds, 2), is_loop=bool(course.is_loop),
+        public_lat=course.public_lat, public_lng=course.public_lng,
+        route=[list(p) for p in _course_route(course)],
+        open_challenge_id=open_ch.id if open_ch else None, created_at=course.created_at,
+    )
+
+
+def _attempt_summary(attempt: models.ChallengeAttempt, challenge: models.Challenge) -> AttemptSummary:
+    return AttemptSummary(
+        id=attempt.id, challenge_id=attempt.challenge_id, status=attempt.status,
+        outcome=attempt.outcome, run_id=attempt.run_session_id,
+        elapsed_seconds=attempt.elapsed_seconds, target_seconds=challenge.target_seconds,
+        course_coverage=attempt.course_coverage,
+        reason_codes=json.loads(attempt.reason_codes_json or "[]"),
+        xp_awarded=attempt.xp_awarded or 0, terms_hash=attempt.terms_hash,
+        joined_at=attempt.joined_at, decided_at=attempt.decided_at,
+    )
+
+
+def _refresh_challenge_status(db: Session, ch: models.Challenge, now: Optional[datetime] = None) -> bool:
+    """Advance open -> closed -> settled by the clock. Returns True if anything changed; the
+    caller commits. Settlement waits out the submission grace period and any pending review."""
+    now = now or _now_naive_utc()
+    changed = False
+    if ch.status == "open" and now >= ch.closes_at:
+        ch.status = "closed"
+        _audit(db, actor_type="system", actor_id=None, action="challenge.closed",
+               entity_type="challenge", entity_id=ch.id)
+        changed = True
+    grace = timedelta(hours=challenge_rules.SUBMISSION_GRACE_HOURS)
+    if ch.status == "closed" and now >= ch.closes_at + grace:
+        attempts = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id == ch.id).all()
+        if not any(a.status == "review_required" for a in attempts):
+            ch.status = "settled"
+            ch.settled_at = now
+            _audit(db, actor_type="system", actor_id=None, action="challenge.settled",
+                   entity_type="challenge", entity_id=ch.id,
+                   details={"attempts": len(attempts),
+                            "wins": sum(1 for a in attempts if a.outcome == "won")})
+            changed = True
+    return changed
+
+
+def _challenge_public(
+    db: Session, ch: models.Challenge, course: models.Course, viewer_id: int,
+    distance_km: Optional[float] = None,
+) -> ChallengePublic:
+    attempt_count = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id,
+        models.ChallengeAttempt.run_session_id.isnot(None),
+    ).count()
+    mine = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == viewer_id,
+    ).first()
+    return ChallengePublic(
+        id=ch.id, title=ch.title, status=ch.status, rules_version=ch.rules_version,
+        terms_hash=ch.terms_hash, course_distance_m=round(course.distance_m, 2),
+        target_seconds=round(ch.target_seconds, 2), entry_crystals=ch.entry_crystals,
+        reward_policy=ch.reward_policy, win_xp=ch.win_xp, participation_xp=ch.participation_xp,
+        eligibility=ch.eligibility, privacy_mode=ch.privacy_mode, safety_notes=ch.safety_notes,
+        opens_at=ch.opens_at, closes_at=ch.closes_at,
+        marker_lat=course.public_lat, marker_lng=course.public_lng,
+        distance_km=distance_km, attempt_count=attempt_count,
+        is_mine=ch.creator_id == viewer_id,
+        my_attempt=_attempt_summary(mine, ch) if mine else None,
+    )
+
+
+def _apply_attempt_outcome(db: Session, attempt: models.ChallengeAttempt, ch: models.Challenge) -> None:
+    """Award the non-cash rewards for a decided attempt (ADR-005: XP and badges only)."""
+    challenger = db.query(models.User).filter(models.User.id == attempt.user_id).first()
+    defender = db.query(models.User).filter(models.User.id == ch.creator_id).first()
+    if attempt.outcome == "won":
+        attempt.xp_awarded = ch.win_xp
+        _award_badge(db, attempt.user_id, "FIRST_CHALLENGE_WIN")
+    else:
+        attempt.xp_awarded = ch.participation_xp
+        if defender is not None:
+            attempt.defender_xp_awarded = challenge_rules.DEFENSE_XP
+            _adjust_xp(defender, challenge_rules.DEFENSE_XP)
+            _award_badge(db, defender.id, "FIRST_DEFENSE")
+    if challenger is not None:
+        _adjust_xp(challenger, attempt.xp_awarded)
+    attempt.decided_at = _now_naive_utc()
+
+
+def _get_challenge(db: Session, challenge_id: int) -> models.Challenge:
+    ch = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if ch is None:
+        raise _api_error(404, "CHALLENGE_NOT_FOUND", "Challenge not found")
+    return ch
+
+
+@app.post("/api/v2/courses", response_model=CourseSummary, status_code=201)
+async def register_course(
+    req: CourseCreate,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Turn one accepted run into a course (PRD-005). Idempotent per run: registering the
+    same run again returns the existing course. The first and last stretch of the run are
+    trimmed off as a privacy zone before anything is stored."""
+    player_id = token_data["id"]
+    run = _get_player_run(db, req.run_id, player_id)
+    if run.status != "closed" or run.verification_status != "accepted":
+        raise _api_error(409, "RUN_NOT_ACCEPTED", "Only a verified, accepted run can become a course")
+    existing = db.query(models.Course).filter(models.Course.source_run_session_id == run.id).first()
+    if existing:
+        return _course_summary(db, existing)
+
+    trimmed = challenge_rules.trim_route(_run_points(db, run.id))
+    reasons = challenge_rules.course_rejection_reasons(trimmed.distance_m)
+    if not trimmed.route or trimmed.elapsed_seconds <= 0:
+        reasons = reasons or ["COURSE_TOO_SHORT"]
+    if reasons:
+        raise _api_error(422, reasons[0], "Course must be between 0.4 km and 42.2 km after privacy trimming")
+
+    active = db.query(models.Course).filter(
+        models.Course.owner_id == player_id, models.Course.status == "active",
+    ).count()
+    if active >= challenge_rules.MAX_ACTIVE_COURSES_PER_USER:
+        raise _api_error(409, "COURSE_LIMIT_REACHED", "You have reached the active course limit")
+
+    route = challenge_rules.simplify_route(trimmed.route)
+    start, finish = route[0], route[-1]
+    # Coarse bounding pre-filter (~110 m) before the exact duplicate test.
+    nearby = db.query(models.Course).filter(
+        models.Course.status == "active",
+        models.Course.start_lat.between(start[0] - 0.001, start[0] + 0.001),
+    ).all()
+    for other in nearby:
+        if challenge_rules.is_duplicate_course(
+            start, finish, trimmed.distance_m,
+            (other.start_lat, other.start_lng), (other.finish_lat, other.finish_lng), other.distance_m,
+        ):
+            if other.owner_id == player_id:
+                raise _api_error(409, "DUPLICATE_COURSE", "You already registered this course")
+            raise _api_error(409, "COURSE_OVERLAP", "This course already exists; challenge it instead")
+
+    marker = challenge_rules.public_marker(route)
+    route_json = json.dumps([list(p) for p in route], separators=(",", ":"))
+    course = models.Course(
+        owner_id=player_id, source_run_session_id=run.id, version=1,
+        rules_version=challenge_rules.COURSE_RULES_VERSION, name=req.name.strip(), status="active",
+        distance_m=round(trimmed.distance_m, 2), benchmark_seconds=round(trimmed.elapsed_seconds, 2),
+        is_loop=challenge_rules.distance_m(start, finish) <= challenge_rules.LOOP_THRESHOLD_M,
+        start_lat=start[0], start_lng=start[1], finish_lat=finish[0], finish_lng=finish[1],
+        route_json=route_json, route_hash=hashlib.sha256(route_json.encode("utf-8")).hexdigest(),
+        public_lat=marker[0], public_lng=marker[1],
+    )
+    db.add(course)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(models.Course).filter(models.Course.source_run_session_id == run.id).first()
+        if existing:
+            return _course_summary(db, existing)
+        raise
+    _award_badge(db, player_id, "FIRST_COURSE")
+    _audit(db, actor_type="player", actor_id=player_id, action="course.registered",
+           entity_type="course", entity_id=course.id,
+           details={"run_id": run.id, "distance_m": course.distance_m,
+                    "rules_version": course.rules_version})
+    db.commit()
+    db.refresh(course)
+    return _course_summary(db, course)
+
+
+@app.get("/api/v2/courses", response_model=List[CourseSummary])
+async def list_my_courses(
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    courses = (
+        db.query(models.Course)
+        .filter(models.Course.owner_id == token_data["id"])
+        .order_by(models.Course.created_at.desc())
+        .all()
+    )
+    return [_course_summary(db, c) for c in courses]
+
+
+@app.post("/api/v2/challenges", response_model=ChallengePublic, status_code=201)
+async def publish_challenge(
+    req: ChallengeCreate,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_challenge),
+):
+    """Publish an asynchronous challenge with immutable terms (PRD-006). The target is the
+    owner's verified benchmark on the course; no crystals are staked (ADR-005)."""
+    player_id = token_data["id"]
+    prior = db.query(models.Challenge).filter(
+        models.Challenge.publish_idempotency_key == req.idempotency_key,
+    ).first()
+    if prior is not None:
+        if prior.creator_id != player_id:
+            raise _api_error(409, "IDEMPOTENCY_KEY_REUSED", "Idempotency key already used")
+        course = db.query(models.Course).filter(models.Course.id == prior.course_id).first()
+        return _challenge_public(db, prior, course, player_id)
+
+    course = db.query(models.Course).filter(models.Course.id == req.course_id).first()
+    if course is None:
+        raise _api_error(404, "COURSE_NOT_FOUND", "Course not found")
+    if course.owner_id != player_id:
+        raise _api_error(403, "NOT_COURSE_OWNER", "Only the course owner can publish a challenge on it")
+    if course.status != "active":
+        raise _api_error(409, "COURSE_NOT_ACTIVE", "This course is not active")
+
+    now = _now_naive_utc()
+    open_on_course = db.query(models.Challenge).filter(
+        models.Challenge.course_id == course.id, models.Challenge.status == "open",
+    ).all()
+    for ch in open_on_course:
+        _refresh_challenge_status(db, ch, now)
+    if any(ch.status == "open" for ch in open_on_course):
+        db.commit()
+        raise _api_error(409, "CHALLENGE_ALREADY_OPEN", "This course already has an open challenge")
+
+    opens_at = now.replace(microsecond=0)
+    closes_at = opens_at + timedelta(hours=req.window_hours)
+    safety = req.safety_notes.strip() if req.safety_notes else None
+    win_xp = challenge_rules.win_xp_for(course.distance_m)
+    terms = challenge_rules.build_terms(
+        course_id=course.id, course_version=course.version, target_seconds=course.benchmark_seconds,
+        win_xp=win_xp, safety_notes=safety, opens_at=opens_at, closes_at=closes_at,
+    )
+    ch = models.Challenge(
+        course_id=course.id, creator_id=player_id, title=req.title.strip(), status="open",
+        rules_version=terms["rules_version"], course_version=course.version,
+        target_seconds=terms["target_seconds"], entry_crystals=terms["entry_crystals"],
+        reward_policy=terms["reward_policy"], win_xp=win_xp,
+        participation_xp=terms["participation_xp"], eligibility=terms["eligibility"],
+        privacy_mode=terms["privacy_mode"], safety_notes=safety,
+        opens_at=opens_at, closes_at=closes_at, terms_hash=challenge_rules.terms_hash(terms),
+        publish_idempotency_key=req.idempotency_key,
+    )
+    db.add(ch)
+    db.flush()
+    _award_badge(db, player_id, "FIRST_CHALLENGE_PUBLISHED")
+    _audit(db, actor_type="player", actor_id=player_id, action="challenge.published",
+           entity_type="challenge", entity_id=ch.id,
+           details={"course_id": course.id, "terms_hash": ch.terms_hash, "window_hours": req.window_hours})
+    db.commit()
+    db.refresh(ch)
+    return _challenge_public(db, ch, course, player_id)
+
+
+@app.get("/api/v2/challenges/nearby", response_model=List[ChallengePublic])
+async def nearby_challenges(
+    lat: float,
+    lng: float,
+    radius_km: float = 5.0,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Open challenges near a point, as generalized markers only (ADR-004). Distance is
+    measured to the snapped marker and rounded, so it cannot be used to triangulate a
+    route."""
+    import math as _math
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise _api_error(422, "INVALID_LOCATION", "lat/lng out of range")
+    radius_km = min(max(radius_km, 0.5), 50.0)
+    dlat = radius_km / 111.0
+    dlng = radius_km / (111.0 * max(0.01, _math.cos(_math.radians(lat))))
+    rows = (
+        db.query(models.Challenge, models.Course)
+        .join(models.Course, models.Course.id == models.Challenge.course_id)
+        .filter(
+            models.Challenge.status == "open",
+            models.Course.status == "active",
+            models.Course.public_lat.between(lat - dlat, lat + dlat),
+            models.Course.public_lng.between(lng - dlng, lng + dlng),
+        )
+        .all()
+    )
+    now = _now_naive_utc()
+    changed = False
+    out: List[ChallengePublic] = []
+    for ch, course in rows:
+        changed |= _refresh_challenge_status(db, ch, now)
+        if ch.status != "open":
+            continue
+        dist = spatial_utils.haversine_distance(lat, lng, course.public_lat, course.public_lng)
+        if dist > radius_km:
+            continue
+        out.append(_challenge_public(db, ch, course, token_data["id"], distance_km=round(dist, 1)))
+    if changed:
+        db.commit()
+    out.sort(key=lambda c: c.distance_km or 0.0)
+    return out[:100]
+
+
+@app.get("/api/v2/challenges/{challenge_id}", response_model=ChallengePublic)
+async def get_challenge(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    ch = _get_challenge(db, challenge_id)
+    if _refresh_challenge_status(db, ch):
+        db.commit()
+    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
+    return _challenge_public(db, ch, course, token_data["id"])
+
+
+@app.get("/api/v2/challenges/{challenge_id}/course", response_model=ChallengeCourseRoute)
+async def get_challenge_course(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """The exact course route, released only to the creator and to players who joined."""
+    ch = _get_challenge(db, challenge_id)
+    player_id = token_data["id"]
+    if ch.creator_id != player_id:
+        joined = db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+        ).first()
+        if joined is None:
+            raise _api_error(403, "JOIN_REQUIRED", "Join the challenge to see the course route")
+    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
+    return ChallengeCourseRoute(
+        challenge_id=ch.id, course_distance_m=round(course.distance_m, 2),
+        start_radius_m=challenge_rules.ATTEMPT_ENDPOINT_RADIUS_M,
+        route=[list(p) for p in _course_route(course)],
+    )
+
+
+@app.post("/api/v2/challenges/{challenge_id}/join", response_model=AttemptSummary)
+async def join_challenge(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_challenge),
+):
+    """Join while the challenge is open (PRD-007). Idempotent: joining twice returns the same
+    attempt. The attempt snapshots the terms hash it agreed to."""
+    player_id = token_data["id"]
+    ch = _get_challenge(db, challenge_id)
+    if _refresh_challenge_status(db, ch):
+        db.commit()
+    existing = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+    ).first()
+    if existing:
+        return _attempt_summary(existing, ch)
+    if ch.status != "open":
+        raise _api_error(409, "CHALLENGE_NOT_OPEN", f"Challenge is {ch.status}")
+    if ch.creator_id == player_id:
+        raise _api_error(409, "OWN_CHALLENGE", "You cannot join your own challenge")
+    verified_runs = db.query(models.RunSession).filter(
+        models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
+    ).count()
+    if verified_runs < 1:
+        raise _api_error(403, "NOT_ELIGIBLE", "Complete one verified run before joining challenges")
+    attempt = models.ChallengeAttempt(
+        challenge_id=ch.id, user_id=player_id, status="joined", terms_hash=ch.terms_hash,
+    )
+    db.add(attempt)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+        ).first()
+        return _attempt_summary(existing, ch)
+    _audit(db, actor_type="player", actor_id=player_id, action="challenge.joined",
+           entity_type="challenge_attempt", entity_id=attempt.id,
+           details={"challenge_id": ch.id, "terms_hash": ch.terms_hash})
+    db.commit()
+    db.refresh(attempt)
+    return _attempt_summary(attempt, ch)
+
+
+@app.post("/api/v2/challenges/{challenge_id}/attempts", response_model=AttemptSummary)
+async def submit_attempt(
+    challenge_id: int,
+    req: AttemptSubmit,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_challenge),
+):
+    """Link a finished run to the player's attempt and decide it from the stored route
+    evidence. Idempotent for the same run; a rejected attempt may be retried with a new run
+    while the challenge accepts submissions."""
+    player_id = token_data["id"]
+    ch = _get_challenge(db, challenge_id)
+    if _refresh_challenge_status(db, ch):
+        db.commit()
+    attempt = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+    ).first()
+    if attempt is None:
+        raise _api_error(409, "NOT_JOINED", "Join the challenge before submitting a run")
+    if attempt.run_session_id == req.run_id and attempt.status != "joined":
+        return _attempt_summary(attempt, ch)
+    if attempt.status not in ("joined", "rejected"):
+        raise _api_error(409, "ATTEMPT_ALREADY_DECIDED", "This attempt has already been submitted")
+    if ch.status not in ("open", "closed"):
+        raise _api_error(409, "CHALLENGE_NOT_OPEN", f"Challenge is {ch.status}")
+    if attempt.terms_hash != ch.terms_hash:
+        raise _api_error(409, "TERMS_CHANGED", "Challenge terms differ from the terms you joined")
+
+    run = _get_player_run(db, req.run_id, player_id)
+    if run.status != "closed":
+        raise _api_error(409, "RUN_NOT_FINISHED", "Finish the run before submitting it")
+    if run.created_at < attempt.joined_at:
+        raise _api_error(409, "RUN_BEFORE_JOIN", "Only runs started after joining count")
+    if run.finished_at is None or run.finished_at > ch.closes_at:
+        raise _api_error(409, "RUN_AFTER_CLOSE", "The run finished after the challenge closed")
+    used = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.run_session_id == run.id, models.ChallengeAttempt.id != attempt.id,
+    ).first()
+    if used is not None:
+        raise _api_error(409, "RUN_ALREADY_USED", "This run is already linked to another attempt")
+
+    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
+    wall_clock = None
+    if run.started_at and run.finished_at:
+        wall_clock = (run.finished_at - run.started_at).total_seconds()
+    ev = challenge_rules.evaluate_attempt(
+        course_route=_course_route(course), course_distance=course.distance_m,
+        target_seconds=ch.target_seconds, run_verification_status=run.verification_status,
+        run_points=_run_points(db, run.id), run_duration=run.duration_seconds or 0.0,
+        run_wall_clock_seconds=wall_clock,
+    )
+    attempt.run_session_id = run.id
+    attempt.status = ev.status
+    attempt.outcome = ev.outcome
+    attempt.elapsed_seconds = ev.elapsed_seconds
+    attempt.course_coverage = ev.coverage
+    attempt.reason_codes_json = json.dumps(ev.reason_codes)
+    attempt.submitted_at = _now_naive_utc()
+    if ev.status == "accepted":
+        _apply_attempt_outcome(db, attempt, ch)
+    elif ev.status == "rejected":
+        attempt.decided_at = attempt.submitted_at
+    _audit(db, actor_type="player", actor_id=player_id, action="challenge.attempt_submitted",
+           entity_type="challenge_attempt", entity_id=attempt.id,
+           details={"challenge_id": ch.id, "run_id": run.id, "status": ev.status,
+                    "outcome": ev.outcome, "reason_codes": ev.reason_codes,
+                    "elapsed_seconds": ev.elapsed_seconds, "rules_version": ch.rules_version})
+    db.commit()
+    db.refresh(attempt)
+    return _attempt_summary(attempt, ch)
+
+
+@app.get("/api/v2/me/progression", response_model=ProgressionResponse)
+async def my_progression(
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Transparent progression: XP, versioned performance rank, badges, and the counts
+    behind them."""
+    player_id = token_data["id"]
+    user = db.query(models.User).filter(models.User.id == player_id).first()
+    xp = user.xp or 0
+    badges = (
+        db.query(models.UserBadge)
+        .filter(models.UserBadge.user_id == player_id)
+        .order_by(models.UserBadge.awarded_at.asc())
+        .all()
+    )
+    defenses = (
+        db.query(models.ChallengeAttempt)
+        .join(models.Challenge, models.Challenge.id == models.ChallengeAttempt.challenge_id)
+        .filter(models.Challenge.creator_id == player_id, models.ChallengeAttempt.outcome == "lost")
+        .count()
+    )
+    return ProgressionResponse(
+        xp=xp,
+        performance_rank=challenge_rules.performance_rank(xp),
+        rank_ladder_version=challenge_rules.RANK_LADDER_VERSION,
+        next_rank_xp=challenge_rules.next_rank_threshold(xp),
+        verified_runs=db.query(models.RunSession).filter(
+            models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
+        ).count(),
+        courses=db.query(models.Course).filter(models.Course.owner_id == player_id).count(),
+        challenges_won=db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome == "won",
+        ).count(),
+        defenses=defenses,
+        badges=[
+            BadgeOut(code=b.badge_code, label=challenge_rules.BADGES.get(b.badge_code, b.badge_code),
+                     awarded_at=b.awarded_at)
+            for b in badges
+        ],
+    )
+
+
+# --- R2 admin trust console API (PRD-010) ----------------------------------------------
+
+class AdminReason(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class AdminChallengeAction(BaseModel):
+    action: str = Field(..., pattern="^(suspend|resume|void)$")
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class AdminReviewDecision(BaseModel):
+    decision: str = Field(..., pattern="^(accept|reject)$")
+    note: str = Field(..., min_length=3, max_length=500)
+
+
+class ReviewQueueItem(BaseModel):
+    attempt_id: int
+    challenge_id: int
+    challenge_title: str
+    user_id: int
+    run_id: Optional[int] = None
+    elapsed_seconds: Optional[float] = None
+    target_seconds: float
+    course_coverage: Optional[float] = None
+    submitted_at: Optional[datetime] = None
+
+
+class AdminChallengeItem(BaseModel):
+    id: int
+    title: str
+    status: str
+    status_reason: Optional[str] = None
+    creator_id: int
+    course_id: int
+    attempt_count: int
+    closes_at: datetime
+    created_at: datetime
+
+
+class AdminCourseStatus(BaseModel):
+    id: int
+    status: str
+    suspended_challenges: int
+
+
+class AdminUserStatus(BaseModel):
+    user_id: int
+    email: str
+    suspended: bool
+    suspension_reason: Optional[str] = None
+
+
+class AuditEventOut(BaseModel):
+    id: int
+    actor_type: str
+    actor_id: Optional[int] = None
+    action: str
+    entity_type: str
+    entity_id: Optional[int] = None
+    details: dict
+    created_at: datetime
+
+
+def _admin_challenge_item(db: Session, ch: models.Challenge) -> AdminChallengeItem:
+    return AdminChallengeItem(
+        id=ch.id, title=ch.title, status=ch.status, status_reason=ch.status_reason,
+        creator_id=ch.creator_id, course_id=ch.course_id,
+        attempt_count=db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id == ch.id).count(),
+        closes_at=ch.closes_at, created_at=ch.created_at,
+    )
+
+
+@app.get("/api/v2/admin/review-queue", response_model=List[ReviewQueueItem])
+async def admin_review_queue(
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    rows = (
+        db.query(models.ChallengeAttempt, models.Challenge)
+        .join(models.Challenge, models.Challenge.id == models.ChallengeAttempt.challenge_id)
+        .filter(models.ChallengeAttempt.status == "review_required")
+        .order_by(models.ChallengeAttempt.submitted_at.asc())
+        .all()
+    )
+    return [
+        ReviewQueueItem(
+            attempt_id=a.id, challenge_id=ch.id, challenge_title=ch.title, user_id=a.user_id,
+            run_id=a.run_session_id, elapsed_seconds=a.elapsed_seconds,
+            target_seconds=ch.target_seconds, course_coverage=a.course_coverage,
+            submitted_at=a.submitted_at,
+        )
+        for a, ch in rows
+    ]
+
+
+@app.post("/api/v2/admin/attempts/{attempt_id}/review", response_model=AttemptSummary)
+async def admin_review_attempt(
+    attempt_id: int,
+    req: AdminReviewDecision,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    attempt = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.id == attempt_id).first()
+    if attempt is None:
+        raise _api_error(404, "ATTEMPT_NOT_FOUND", "Attempt not found")
+    if attempt.status != "review_required":
+        raise _api_error(409, "NOT_IN_REVIEW", f"Attempt is {attempt.status}")
+    ch = _get_challenge(db, attempt.challenge_id)
+    attempt.reviewed_by_admin_id = token_data["id"]
+    attempt.review_note = req.note
+    if req.decision == "accept":
+        attempt.status = "accepted"
+        attempt.outcome = "won" if (attempt.elapsed_seconds or 0) < ch.target_seconds else "lost"
+        attempt.reason_codes_json = "[]"
+        if ch.status != "voided":
+            _apply_attempt_outcome(db, attempt, ch)
+    else:
+        attempt.status = "rejected"
+        attempt.reason_codes_json = json.dumps(["REVIEW_REJECTED"])
+        attempt.decided_at = _now_naive_utc()
+    _audit(db, actor_type="admin", actor_id=token_data["id"], action="attempt.reviewed",
+           entity_type="challenge_attempt", entity_id=attempt.id,
+           details={"decision": req.decision, "note": req.note, "outcome": attempt.outcome})
+    _refresh_challenge_status(db, ch)
+    db.commit()
+    db.refresh(attempt)
+    return _attempt_summary(attempt, ch)
+
+
+@app.get("/api/v2/admin/challenges", response_model=List[AdminChallengeItem])
+async def admin_list_challenges(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    q = db.query(models.Challenge)
+    if status:
+        q = q.filter(models.Challenge.status == status)
+    return [_admin_challenge_item(db, ch) for ch in q.order_by(models.Challenge.created_at.desc()).limit(200).all()]
+
+
+@app.post("/api/v2/admin/challenges/{challenge_id}/status", response_model=AdminChallengeItem)
+async def admin_challenge_status(
+    challenge_id: int,
+    req: AdminChallengeAction,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    """Suspend, resume, or void a challenge without database edits (PRD-010). Voiding
+    reverses every XP award the challenge produced and marks all attempts voided."""
+    ch = _get_challenge(db, challenge_id)
+    if req.action == "suspend":
+        if ch.status not in ("open", "closed"):
+            raise _api_error(409, "INVALID_TRANSITION", f"Cannot suspend a {ch.status} challenge")
+        ch.status = "suspended"
+    elif req.action == "resume":
+        if ch.status != "suspended":
+            raise _api_error(409, "INVALID_TRANSITION", f"Cannot resume a {ch.status} challenge")
+        ch.status = "open"
+        _refresh_challenge_status(db, ch)
+    else:
+        if ch.status == "voided":
+            raise _api_error(409, "INVALID_TRANSITION", "Challenge is already voided")
+        attempts = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id == ch.id).all()
+        defender = db.query(models.User).filter(models.User.id == ch.creator_id).first()
+        for a in attempts:
+            if a.xp_awarded:
+                challenger = db.query(models.User).filter(models.User.id == a.user_id).first()
+                if challenger is not None:
+                    _adjust_xp(challenger, -a.xp_awarded)
+            if a.defender_xp_awarded and defender is not None:
+                _adjust_xp(defender, -a.defender_xp_awarded)
+            a.outcome = "voided"
+            a.decided_at = a.decided_at or _now_naive_utc()
+        ch.status = "voided"
+    ch.status_reason = req.reason
+    _audit(db, actor_type="admin", actor_id=token_data["id"], action=f"challenge.{req.action}",
+           entity_type="challenge", entity_id=ch.id, details={"reason": req.reason, "status": ch.status})
+    db.commit()
+    db.refresh(ch)
+    return _admin_challenge_item(db, ch)
+
+
+@app.post("/api/v2/admin/courses/{course_id}/suspend", response_model=AdminCourseStatus)
+async def admin_suspend_course(
+    course_id: int,
+    req: AdminReason,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    """Take a course off the map (e.g. unsafe or sensitive location) and suspend its live
+    challenges."""
+    course = db.query(models.Course).filter(models.Course.id == course_id).first()
+    if course is None:
+        raise _api_error(404, "COURSE_NOT_FOUND", "Course not found")
+    course.status = "suspended"
+    live = db.query(models.Challenge).filter(
+        models.Challenge.course_id == course.id, models.Challenge.status.in_(("open", "closed")),
+    ).all()
+    for ch in live:
+        ch.status = "suspended"
+        ch.status_reason = f"Course suspended: {req.reason}"
+    _audit(db, actor_type="admin", actor_id=token_data["id"], action="course.suspend",
+           entity_type="course", entity_id=course.id,
+           details={"reason": req.reason, "suspended_challenges": [c.id for c in live]})
+    db.commit()
+    return AdminCourseStatus(id=course.id, status=course.status, suspended_challenges=len(live))
+
+
+def _set_user_suspension(db: Session, user_id: int, admin_id: int, reason: Optional[str]) -> AdminUserStatus:
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        raise _api_error(404, "USER_NOT_FOUND", "User not found")
+    user.suspended_at = _now_naive_utc() if reason else None
+    user.suspension_reason = reason
+    _audit(db, actor_type="admin", actor_id=admin_id,
+           action="user.suspend" if reason else "user.unsuspend",
+           entity_type="user", entity_id=user.id, details={"reason": reason})
+    db.commit()
+    return AdminUserStatus(user_id=user.id, email=user.email, suspended=reason is not None,
+                           suspension_reason=reason)
+
+
+@app.post("/api/v2/admin/users/{user_id}/suspend", response_model=AdminUserStatus)
+async def admin_suspend_user(
+    user_id: int,
+    req: AdminReason,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    return _set_user_suspension(db, user_id, token_data["id"], req.reason)
+
+
+@app.post("/api/v2/admin/users/{user_id}/unsuspend", response_model=AdminUserStatus)
+async def admin_unsuspend_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    return _set_user_suspension(db, user_id, token_data["id"], None)
+
+
+@app.get("/api/v2/admin/audit-events", response_model=List[AuditEventOut])
+async def admin_audit_events(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    q = db.query(models.AuditEvent)
+    if entity_type:
+        q = q.filter(models.AuditEvent.entity_type == entity_type)
+    if entity_id is not None:
+        q = q.filter(models.AuditEvent.entity_id == entity_id)
+    if action:
+        q = q.filter(models.AuditEvent.action == action)
+    rows = q.order_by(models.AuditEvent.id.desc()).limit(min(max(limit, 1), 500)).all()
+    return [
+        AuditEventOut(
+            id=r.id, actor_type=r.actor_type, actor_id=r.actor_id, action=r.action,
+            entity_type=r.entity_type, entity_id=r.entity_id,
+            details=json.loads(r.details_json or "{}"), created_at=r.created_at,
+        )
+        for r in rows
+    ]
 
 @app.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
 async def get_nearby_domains(
@@ -3116,6 +4065,23 @@ def process_telemetry_ttl():
             db.commit()
             print(f"[telemetry-ttl] purged {deleted} TelemetryData rows older than {ttl_days} days "
                   f"(across {len(old_session_ids)} sessions; metadata retained).")
+    finally:
+        db.close()
+
+
+def process_challenge_settlement():
+    """R2 hourly job — closes challenges past their window and settles them once the
+    submission grace period has passed and no attempt awaits review. Reads also advance
+    status lazily; this job makes sure untouched challenges settle too."""
+    db = database.SessionLocal()
+    try:
+        now = _now_naive_utc()
+        live = db.query(models.Challenge).filter(models.Challenge.status.in_(("open", "closed"))).all()
+        changed = False
+        for ch in live:
+            changed |= _refresh_challenge_status(db, ch, now)
+        if changed:
+            db.commit()
     finally:
         db.close()
 

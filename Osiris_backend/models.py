@@ -47,6 +47,11 @@ class User(Base):
     end_stat = Column(Integer, default=0)  # Long runs, walks, sustained volume
     con_stat = Column(Integer, default=0)  # Planks, holds, streak precision
 
+    # PRD-010: admins suspend a player without database edits. Non-null = suspended; the
+    # v2 API refuses every mutation for a suspended player (see main.get_active_player).
+    suspended_at = Column(DateTime, nullable=True)
+    suspension_reason = Column(String, nullable=True)
+
     # Relationships
     domains = relationship("Domain", back_populates="owner")
 
@@ -458,3 +463,126 @@ class VerificationDecision(Base):
     reason_codes_json = Column(String, nullable=False, default="[]")
     metrics_json = Column(String, nullable=False, default="{}")
     created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+# --- R2: Course and challenge pilot ---------------------------------------------
+
+class Course(Base):
+    """A versioned course normalized from one accepted run (PRD-005).
+
+    `route_json`, `start_*` and `finish_*` are PRIVATE: only the owner and admins see them.
+    Public discovery uses `public_lat`/`public_lng`, a grid-snapped marker derived from the
+    route midpoint (never the start or finish, which are the likeliest home/work points).
+
+    status: active | suspended | retired
+    """
+    __tablename__ = "courses"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # One course proposal per accepted run; the unique constraint is the idempotency guard.
+    source_run_session_id = Column(Integer, ForeignKey("run_sessions.id"), nullable=False, unique=True)
+    version = Column(Integer, nullable=False, default=1)
+    rules_version = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="active", index=True)
+    distance_m = Column(Float, nullable=False)
+    benchmark_seconds = Column(Float, nullable=False)   # owner's verified time on the source run
+    is_loop = Column(Boolean, nullable=False, default=False)
+    start_lat = Column(Float, nullable=False)
+    start_lng = Column(Float, nullable=False)
+    finish_lat = Column(Float, nullable=False)
+    finish_lng = Column(Float, nullable=False)
+    route_json = Column(String, nullable=False)          # simplified [[lat, lng], ...]
+    route_hash = Column(String, nullable=False, index=True)
+    public_lat = Column(Float, nullable=False, index=True)
+    public_lng = Column(Float, nullable=False, index=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class Challenge(Base):
+    """Immutable asynchronous challenge published against a Course (PRD-006).
+
+    Every field in `services.challenges.TERMS_FIELDS` is frozen at publish time and hashed
+    into `terms_hash`; each attempt snapshots that hash when the challenger joins.
+    Corrections create a new challenge — there is no edit path.
+
+    status: open -> closed -> settled, or suspended | voided by an admin.
+    entry_crystals is always 0 in this release (ADR-005: no stakes until the settlement
+    equation is approved); the column exists so the terms contract is stable.
+    """
+    __tablename__ = "challenges"
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="open", index=True)
+    rules_version = Column(String, nullable=False)
+    course_version = Column(Integer, nullable=False)
+    target_seconds = Column(Float, nullable=False)
+    entry_crystals = Column(Integer, nullable=False, default=0)
+    reward_policy = Column(String, nullable=False, default="xp_badge")
+    win_xp = Column(Integer, nullable=False)
+    participation_xp = Column(Integer, nullable=False)
+    eligibility = Column(String, nullable=False, default="verified_runner")
+    privacy_mode = Column(String, nullable=False, default="generalized")
+    safety_notes = Column(String, nullable=True)
+    opens_at = Column(DateTime, nullable=False)
+    closes_at = Column(DateTime, nullable=False, index=True)
+    terms_hash = Column(String, nullable=False)
+    publish_idempotency_key = Column(String, nullable=True, unique=True)
+    status_reason = Column(String, nullable=True)        # admin suspend/void reason
+    settled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class ChallengeAttempt(Base):
+    """One player's participation in a Challenge.
+
+    status: joined -> accepted | rejected | review_required -> (outcome set)
+    outcome: won | lost | voided (NULL until the attempt is decided)
+    """
+    __tablename__ = "challenge_attempts"
+    id = Column(Integer, primary_key=True, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="joined", index=True)
+    outcome = Column(String, nullable=True)
+    terms_hash = Column(String, nullable=False)          # snapshot at join time
+    run_session_id = Column(Integer, ForeignKey("run_sessions.id"), nullable=True, unique=True)
+    elapsed_seconds = Column(Float, nullable=True)
+    course_coverage = Column(Float, nullable=True)
+    reason_codes_json = Column(String, nullable=False, default="[]")
+    xp_awarded = Column(Integer, nullable=False, default=0)
+    defender_xp_awarded = Column(Integer, nullable=False, default=0)
+    joined_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+    submitted_at = Column(DateTime, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    reviewed_by_admin_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
+    review_note = Column(String, nullable=True)
+
+    __table_args__ = (UniqueConstraint("challenge_id", "user_id", name="uq_challenge_attempts_challenge_user"),)
+
+
+class UserBadge(Base):
+    """A non-cash achievement. One row per (user, badge_code)."""
+    __tablename__ = "user_badges"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    badge_code = Column(String, nullable=False)
+    awarded_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "badge_code", name="uq_user_badges_user_badge"),)
+
+
+class AuditEvent(Base):
+    """Append-only trail of security, admin, challenge, and economy actions (PRD-008).
+    `details_json` must never carry raw coordinates or secrets."""
+    __tablename__ = "audit_events"
+    id = Column(Integer, primary_key=True, index=True)
+    actor_type = Column(String, nullable=False)          # player | admin | system
+    actor_id = Column(Integer, nullable=True)
+    action = Column(String, nullable=False, index=True)
+    entity_type = Column(String, nullable=False, index=True)
+    entity_id = Column(Integer, nullable=True, index=True)
+    details_json = Column(String, nullable=False, default="{}")
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
