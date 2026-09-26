@@ -6,6 +6,10 @@
 # Dev SQLite DB — the entrypoint runs `alembic upgrade head` to build a fresh DB.
 *.db
 *.sqlite3
+# Local secrets — supplied at runtime via -e/env, never baked into the image.
+.env
+.env.*
+!.env.example
 .git/
 .gitignore
 .pytest_cache/

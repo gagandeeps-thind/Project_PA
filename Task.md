@@ -632,7 +632,7 @@ The pilot needs ~50 local testers playing in DeWolf Park / Sunnyside Mall. To ge
 **Critical-path dependencies (don't slip these):**
 - Backend `/domains/nearby` blocks the entire frontend Map View. Ship in v2.10.
 - `ActivityProofArchive` blocks any future ML training. Even though no model exists yet, every pilot workout that runs without it is permanently lost data. Ship in v2.10.
-- Real payment provider integration cannot ship before legal sign-off on the pilot's "virtual crystals → real money" framing. Confirm with counsel before v2.12 starts.
+- Real payment provider integration requires a documented product, finance, security, and market-readiness review before v2.12 starts.
 
 **Risks to flag now:**
 - Single-developer frontend (Gagan in Antigravity) is the bottleneck for every cycle's user-visible bar. Backend can ship faster than frontend can consume. Don't accumulate backend velocity at the cost of unintegrated APIs.

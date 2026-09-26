@@ -100,6 +100,51 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  // ── Verified running ─────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> createRun({
+    String activityType = 'run',
+    required String deviceStartedAt,
+  }) async {
+    final response = await _dio.post('/api/v2/runs', data: {
+      'activity_type': activityType,
+      'device_started_at': deviceStartedAt,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> startRun(
+    int runId,
+    String deviceStartedAt,
+  ) async {
+    final response = await _dio.post('/api/v2/runs/$runId/start', data: {
+      'device_started_at': deviceStartedAt,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> appendRunPoints(
+    int runId,
+    List<Map<String, dynamic>> points,
+  ) async {
+    final response = await _dio.post('/api/v2/runs/$runId/points', data: {
+      'points': points,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> finishRun(
+    int runId,
+    String deviceFinishedAt,
+    String idempotencyKey,
+  ) async {
+    final response = await _dio.post('/api/v2/runs/$runId/finish', data: {
+      'device_finished_at': deviceFinishedAt,
+      'idempotency_key': idempotencyKey,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
   // ── Domains ───────────────────────────────────────────────────────────
 
   /// Submit a new domain polygon. Automatically adds device_timestamp.

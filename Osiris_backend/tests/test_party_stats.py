@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from database import Base
-from main import app, get_db, record_activity, get_password_hash, get_rank, get_title
+from main import app, get_db, record_activity, get_password_hash, get_rank, get_title, create_access_token
 import models
 
 # Set up an in-memory SQLite database for testing
@@ -134,7 +134,8 @@ def test_rolling_window_party_role():
         
         # The user's lifetime totals are now: STR=100, AGI=40
         # If we call without window_days, leading should be STR (Vanguard)
-        resp_lifetime = client.get(f"/api/v1/users/{user.id}/party-role")
+        headers = {"Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'role': 'player'})}"}
+        resp_lifetime = client.get(f"/api/v1/users/{user.id}/party-role", headers=headers)
         assert resp_lifetime.status_code == 200
         data_lifetime = resp_lifetime.json()
         assert data_lifetime["leading_stat"] == "str_stat", f"Expected str_stat, got {data_lifetime['leading_stat']}"
@@ -143,7 +144,7 @@ def test_rolling_window_party_role():
         
         # If we call WITH window_days=30, the 100 STR is ignored.
         # Leading should be AGI (Striker)
-        resp_window = client.get(f"/api/v1/users/{user.id}/party-role?window_days=30")
+        resp_window = client.get(f"/api/v1/users/{user.id}/party-role?window_days=30", headers=headers)
         assert resp_window.status_code == 200
         data_window = resp_window.json()
         assert data_window["leading_stat"] == "agi_stat", f"Expected agi_stat, got {data_window['leading_stat']}"

@@ -729,6 +729,111 @@
         "title": "CouponRedeemResponse",
         "type": "object"
       },
+      "CrystalPackInfo": {
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "crystals": {
+            "title": "Crystals",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pack_id": {
+            "title": "Pack Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pack_id",
+          "label",
+          "crystals",
+          "amount_cents",
+          "currency"
+        ],
+        "title": "CrystalPackInfo",
+        "type": "object"
+      },
+      "CrystalPurchaseIntentRequest": {
+        "properties": {
+          "pack_id": {
+            "title": "Pack Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pack_id"
+        ],
+        "title": "CrystalPurchaseIntentRequest",
+        "type": "object"
+      },
+      "CrystalPurchaseIntentResponse": {
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "client_secret": {
+            "title": "Client Secret",
+            "type": "string"
+          },
+          "crystal_amount": {
+            "title": "Crystal Amount",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "pack_id": {
+            "title": "Pack Id",
+            "type": "string"
+          },
+          "payment_intent_id": {
+            "title": "Payment Intent Id",
+            "type": "string"
+          },
+          "publishable_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publishable Key"
+          },
+          "purchase_id": {
+            "title": "Purchase Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purchase_id",
+          "pack_id",
+          "crystal_amount",
+          "amount_cents",
+          "currency",
+          "payment_intent_id",
+          "client_secret",
+          "status"
+        ],
+        "title": "CrystalPurchaseIntentResponse",
+        "type": "object"
+      },
       "DomainCreate": {
         "properties": {
           "coordinates": {
@@ -1269,8 +1374,19 @@
         "type": "object"
       },
       "PaymentIntentResponse": {
-        "description": "Returned when a merchant initiates payment. In Phase 2 with a real provider this would\ninclude a client_secret for Stripe Elements; in MVP it's a stub UUID.",
+        "description": "Returned when a merchant initiates the pilot-fee payment. `client_secret` is what the\nFlutter Stripe SDK uses to confirm the card on-device; `publishable_key` lets the client\ninit the SDK from the server's config so the pk isn't pinned in two places.",
         "properties": {
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
           "merchant_id": {
             "title": "Merchant Id",
             "type": "integer"
@@ -1290,6 +1406,17 @@
           "provider_payment_id": {
             "title": "Provider Payment Id",
             "type": "string"
+          },
+          "publishable_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publishable Key"
           }
         },
         "required": [
@@ -1399,6 +1526,233 @@
           "rep_count"
         ],
         "title": "PoseSummary",
+        "type": "object"
+      },
+      "RoutePointBatch": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/RoutePointInput"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "points"
+        ],
+        "title": "RoutePointBatch",
+        "type": "object"
+      },
+      "RoutePointInput": {
+        "properties": {
+          "accuracy_m": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy M"
+          },
+          "altitude_m": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": -1000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude M"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng",
+            "type": "number"
+          },
+          "sequence": {
+            "minimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "speed_mps": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mps"
+          },
+          "t_ms": {
+            "minimum": 0.0,
+            "title": "T Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "t_ms",
+          "lat",
+          "lng"
+        ],
+        "title": "RoutePointInput",
+        "type": "object"
+      },
+      "RunSessionCreate": {
+        "properties": {
+          "activity_type": {
+            "default": "run",
+            "pattern": "^(run|jog)$",
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "device_started_at": {
+            "format": "date-time",
+            "title": "Device Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_started_at"
+        ],
+        "title": "RunSessionCreate",
+        "type": "object"
+      },
+      "RunSessionFinish": {
+        "properties": {
+          "device_finished_at": {
+            "format": "date-time",
+            "title": "Device Finished At",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_finished_at",
+          "idempotency_key"
+        ],
+        "title": "RunSessionFinish",
+        "type": "object"
+      },
+      "RunSessionStart": {
+        "properties": {
+          "device_started_at": {
+            "format": "date-time",
+            "title": "Device Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_started_at"
+        ],
+        "title": "RunSessionStart",
+        "type": "object"
+      },
+      "RunSessionSummary": {
+        "properties": {
+          "activity_type": {
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "distance_m": {
+            "title": "Distance M",
+            "type": "number"
+          },
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "point_count": {
+            "title": "Point Count",
+            "type": "integer"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "route_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Hash"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "verification_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Status"
+          },
+          "xp_awarded": {
+            "default": 0,
+            "title": "Xp Awarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "activity_type",
+          "status",
+          "point_count",
+          "distance_m",
+          "duration_seconds",
+          "message"
+        ],
+        "title": "RunSessionSummary",
         "type": "object"
       },
       "SiegeResolveRequest": {
@@ -2629,7 +2983,7 @@
     },
     "/api/v1/merchants/{merchant_id}/payments/intent": {
       "post": {
-        "description": "Initiate the pilot-fee payment. In production this calls the payment provider (e.g.,\nStripe) and returns a client_secret for the front-end to redirect to a payment form.\nFor MVP we stub a unique provider_payment_id and leave payment_status='payment_pending'\nuntil the webhook fires.",
+        "description": "Initiate the pilot-fee payment via Stripe. Creates a Stripe PaymentIntent for the\nmerchant's `pilot_fee_cents` and returns its `client_secret` so the Flutter Stripe SDK can\nconfirm the card on-device. Activation does NOT happen here \u2014 it happens when Stripe POSTs\n`payment_intent.succeeded` to /payments/stripe/webhook.",
         "operationId": "create_payment_intent_api_v1_merchants__merchant_id__payments_intent_post",
         "parameters": [
           {
@@ -2709,6 +3063,92 @@
           }
         },
         "summary": "Onboard User"
+      }
+    },
+    "/api/v1/payments/crystals/intent": {
+      "post": {
+        "description": "Start a real-money crystal top-up. The price and crystal grant come from CRYSTAL_PACKS\non the server \u2014 the client only chooses a `pack_id`. Creates a Stripe PaymentIntent and a\n'pending' CrystalPurchase; crystals are credited later by the webhook on success.",
+        "operationId": "create_crystal_purchase_intent_api_v1_payments_crystals_intent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrystalPurchaseIntentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrystalPurchaseIntentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Crystal Purchase Intent"
+      }
+    },
+    "/api/v1/payments/crystals/packs": {
+      "get": {
+        "description": "Buyable crystal packs with server-authoritative pricing. The client renders these and\nsends back only a `pack_id`; it never sets a price.",
+        "operationId": "list_crystal_packs_api_v1_payments_crystals_packs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CrystalPackInfo"
+                  },
+                  "title": "Response List Crystal Packs Api V1 Payments Crystals Packs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Crystal Packs"
+      }
+    },
+    "/api/v1/payments/stripe/webhook": {
+      "post": {
+        "description": "Stripe-native webhook. Verifies the `Stripe-Signature` header against the RAW body with\n`stripe.Webhook.construct_event`, then routes `payment_intent.*` events by their metadata\n`kind` to the merchant-pilot-fee or crystal-purchase processor.\n\nEvent-level idempotency: PaymentWebhookEvent keyed on the Stripe `event.id` (unique index)\nmakes retried deliveries no-ops. Purchase-level idempotency (no double-mint) is enforced\nseparately by `_fulfill_crystal_purchase`.",
+        "operationId": "stripe_webhook_api_v1_payments_stripe_webhook_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentWebhookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stripe Webhook"
       }
     },
     "/api/v1/payments/webhook": {
@@ -2912,6 +3352,256 @@
           }
         ],
         "summary": "Get User Party Role"
+      }
+    },
+    "/api/v2/runs": {
+      "post": {
+        "description": "Create a run shell. The route is not accepted until it is finished and verified.",
+        "operationId": "create_run_session_api_v2_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSessionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Run Session"
+      }
+    },
+    "/api/v2/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_session_api_v2_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Run Session"
+      }
+    },
+    "/api/v2/runs/{run_id}/finish": {
+      "post": {
+        "operationId": "finish_run_session_api_v2_runs__run_id__finish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSessionFinish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Finish Run Session"
+      }
+    },
+    "/api/v2/runs/{run_id}/points": {
+      "post": {
+        "operationId": "append_run_points_api_v2_runs__run_id__points_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutePointBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Append Run Points"
+      }
+    },
+    "/api/v2/runs/{run_id}/start": {
+      "post": {
+        "operationId": "start_run_session_api_v2_runs__run_id__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSessionStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Start Run Session"
       }
     }
   }

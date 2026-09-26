@@ -29,6 +29,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // Domain tracing state
   bool _isTracing = false;
   final List<LatLng> _tracePath = [];
+  int? _runId;
+  DateTime? _runStartTime;
+  int _runSequence = 0;
+  double _runDistanceM = 0;
+  Position? _lastRunPosition;
+  final List<Map<String, dynamic>> _pendingRunPoints = [];
+  bool _uploadingRunPoints = false;
 
   // Nearby data
   List<Map<String, dynamic>> _nearbyDomains = [];
@@ -71,6 +78,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
         if (_isTracing) {
           setState(() => _tracePath.add(newPos));
+          unawaited(_captureRunPoint(pos));
         }
       });
     } catch (e) {
@@ -111,36 +119,110 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  void _toggleTracing() {
+  Future<void> _toggleTracing() async {
     if (_isTracing) {
-      // Stop tracing
-      _pedometer.stop();
-      setState(() => _isTracing = false);
-
-      if (_tracePath.length >= 3) {
-        _showSubmitDialog();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Need at least 3 points for a domain.')),
-        );
-      }
-    } else {
-      // Start tracing
+      await _finishRun();
+      return;
+    }
+    if (_currentPos == null) return;
+    final api = ref.read(apiClientProvider);
+    final now = DateTime.now().toUtc();
+    try {
+      final created = await api.createRun(
+        activityType: 'run',
+        deviceStartedAt: now.toIso8601String(),
+      );
+      final runId = created['id'] as int;
+      await api.startRun(runId, now.toIso8601String());
       _tracePath.clear();
-      if (_currentPos != null) _tracePath.add(_currentPos!);
-
-      _pedometer.start(onStep: (steps, cadence) {
-        setState(() {
-          _steps = steps;
-          _cadence = cadence;
-        });
-      });
-
+      _pendingRunPoints.clear();
+      _runId = runId;
+      _runStartTime = now;
+      _runSequence = 0;
+      _runDistanceM = 0;
+      _lastRunPosition = null;
+      _tracePath.add(_currentPos!);
       setState(() {
         _isTracing = true;
         _steps = 0;
         _cadence = 0.0;
       });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiError.getMessage(e)), backgroundColor: OsirisTheme.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _captureRunPoint(Position position) async {
+    if (_runId == null || _runStartTime == null) return;
+    if (_lastRunPosition != null) {
+      _runDistanceM += LocationService.distanceBetween(
+        _lastRunPosition!.latitude,
+        _lastRunPosition!.longitude,
+        position.latitude,
+        position.longitude,
+      );
+    }
+    _lastRunPosition = position;
+    final tMs = DateTime.now().toUtc().difference(_runStartTime!).inMilliseconds;
+    _pendingRunPoints.add({
+      'sequence': _runSequence++,
+      't_ms': tMs,
+      'lat': position.latitude,
+      'lng': position.longitude,
+      'accuracy_m': position.accuracy,
+      'speed_mps': position.speed < 0 ? null : position.speed,
+      'altitude_m': position.altitude,
+    });
+    if (_pendingRunPoints.length >= 5) await _flushRunPoints();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _flushRunPoints() async {
+    if (_uploadingRunPoints || _runId == null || _pendingRunPoints.isEmpty) return;
+    _uploadingRunPoints = true;
+    final batch = List<Map<String, dynamic>>.from(_pendingRunPoints);
+    try {
+      await ref.read(apiClientProvider).appendRunPoints(_runId!, batch);
+      _pendingRunPoints.removeRange(0, batch.length);
+    } finally {
+      _uploadingRunPoints = false;
+    }
+  }
+
+  Future<void> _finishRun() async {
+    if (_runId == null) return;
+    _pedometer.stop();
+    try {
+      await _flushRunPoints();
+      if (_pendingRunPoints.isNotEmpty) {
+        throw Exception('Route upload is still pending. Check your connection and try again.');
+      }
+      final result = await ref.read(apiClientProvider).finishRun(
+        _runId!,
+        DateTime.now().toUtc().toIso8601String(),
+        'run-${_runId!}-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      if (mounted) {
+        setState(() => _isTracing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] as String? ?? 'Run submitted'),
+            backgroundColor: result['verification_status'] == 'accepted'
+                ? OsirisTheme.success
+                : OsirisTheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiError.getMessage(e)), backgroundColor: OsirisTheme.error),
+        );
+      }
     }
   }
 
@@ -318,7 +400,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              '🚶 Steps: $_steps',
+                              '🏃 Distance: ${(_runDistanceM / 1000).toStringAsFixed(2)} km',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -326,7 +408,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '⚡ Cadence: ${_cadence.toStringAsFixed(1)} spm',
+                              'Points uploaded: ${_runSequence - _pendingRunPoints.length}/$_runSequence',
                               style: const TextStyle(fontSize: 14),
                             ),
                           ],
@@ -337,12 +419,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ],
             ),
 
-      // ── FAB: Start/Stop Tracing ──
+      // ── FAB: Start/Stop Run ──
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _toggleTracing,
         backgroundColor: _isTracing ? OsirisTheme.error : OsirisTheme.primary,
         icon: Icon(_isTracing ? Icons.stop : Icons.play_arrow),
-        label: Text(_isTracing ? 'STOP' : 'TRACE DOMAIN'),
+        label: Text(_isTracing ? 'FINISH RUN' : 'START RUN'),
       ),
     );
   }

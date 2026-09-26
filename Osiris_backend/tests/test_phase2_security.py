@@ -38,6 +38,9 @@ def _check(name, cond):
 def test_webhook_fail_closed_boot():
     env = {k: v for k, v in os.environ.items()
            if k not in ("OSIRIS_WEBHOOK_SECRET", "OSIRIS_ENV")}
+    # The repository may contain a developer-only .env. Disable dotenv loading in this
+    # subprocess so the test genuinely exercises the missing-secret boot path.
+    env["PYTHON_DOTENV_DISABLED"] = "1"
     proc = subprocess.run(
         [sys.executable, "-c", "import main"],
         cwd=BACKEND, env=env, capture_output=True, text=True,
@@ -52,6 +55,10 @@ def test_webhook_fail_closed_boot():
 os.environ["OSIRIS_ENV"] = "production"
 os.environ["OSIRIS_WEBHOOK_SECRET"] = "phase2-test-webhook-secret"
 os.environ.setdefault("OSIRIS_JWT_SECRET", "phase2-test-jwt-secret-aaaaaaaaaaaaaaaaaaaa")
+# Phase 3: production now also requires Stripe config (fail-closed, audit §2.1 parity), so a
+# correct prod-like env must supply these too — same pattern as the secrets above.
+os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_phase2_dummy")
+os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_phase2_dummy")
 
 
 def _client_and_models():

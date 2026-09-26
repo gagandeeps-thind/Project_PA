@@ -12,6 +12,13 @@ import secrets
 import hashlib
 import hmac
 
+# Load a local .env (gitignored) into os.environ before anything reads config. In real
+# deployments env vars are set by the platform/CI and this is a no-op; locally it's how
+# OSIRIS_* / STRIPE_* secrets get in without exporting them by hand. Existing real env vars
+# win (override=False) so the shell/CI always takes precedence over a stray .env.
+from dotenv import load_dotenv
+load_dotenv(override=False)
+
 logger = logging.getLogger(__name__)
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
 from sqlalchemy.orm import Session
@@ -31,6 +38,8 @@ import database
 import models
 import spatial_utils
 import ml_referee
+import run_verifier
+from services import ledger, stripe_gateway
 
 # Bootstrap convenience: creates any missing tables on first run. Alembic is the schema
 # source-of-truth going forward (see `alembic/` + `alembic.ini`). For new dev DBs, run
@@ -289,6 +298,11 @@ if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
         "and configure the same value on the payment provider's webhook settings."
     )
 
+# Stripe fail-closed boot check (audit §2.1 parity). Called here, AFTER the webhook-secret
+# check above, so that when multiple secrets are missing the OSIRIS_WEBHOOK_SECRET error
+# surfaces first (stripe_gateway is import-side-effect-free by design).
+stripe_gateway.assert_boot_config()
+
 async def verify_webhook_signature(request: Request) -> bytes:
     """Reads the raw body once, validates the X-Provider-Signature HMAC, and returns the
     body bytes so the calling endpoint can re-parse them (FastAPI's body() consumes the
@@ -533,6 +547,66 @@ class UserProfile(BaseModel):
         # Tells Pydantic to read data even if it's not a standard Python dictionary (i.e., read from SQLAlchemy DB objects)
         from_attributes = True
 
+
+# --- First-release running loop ------------------------------------------------
+
+class RunSessionCreate(BaseModel):
+    activity_type: str = Field(default="run", pattern="^(run|jog)$")
+    device_started_at: datetime
+
+
+class RunSessionStart(BaseModel):
+    device_started_at: datetime
+
+
+class RoutePointInput(BaseModel):
+    sequence: int = Field(..., ge=0)
+    t_ms: int = Field(..., ge=0)
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+    accuracy_m: Optional[float] = Field(default=None, ge=0, le=10000)
+    speed_mps: Optional[float] = Field(default=None, ge=0, le=100)
+    altitude_m: Optional[float] = Field(default=None, ge=-1000, le=10000)
+
+
+class RoutePointBatch(BaseModel):
+    points: List[RoutePointInput] = Field(..., min_length=1, max_length=500)
+
+
+class RunSessionFinish(BaseModel):
+    device_finished_at: datetime
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
+
+
+class RunSessionSummary(BaseModel):
+    id: int
+    activity_type: str
+    status: str
+    verification_status: Optional[str] = None
+    point_count: int
+    distance_m: float
+    duration_seconds: float
+    route_hash: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    xp_awarded: int = 0
+    message: str
+
+
+def _run_summary(session: models.RunSession, *, xp_awarded: int = 0, message: str = "Run session") -> RunSessionSummary:
+    return RunSessionSummary(
+        id=session.id,
+        activity_type=session.activity_type,
+        status=session.status,
+        verification_status=session.verification_status,
+        point_count=session.point_count or 0,
+        distance_m=round(session.distance_m or 0.0, 2),
+        duration_seconds=round(session.duration_seconds or 0.0, 2),
+        route_hash=session.route_hash,
+        rejection_reason=session.rejection_reason,
+        xp_awarded=xp_awarded,
+        message=message,
+    )
+
 # The JSON shape we expect when a user submits a completed territory run
 class DomainCreate(BaseModel):
     owner_id: int
@@ -651,13 +725,56 @@ class MerchantProfile(BaseModel):
         from_attributes = True
 
 class PaymentIntentResponse(BaseModel):
-    """Returned when a merchant initiates payment. In Phase 2 with a real provider this would
-    include a client_secret for Stripe Elements; in MVP it's a stub UUID."""
+    """Returned when a merchant initiates the pilot-fee payment. `client_secret` is what the
+    Flutter Stripe SDK uses to confirm the card on-device; `publishable_key` lets the client
+    init the SDK from the server's config so the pk isn't pinned in two places."""
     merchant_id: int
     pilot_fee_cents: int
-    provider_payment_id: str
+    provider_payment_id: str         # Stripe PaymentIntent id (pi_...)
     payment_status: str
+    client_secret: Optional[str] = None
+    publishable_key: Optional[str] = None
     next_action: str
+
+
+# --- Phase 3: player crystal top-up (one-way real-money purchase) ---
+#
+# Server-authoritative crystal packs. The client picks a `pack_id`; the SERVER decides the
+# price and the crystal grant. The client never sends an amount — that's the whole point, it
+# stops a tampered client buying 1,000,000 crystals for $0.01.
+#
+# NOTE: this purchase path is intentionally isolated behind server-authoritative packs,
+# payment-provider confirmation, and ledgered fulfillment.
+CRYSTAL_PACKS: dict[str, dict] = {
+    "starter":    {"crystals": 500,  "amount_cents": 499,  "label": "Starter Pouch"},
+    "adventurer": {"crystals": 1200, "amount_cents": 999,  "label": "Adventurer's Cache"},
+    "champion":   {"crystals": 2600, "amount_cents": 1999, "label": "Champion's Hoard"},
+}
+CRYSTAL_PURCHASE_CURRENCY = "usd"
+
+
+class CrystalPackInfo(BaseModel):
+    pack_id: str
+    label: str
+    crystals: int
+    amount_cents: int
+    currency: str
+
+
+class CrystalPurchaseIntentRequest(BaseModel):
+    pack_id: str  # must be a key of CRYSTAL_PACKS; price is looked up server-side
+
+
+class CrystalPurchaseIntentResponse(BaseModel):
+    purchase_id: int
+    pack_id: str
+    crystal_amount: int
+    amount_cents: int
+    currency: str
+    payment_intent_id: str           # Stripe PaymentIntent id (pi_...)
+    client_secret: str
+    publishable_key: Optional[str] = None
+    status: str
 
 class PaymentWebhookRequest(BaseModel):
     """Payload from the payment provider when a payment terminal-state is reached.
@@ -1001,6 +1118,8 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: Non
     hashed_pwd = get_password_hash(user.password)
 
     device_ts = _to_naive_utc(user.device_timestamp)
+    # mana_crystals starts at 0 here; the opening grant is applied below via the ledger
+    # service so the invariant sum(CrystalLedger.delta) == mana_crystals holds from row one.
     new_user = models.User(
         email=user.email,
         hashed_password=hashed_pwd,
@@ -1011,11 +1130,18 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: Non
         title=get_title(0.0),
         cumulative_area=0.0,
         last_activity_date=device_ts,
-        streak=0
+        streak=0,
+        mana_crystals=0,
     )
 
-    # 4. Save to Database and commit the transaction
+    # 4. Save to Database. Flush first to mint the user id, then write the opening-balance
+    # ledger row (the ONLY path that sets the starting wallet), and commit atomically.
     db.add(new_user)
+    db.flush()  # populates new_user.id without committing
+    ledger.apply_crystal_delta(
+        db, new_user, models.OPENING_CRYSTAL_BALANCE, "opening_balance",
+        note="New player opening grant",
+    )
     db.commit()
     db.refresh(new_user) # Retrieves the newly generated 'id' from the database
 
@@ -1120,6 +1246,182 @@ async def get_user_profile(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+# --- First-release API v2: verified running -----------------------------------
+
+def _get_player_run(db: Session, run_id: int, player_id: int) -> models.RunSession:
+    session = db.query(models.RunSession).filter(models.RunSession.id == run_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Run session not found")
+    if session.user_id != player_id:
+        raise HTTPException(status_code=403, detail="Run session belongs to another player")
+    return session
+
+
+@app.post("/api/v2/runs", response_model=RunSessionSummary, status_code=201)
+async def create_run_session(
+    req: RunSessionCreate,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
+):
+    """Create a run shell. The route is not accepted until it is finished and verified."""
+    session = models.RunSession(
+        user_id=token_data["id"],
+        activity_type=req.activity_type.lower(),
+        status="created",
+        device_started_at=_to_naive_utc(req.device_started_at),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return _run_summary(session, message="Run session created")
+
+
+@app.post("/api/v2/runs/{run_id}/start", response_model=RunSessionSummary)
+async def start_run_session(
+    run_id: int,
+    req: RunSessionStart,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    if session.status == "active":
+        return _run_summary(session, message="Run session already active")
+    if session.status != "created":
+        raise HTTPException(status_code=409, detail=f"Run session cannot start from status={session.status}")
+    session.status = "active"
+    session.started_at = _now_naive_utc()
+    session.device_started_at = _to_naive_utc(req.device_started_at)
+    session.updated_at = _now_naive_utc()
+    db.commit()
+    db.refresh(session)
+    return _run_summary(session, message="Run session started")
+
+
+@app.post("/api/v2/runs/{run_id}/points", response_model=RunSessionSummary)
+async def append_run_points(
+    run_id: int,
+    req: RoutePointBatch,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    if session.status != "active":
+        raise HTTPException(status_code=409, detail="Route points can only be appended to an active run")
+    existing_last = (
+        db.query(models.RoutePoint)
+        .filter(models.RoutePoint.run_session_id == run_id)
+        .order_by(models.RoutePoint.sequence.desc())
+        .first()
+    )
+    expected = (existing_last.sequence + 1) if existing_last else 0
+    sequences = [point.sequence for point in req.points]
+    if sequences != list(range(expected, expected + len(sequences))):
+        raise HTTPException(status_code=409, detail=f"Route sequence must start at {expected} and be contiguous")
+    for point in req.points:
+        db.add(models.RoutePoint(
+            run_session_id=run_id,
+            sequence=point.sequence,
+            t_ms=point.t_ms,
+            lat=point.lat,
+            lng=point.lng,
+            accuracy_m=point.accuracy_m,
+            speed_mps=point.speed_mps,
+            altitude_m=point.altitude_m,
+        ))
+    session.point_count = (session.point_count or 0) + len(req.points)
+    session.updated_at = _now_naive_utc()
+    db.commit()
+    db.refresh(session)
+    return _run_summary(session, message=f"Accepted {len(req.points)} route points")
+
+
+@app.post("/api/v2/runs/{run_id}/finish", response_model=RunSessionSummary)
+async def finish_run_session(
+    run_id: int,
+    req: RunSessionFinish,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    if session.status in ("submitted", "verifying", "closed"):
+        if session.finish_idempotency_key == req.idempotency_key:
+            return _run_summary(session, message="Run finish already processed")
+        raise HTTPException(status_code=409, detail="Run session has already been finished")
+    if session.status != "active":
+        raise HTTPException(status_code=409, detail=f"Run session cannot finish from status={session.status}")
+
+    points = (
+        db.query(models.RoutePoint)
+        .filter(models.RoutePoint.run_session_id == run_id)
+        .order_by(models.RoutePoint.sequence.asc())
+        .all()
+    )
+    if not points:
+        raise HTTPException(status_code=400, detail="A run must contain route points before it can finish")
+
+    session.status = "verifying"
+    session.device_finished_at = _to_naive_utc(req.device_finished_at)
+    session.finished_at = _now_naive_utc()
+    session.finish_idempotency_key = req.idempotency_key
+    session.updated_at = _now_naive_utc()
+    db.flush()
+
+    result = run_verifier.verify_route([
+        {
+            "sequence": point.sequence,
+            "t_ms": point.t_ms,
+            "lat": point.lat,
+            "lng": point.lng,
+            "accuracy_m": point.accuracy_m,
+            "speed_mps": point.speed_mps,
+            "altitude_m": point.altitude_m,
+        }
+        for point in points
+    ])
+    session.status = "closed"
+    session.verification_status = result.status
+    session.route_hash = result.route_hash
+    session.distance_m = float(result.metrics["distance_m"])
+    session.duration_seconds = float(result.metrics["duration_seconds"])
+    session.rejection_reason = ",".join(result.reason_codes) if result.reason_codes else None
+    decision = models.VerificationDecision(
+        run_session_id=session.id,
+        rules_version=run_verifier.RULES_VERSION,
+        status=result.status,
+        reason_codes_json=json.dumps(result.reason_codes),
+        metrics_json=json.dumps(result.metrics),
+    )
+    db.add(decision)
+
+    xp_awarded = 0
+    if result.status == "accepted":
+        user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
+        if user:
+            xp_awarded = max(10, int(float(result.metrics["distance_m"]) // 100))
+            user.xp += xp_awarded
+            user.last_activity_date = session.finished_at
+            user.rank = get_rank(user.xp, user.last_activity_date)
+            record_activity(
+                db, user, "run", max(1, int(float(result.metrics["distance_m"]) // 100)),
+                session.finished_at, "run_session", related_id=session.id,
+                verified=True, confidence=1.0,
+            )
+    db.commit()
+    db.refresh(session)
+    message = "Run verified and accepted" if result.status == "accepted" else "Run rejected by verification rules"
+    return _run_summary(session, xp_awarded=xp_awarded, message=message)
+
+
+@app.get("/api/v2/runs/{run_id}", response_model=RunSessionSummary)
+async def get_run_session(
+    run_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    return _run_summary(session, message="Run session status")
 
 @app.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
 async def get_nearby_domains(
@@ -1318,7 +1620,11 @@ async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depend
     if user.mana_crystals < delta:
         raise HTTPException(status_code=402, detail="Insufficient Mana Crystals.")
 
-    user.mana_crystals -= delta
+    ledger.apply_crystal_delta(
+        db, user, -delta, "vault_lock",
+        related_domain_id=domain.id,
+        note=f"Vault lock to {req.amount} on domain {domain.id}",
+    )
     domain.vault_balance = req.amount
     db.commit()
     db.refresh(domain)
@@ -1410,7 +1716,15 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     defender_score = siege.defender_score_snapshot or 0
     is_time_trial = target_defense_type in ("run", "walk", "sprint")
     if is_time_trial:
-        challenger_won = req.challenger_score <= defender_score and req.challenger_score > 0
+        # Time trials are won by a LOWER time. A free-tier domain has no baseline
+        # (defender_score == 0): there is no real time to beat, so any positive challenger
+        # time wins (§3.1 fix — previously `score <= 0 and score > 0` was always False,
+        # making free-tier time-trial domains unconquerable). Paid/seeded tiers keep the
+        # genuine "beat the baseline" comparison.
+        if defender_score == 0:
+            challenger_won = req.challenger_score > 0
+        else:
+            challenger_won = 0 < req.challenger_score <= defender_score
     else:
         challenger_won = req.challenger_score > defender_score
 
@@ -1421,11 +1735,22 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     if challenger_won:
         # Debit only the out-of-pocket; the discount portion was subsidized by the system.
         if required_match > 0:
-            challenger.mana_crystals -= out_of_pocket
+            # NB: target_domain is db.delete()'d below on the win path, so we deliberately
+            # do NOT set related_domain_id here (it would dangle); the id lives in the note.
+            if out_of_pocket > 0:
+                ledger.apply_crystal_delta(
+                    db, challenger, -out_of_pocket, "siege_out_of_pocket",
+                    related_siege_id=siege.id,
+                    note=f"Match staked on siege {siege.id} win (domain {target_domain.id})",
+                )
             pot = required_match * 2  # treat as full match vs defender vault
             winner_share = int(pot * (1 - WAR_TAX_PCT))  # 80%
             war_tax_revenue = pot - winner_share          # 20% to platform
-            challenger.mana_crystals += winner_share
+            ledger.apply_crystal_delta(
+                db, challenger, winner_share, "siege_win_payout",
+                related_siege_id=siege.id,
+                note=f"80% pot payout on siege {siege.id} win (domain {target_domain.id})",
+            )
             crystals_awarded = winner_share
             target_domain.vault_balance = 0
             # Ledger: record platform's War Tax cut.
@@ -1462,7 +1787,12 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     else:
         # LOSS: challenger forfeits their match, split 50/30/20.
         if required_match > 0:
-            challenger.mana_crystals -= out_of_pocket
+            if out_of_pocket > 0:
+                ledger.apply_crystal_delta(
+                    db, challenger, -out_of_pocket, "siege_forfeit",
+                    related_siege_id=siege.id, related_domain_id=target_domain.id,
+                    note=f"Forfeited match on siege {siege.id} loss",
+                )
             defender_cut = int(required_match * LOSS_DEFENDER_PCT)
             system_keep = int(required_match * LOSS_SYSTEM_PCT)         # 30% — platform revenue
             future_discount_cut = int(required_match * LOSS_DISCOUNT_PCT)
@@ -1857,10 +2187,10 @@ async def create_payment_intent(
     token_data: dict = Depends(get_current_merchant),
     db: Session = Depends(get_db),
 ):
-    """Initiate the pilot-fee payment. In production this calls the payment provider (e.g.,
-    Stripe) and returns a client_secret for the front-end to redirect to a payment form.
-    For MVP we stub a unique provider_payment_id and leave payment_status='payment_pending'
-    until the webhook fires."""
+    """Initiate the pilot-fee payment via Stripe. Creates a Stripe PaymentIntent for the
+    merchant's `pilot_fee_cents` and returns its `client_secret` so the Flutter Stripe SDK can
+    confirm the card on-device. Activation does NOT happen here — it happens when Stripe POSTs
+    `payment_intent.succeeded` to /payments/stripe/webhook."""
     if token_data["id"] != merchant_id:
         raise HTTPException(status_code=403, detail="Merchants can only pay their own pilot fee")
 
@@ -1870,22 +2200,29 @@ async def create_payment_intent(
     if merchant.is_active:
         raise HTTPException(status_code=400, detail="Merchant is already active; nothing to pay")
 
-    # Stub provider integration. Replace with provider SDK in Phase 2.
-    provider_payment_id = f"mvp_intent_{secrets.token_urlsafe(12)}"
-    merchant.payment_provider_id = provider_payment_id
+    try:
+        intent = stripe_gateway.create_payment_intent(
+            amount_cents=merchant.pilot_fee_cents,
+            currency=CRYSTAL_PURCHASE_CURRENCY,
+            description=f"Osiris merchant pilot fee — merchant {merchant.id}",
+            metadata={"kind": "merchant_pilot_fee", "merchant_id": str(merchant.id)},
+            idempotency_key=f"merchant_pilot_fee:{merchant.id}",
+        )
+    except stripe_gateway.StripeNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    merchant.payment_provider_id = intent.id
     merchant.payment_status = "payment_pending"
     db.commit()
 
     return PaymentIntentResponse(
         merchant_id=merchant.id,
         pilot_fee_cents=merchant.pilot_fee_cents,
-        provider_payment_id=provider_payment_id,
+        provider_payment_id=intent.id,
         payment_status=merchant.payment_status,
-        next_action=(
-            "MVP stub: simulate the provider by POSTing a webhook to "
-            "/api/v1/payments/webhook with the same provider_payment_id and "
-            "payment_status='payment_successful'."
-        ),
+        client_secret=intent.client_secret,
+        publishable_key=stripe_gateway.STRIPE_PUBLISHABLE_KEY,
+        next_action="Confirm the PaymentIntent client_secret with the Stripe SDK in the app.",
     )
 
 
@@ -2014,6 +2351,282 @@ async def payment_webhook(
         payment_status=merchant.payment_status,
         is_active=bool(merchant.is_active),
         message=message,
+    )
+
+
+# --- Phase 3: Stripe-native webhook + shared terminal-state processors ---
+#
+# Stripe event type -> our internal payment_status vocabulary. Only these are acted on; any
+# other event type is acknowledged with 200 and ignored so Stripe stops retrying it.
+_STRIPE_EVENT_TO_STATUS = {
+    "payment_intent.succeeded": "payment_successful",
+    "payment_intent.payment_failed": "payment_declined",
+    "payment_intent.processing": "payment_pending",
+}
+
+
+def _apply_merchant_pilot_fee(
+    db: Session, *, merchant, payment_status: str, provider_payment_id: str,
+    amount_cents: int, occurred_at: datetime,
+) -> str:
+    """Apply a terminal payment status to a merchant pilot fee. Same activation rule as the
+    generic webhook: only 'payment_successful' flips is_active and records revenue (once, on
+    the activating transition). Does NOT commit — the caller owns the transaction."""
+    merchant.payment_status = payment_status
+    merchant.payment_provider_id = provider_payment_id
+    if payment_status == "payment_successful":
+        already_active = bool(merchant.is_active)
+        merchant.is_active = True
+        merchant.last_payment_at = occurred_at
+        if not already_active and amount_cents > 0:
+            db.add(models.PlatformRevenue(
+                source="merchant_pilot_fee",
+                amount=amount_cents,
+                user_id=None,
+                note=f"Merchant {merchant.id} pilot fee via {provider_payment_id}",
+            ))
+        return "Merchant activated. Pilot fee recorded."
+    return f"Status updated to {payment_status}; merchant remains inactive."
+
+
+def _fulfill_crystal_purchase(
+    db: Session, *, purchase, payment_status: str, amount_cents: int, occurred_at: datetime,
+) -> str:
+    """Apply a terminal payment status to a player crystal purchase.
+
+    RED LINE — no double-mint: on success we credit crystals through the ledger EXACTLY ONCE.
+    The guard is `purchase.status`: a row already 'succeeded' is a no-op, so a replayed/duplicate
+    Stripe event can never credit twice. Does NOT commit — the caller owns the transaction."""
+    if payment_status == "payment_successful":
+        if purchase.status == "succeeded":
+            return "Crystal purchase already fulfilled (no-op)."
+        user = db.query(models.User).filter(models.User.id == purchase.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Purchasing user not found")
+        entry = ledger.apply_crystal_delta(
+            db, user, purchase.crystal_amount, "crystal_purchase",
+            note=f"Stripe top-up {purchase.stripe_payment_intent_id} ({purchase.pack_id})",
+        )
+        db.flush()  # assign entry.id so the purchase can link to its ledger row
+        purchase.status = "succeeded"
+        purchase.crystal_ledger_id = entry.id
+        purchase.fulfilled_at = occurred_at
+        if amount_cents > 0:
+            db.add(models.PlatformRevenue(
+                source="crystal_purchase",
+                amount=amount_cents,
+                user_id=purchase.user_id,
+                note=f"User {purchase.user_id} crystal top-up {purchase.stripe_payment_intent_id}",
+            ))
+        return f"Credited {purchase.crystal_amount} crystals to user {purchase.user_id}."
+    if payment_status == "payment_declined":
+        if purchase.status != "succeeded":
+            purchase.status = "failed"
+        return "Crystal purchase marked failed."
+    return f"Crystal purchase status updated to {payment_status}."
+
+
+@app.post("/api/v1/payments/stripe/webhook", response_model=PaymentWebhookResponse)
+async def stripe_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    _rl: None = Depends(_rl_webhook),
+):
+    """Stripe-native webhook. Verifies the `Stripe-Signature` header against the RAW body with
+    `stripe.Webhook.construct_event`, then routes `payment_intent.*` events by their metadata
+    `kind` to the merchant-pilot-fee or crystal-purchase processor.
+
+    Event-level idempotency: PaymentWebhookEvent keyed on the Stripe `event.id` (unique index)
+    makes retried deliveries no-ops. Purchase-level idempotency (no double-mint) is enforced
+    separately by `_fulfill_crystal_purchase`."""
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    try:
+        event = stripe_gateway.construct_event(payload, sig_header)
+    except stripe_gateway.StripeNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    except Exception:
+        # stripe.error.SignatureVerificationError (and any other verification failure).
+        raise HTTPException(status_code=401, detail="Invalid Stripe signature")
+
+    event_id = event["id"]
+    event_type = event["type"]
+
+    payment_status = _STRIPE_EVENT_TO_STATUS.get(event_type)
+    if payment_status is None:
+        return PaymentWebhookResponse(
+            merchant_id=0, payment_status="ignored", is_active=False,
+            message=f"Event type {event_type} acknowledged; no action taken.",
+        )
+
+    # Event-level dedup: if we've seen this Stripe event.id, replay nothing.
+    prior = (
+        db.query(models.PaymentWebhookEvent)
+        .filter(models.PaymentWebhookEvent.provider_event_id == event_id)
+        .first()
+    )
+    if prior:
+        return PaymentWebhookResponse(
+            merchant_id=prior.merchant_id or 0,
+            payment_status=prior.payment_status or payment_status,
+            is_active=False,
+            message=f"Duplicate event {event_id} ignored (already processed).",
+        )
+
+    intent = event["data"]["object"]
+    pi_id = intent["id"]
+    amount_cents = intent.get("amount") or 0
+    metadata = intent.get("metadata") or {}
+    kind = metadata.get("kind")
+    occurred_at = _now_naive_utc()
+
+    merchant_id_for_event: Optional[int] = None
+    user_id_for_event: Optional[int] = None
+
+    if kind == "merchant_pilot_fee":
+        merchant = (
+            db.query(models.Merchant)
+            .filter(models.Merchant.id == int(metadata["merchant_id"]))
+            .first()
+        )
+        if not merchant:
+            raise HTTPException(status_code=404, detail="Merchant not found")
+        merchant_id_for_event = merchant.id
+        message = _apply_merchant_pilot_fee(
+            db, merchant=merchant, payment_status=payment_status,
+            provider_payment_id=pi_id, amount_cents=amount_cents, occurred_at=occurred_at,
+        )
+        resp_merchant_id, resp_status, resp_active = (
+            merchant.id, merchant.payment_status, bool(merchant.is_active),
+        )
+    elif kind == "crystal_purchase":
+        purchase = (
+            db.query(models.CrystalPurchase)
+            .filter(models.CrystalPurchase.stripe_payment_intent_id == pi_id)
+            .first()
+        )
+        if not purchase:
+            raise HTTPException(status_code=404, detail="Crystal purchase not found")
+        user_id_for_event = purchase.user_id
+        message = _fulfill_crystal_purchase(
+            db, purchase=purchase, payment_status=payment_status,
+            amount_cents=amount_cents, occurred_at=occurred_at,
+        )
+        resp_merchant_id, resp_status, resp_active = (
+            0, purchase.status, purchase.status == "succeeded",
+        )
+    else:
+        return PaymentWebhookResponse(
+            merchant_id=0, payment_status="ignored", is_active=False,
+            message=f"Event {event_id} metadata.kind={kind!r} is unknown; ignored.",
+        )
+
+    # Record the event AFTER side effects, same transaction. The unique index on
+    # provider_event_id turns a concurrent duplicate delivery into an IntegrityError at commit.
+    db.add(models.PaymentWebhookEvent(
+        provider_event_id=event_id,
+        merchant_id=merchant_id_for_event,
+        user_id=user_id_for_event,
+        event_type=event_type,
+        payment_status=payment_status,
+        provider_payment_id=pi_id,
+        amount_cents=amount_cents,
+        received_at=_now_naive_utc(),
+    ))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return PaymentWebhookResponse(
+            merchant_id=merchant_id_for_event or 0,
+            payment_status=payment_status,
+            is_active=False,
+            message=f"Duplicate event {event_id} raced — earlier delivery won.",
+        )
+
+    return PaymentWebhookResponse(
+        merchant_id=resp_merchant_id, payment_status=resp_status,
+        is_active=resp_active, message=message,
+    )
+
+
+# --- Phase 3: player crystal top-up (one-way purchase) endpoints ---
+
+@app.get("/api/v1/payments/crystals/packs", response_model=List[CrystalPackInfo])
+async def list_crystal_packs():
+    """Buyable crystal packs with server-authoritative pricing. The client renders these and
+    sends back only a `pack_id`; it never sets a price."""
+    return [
+        CrystalPackInfo(
+            pack_id=pid, label=p["label"], crystals=p["crystals"],
+            amount_cents=p["amount_cents"], currency=CRYSTAL_PURCHASE_CURRENCY,
+        )
+        for pid, p in CRYSTAL_PACKS.items()
+    ]
+
+
+@app.post("/api/v1/payments/crystals/intent", response_model=CrystalPurchaseIntentResponse)
+async def create_crystal_purchase_intent(
+    req: CrystalPurchaseIntentRequest,
+    token_data: dict = Depends(get_current_player),
+    db: Session = Depends(get_db),
+):
+    """Start a real-money crystal top-up. The price and crystal grant come from CRYSTAL_PACKS
+    on the server — the client only chooses a `pack_id`. Creates a Stripe PaymentIntent and a
+    'pending' CrystalPurchase; crystals are credited later by the webhook on success."""
+    pack = CRYSTAL_PACKS.get(req.pack_id)
+    if not pack:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown pack_id {req.pack_id!r}. Valid packs: {sorted(CRYSTAL_PACKS)}",
+        )
+
+    user_id = token_data["id"]
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        intent = stripe_gateway.create_payment_intent(
+            amount_cents=pack["amount_cents"],
+            currency=CRYSTAL_PURCHASE_CURRENCY,
+            description=f"Osiris crystal top-up — {pack['label']} for user {user_id}",
+            metadata={
+                "kind": "crystal_purchase",
+                "user_id": str(user_id),
+                "pack_id": req.pack_id,
+                "crystal_amount": str(pack["crystals"]),
+            },
+        )
+    except stripe_gateway.StripeNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    purchase = models.CrystalPurchase(
+        user_id=user_id,
+        pack_id=req.pack_id,
+        crystal_amount=pack["crystals"],
+        amount_cents=pack["amount_cents"],
+        currency=CRYSTAL_PURCHASE_CURRENCY,
+        stripe_payment_intent_id=intent.id,
+        status="pending",
+    )
+    db.add(purchase)
+    db.commit()
+    db.refresh(purchase)
+
+    return CrystalPurchaseIntentResponse(
+        purchase_id=purchase.id,
+        pack_id=req.pack_id,
+        crystal_amount=pack["crystals"],
+        amount_cents=pack["amount_cents"],
+        currency=CRYSTAL_PURCHASE_CURRENCY,
+        payment_intent_id=intent.id,
+        client_secret=intent.client_secret,
+        publishable_key=stripe_gateway.STRIPE_PUBLISHABLE_KEY,
+        status=purchase.status,
     )
 
 
@@ -2269,7 +2882,12 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
     # Award rewards
     device_ts = _to_naive_utc(req.device_timestamp)
     user.xp += bounty.xp_reward
-    user.mana_crystals += bounty.crystal_reward
+    if bounty.crystal_reward:
+        ledger.apply_crystal_delta(
+            db, user, bounty.crystal_reward, "bounty_reward",
+            related_bounty_id=bounty.id,
+            note=f"Reward for bounty {bounty.id}",
+        )
     user.last_activity_date = device_ts
     user.rank = get_rank(user.xp, user.last_activity_date)
     activity_score = req.score or bounty.target_score

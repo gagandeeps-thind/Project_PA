@@ -83,7 +83,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
     }
 
     final token = data['access_token'] as String;
-    final userId = data['user_id'] as int;
+    final userId = (data['id'] ?? data['user_id']) as int;
 
     _api.setToken(token);
 

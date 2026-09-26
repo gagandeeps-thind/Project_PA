@@ -59,7 +59,7 @@ The single fact we most need weighed: the platform's "verified score" that decid
 ## Part C — Pre-read materials we will provide
 
 - `Gambling_Analysis_Matrix.md` — the three variants decomposed against consideration/chance/prize with our stated uncertainty.
-- `Viability_Memo.md` §2–§4 — precise mechanic restatement + the "what must be true to launch real money" gate.
+- `Viability_Memo.md` §2–§4 — precise mechanic restatement and readiness checklist.
 - The siege/wance payout math: pot = defender vault + challenger match; **win 80/20**, **loss 50/30/20**; Challenge Board pot minus **20%** (`Imp_and_US.md` §4.4/§4.7).
 - On request: the relevant audit excerpt (§2.3) documenting referee bypassability.
 

@@ -51,6 +51,11 @@ jobs:
       - name: Build fresh DB (migrations from zero — proves a clean clone boots)
         run: python -m alembic upgrade head
 
+      - name: Crystal ledger reconciliation (sum(deltas) == mana_crystals for every user)
+        # Money-path invariant gate (audit §3.2). Runs after migrations on the seed world;
+        # any user whose ledger does not reconcile fails the build.
+        run: python scripts/reconcile_ledger.py --check
+
       - name: Tests — ML referee suite
         run: python tests/test_ml_referee.py
 
@@ -59,6 +64,9 @@ jobs:
 
       - name: Tests — Phase 2 security suite (webhook/CORS/nearby-auth)
         run: python tests/test_phase2_security.py
+
+      - name: Tests — Phase 3 Stripe payments suite (price authority / no-double-mint / sig)
+        run: python tests/test_phase3_stripe.py
 
       - name: OpenAPI contract drift check
         run: python scripts/check_openapi_drift.py
@@ -77,6 +85,8 @@ jobs:
           docker run -d --name osiris_ci -p 8000:8000 \
             -e OSIRIS_JWT_SECRET=ci-fixed-secret-not-for-production-use-only \
             -e OSIRIS_WEBHOOK_SECRET=ci-fixed-webhook-secret \
+            -e STRIPE_SECRET_KEY=sk_test_ci_dummy \
+            -e STRIPE_WEBHOOK_SECRET=whsec_ci_dummy \
             osiris-backend:ci
           for i in $(seq 1 20); do
             if curl -fs http://127.0.0.1:8000/healthz; then echo "healthz OK"; exit 0; fi

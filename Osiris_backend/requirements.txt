@@ -30,6 +30,9 @@ APScheduler==3.11.2
 # Config loading
 python-dotenv==1.2.2
 
+# Payments (Phase 3) — Stripe SDK. Pulls in `requests` as a transitive dep.
+stripe==15.3.0
+
 # NOTE: scripts/seed_pilot.py and scripts/migrate_v2_9.py `import requests`, which is NOT
 # in the validated environment. They are out of the CI path and already non-runnable here.
 # Flagged as a Phase 0 finding — do not add `requests` to the image just to keep them; fix

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -8,6 +8,12 @@ def _default_now_naive_utc():
     """Naive UTC timestamp (tz stripped) for SQLite-compatible storage.
     Server-side fallback default; most timestamps now flow from the client device."""
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
+# Opening Mana Crystal grant every new player receives at registration. Kept as a single
+# named constant so the column default, the onboarding ledger row, and any backfill all
+# agree on one number.
+OPENING_CRYSTAL_BALANCE = 100
 
 class User(Base):
     __tablename__ = "users"
@@ -28,8 +34,11 @@ class User(Base):
     streak = Column(Integer, default=0)
     last_activity_date = Column(DateTime, default=_default_now_naive_utc)
 
-    # Virtual in-game currency (Phase 1 MVP — becomes real-world convertible in Phase 2)
-    mana_crystals = Column(Integer, default=100)
+    # Virtual in-game currency; value and permitted uses are product-policy controlled.
+    # The authoritative running balance. Every write to this column MUST flow through
+    # services.ledger.apply_crystal_delta, which also appends a CrystalLedger row so the
+    # invariant sum(CrystalLedger.delta for user) == mana_crystals always holds.
+    mana_crystals = Column(Integer, default=OPENING_CRYSTAL_BALANCE)
 
     # Party Attribute Stats — accumulate on every verified activity, drive Party Role assignment.
     # MVP keeps these as running totals; Phase 2 will recompute from a 30-day rolling ActivityLog.
@@ -207,6 +216,45 @@ class PlatformRevenue(Base):
     created_at = Column(DateTime, default=_default_now_naive_utc)
 
 
+# --- Phase 2: Player-side Crystal Ledger (audit §3.2) ---
+
+class CrystalLedger(Base):
+    """Append-only, double-entry-style journal of every Mana Crystal movement on the
+    PLAYER side. `PlatformRevenue` is the platform-side ledger; this is its player-side
+    counterpart. One row per balance mutation, written by services.ledger.apply_crystal_delta
+    (the ONLY writer of User.mana_crystals).
+
+    Invariant (enforced by scripts/reconcile_ledger.py --check, run in CI):
+        sum(CrystalLedger.delta WHERE user_id == u) == User(u).mana_crystals
+
+    `balance_after` is the wallet balance immediately after this row was applied, so the
+    ledger is independently auditable without replaying every prior row.
+
+    reason_code (string enum, not enforced at DB level):
+      - 'opening_balance'     : the +100 grant a new player gets at registration
+      - 'vault_lock'          : crystals moved from wallet into a domain Vault
+      - 'siege_out_of_pocket' : challenger's match debited on a siege WIN
+      - 'siege_win_payout'    : winner's 80% pot share credited on a siege WIN
+      - 'siege_forfeit'       : challenger's match debited (forfeited) on a siege LOSS
+      - 'bounty_reward'       : crystals awarded for completing a bounty
+      - 'crystal_purchase'    : (Phase 3) real-money one-way top-up, credited on a Stripe
+                                payment_intent.succeeded webhook (see CrystalPurchase)
+
+    Append-only: there is no update or delete path anywhere in the codebase.
+    """
+    __tablename__ = "crystal_ledger"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    delta = Column(Integer, nullable=False)            # signed crystal movement (+credit / -debit)
+    balance_after = Column(Integer, nullable=False)    # wallet balance immediately after this row
+    reason_code = Column(String, index=True, nullable=False)
+    related_siege_id = Column(Integer, ForeignKey("sieges_log.id"), nullable=True)
+    related_bounty_id = Column(Integer, ForeignKey("bounties.id"), nullable=True)
+    related_domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+
+
 # --- Hardening Sprint v2.7: ActivityLog ---
 
 class ActivityLog(Base):
@@ -302,10 +350,47 @@ class PaymentWebhookEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     provider_event_id = Column(String, unique=True, index=True, nullable=False)
     merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
+    # Phase 3: the same dedup table now guards player crystal-purchase webhooks too, so an
+    # event references either a merchant (pilot fee) or a user (crystal top-up), never both.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    event_type = Column(String, nullable=True)  # Stripe event.type, e.g. 'payment_intent.succeeded'
     payment_status = Column(String, nullable=True)
     provider_payment_id = Column(String, nullable=True)
     amount_cents = Column(Integer, default=0)
     received_at = Column(DateTime, default=_default_now_naive_utc, index=True)
+
+
+class CrystalPurchase(Base):
+    """Phase 3 — a player's real-money Mana Crystal top-up (one-way: money -> crystals).
+
+    Lifecycle:
+      - Player calls POST /payments/crystals/intent with a server-defined pack id. We create a
+        Stripe PaymentIntent (server sets the price — the client never sends an amount) and
+        insert this row with status='pending'.
+      - Stripe fires payment_intent.succeeded -> the webhook credits the crystals via
+        services.ledger.apply_crystal_delta exactly once and stamps status='succeeded' +
+        crystal_ledger_id + fulfilled_at.
+      - payment_intent.payment_failed -> status='failed', no crystals.
+
+    Idempotency / no-double-mint (RED LINE): `stripe_payment_intent_id` is UNIQUE and the
+    webhook only credits a row whose status is not already 'succeeded'. A retried/duplicate
+    webhook for the same intent is therefore a no-op. This row is the player-purchase
+    counterpart to PaymentWebhookEvent (which dedupes at the Stripe event level).
+
+    Purchase fulfillment is recorded as a one-way provider-confirmed credit in this model.
+    """
+    __tablename__ = "crystal_purchases"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    pack_id = Column(String, nullable=False)              # server pack key, e.g. 'starter'
+    crystal_amount = Column(Integer, nullable=False)      # crystals to credit on success
+    amount_cents = Column(Integer, nullable=False)        # price charged (server-authoritative)
+    currency = Column(String, default="usd")
+    stripe_payment_intent_id = Column(String, unique=True, index=True, nullable=False)
+    status = Column(String, default="pending", index=True)  # pending | succeeded | failed
+    crystal_ledger_id = Column(Integer, ForeignKey("crystal_ledger.id"), nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc)
+    fulfilled_at = Column(DateTime, nullable=True)
 
 
 class ProofConsumed(Base):
@@ -320,3 +405,56 @@ class ProofConsumed(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     source = Column(String, nullable=True)               # 'domain_claim' | 'siege_resolve' | 'bounty_complete'
     consumed_at = Column(DateTime, default=_default_now_naive_utc)
+
+
+class RunSession(Base):
+    """First-release running session and its server-authoritative outcome."""
+    __tablename__ = "run_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    activity_type = Column(String, nullable=False, default="run", index=True)
+    status = Column(String, nullable=False, default="created", index=True)
+    device_started_at = Column(DateTime, nullable=True)
+    device_finished_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    point_count = Column(Integer, default=0)
+    distance_m = Column(Float, default=0.0)
+    duration_seconds = Column(Float, default=0.0)
+    route_hash = Column(String, nullable=True, index=True)
+    finish_idempotency_key = Column(String, nullable=True, unique=True, index=True)
+    verification_status = Column(String, nullable=True, index=True)
+    rejection_reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+    updated_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "id", name="uq_run_sessions_user_id_id"),)
+
+
+class RoutePoint(Base):
+    """Private route evidence. It is never returned by public discovery endpoints."""
+    __tablename__ = "route_points"
+    id = Column(Integer, primary_key=True, index=True)
+    run_session_id = Column(Integer, ForeignKey("run_sessions.id"), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)
+    t_ms = Column(Integer, nullable=False)
+    lat = Column(Float, nullable=False)
+    lng = Column(Float, nullable=False)
+    accuracy_m = Column(Float, nullable=True)
+    speed_mps = Column(Float, nullable=True)
+    altitude_m = Column(Float, nullable=True)
+    received_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("run_session_id", "sequence", name="uq_route_points_session_sequence"),)
+
+
+class VerificationDecision(Base):
+    """Immutable, explainable verification result for a run."""
+    __tablename__ = "verification_decisions"
+    id = Column(Integer, primary_key=True, index=True)
+    run_session_id = Column(Integer, ForeignKey("run_sessions.id"), nullable=False, unique=True)
+    rules_version = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    reason_codes_json = Column(String, nullable=False, default="[]")
+    metrics_json = Column(String, nullable=False, default="{}")
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)

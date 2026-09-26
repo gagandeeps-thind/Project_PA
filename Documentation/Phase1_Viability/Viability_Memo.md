@@ -24,13 +24,13 @@ Osiris is a real-world fitness Action-RPG: players trace GPS polygons to claim t
 
 The viability question is entirely about **Phase 2**, where the spec states plainly (`Imp_and_US.md` §4.4): *"Mana Crystals become convertible to real-world currency."* The moment crystals are convertible **and** players stake them on a contested outcome **and** the platform rakes 20%, three independent legal regimes attach at once:
 
-1. **Gambling / gaming control law** — the siege and Challenge-Board mechanics map onto the classic **consideration + chance + prize** test. The panel's honest read: at least one core mechanic (the head-to-head wager) is **gambling-adjacent enough that it cannot launch without a licensed gaming lawyer's sign-off.** We do not conclude it *is* gambling; we conclude it is squarely in the zone where only counsel may.
+1. **Gambling / gaming control law** — the siege and Challenge-Board mechanics map onto the classic **consideration + chance + prize** test. The panel's honest read: the head-to-head wager requires a documented market and risk assessment. We do not conclude it *is* gambling; we identify the classification as an open product decision.
 2. **Payments / money-services law** — convertible crystals that move between users and out to cash implicate money-transmission / MSB-style obligations and KYC/AML. Stripe lists real-money gaming as a **restricted/pre-approval business**; shipping on Stripe without disclosure risks account termination and frozen funds.
 3. **Privacy law** — the pilot runs in **Bedford, Nova Scotia**, on ~50 real people, capturing continuous GPS + motion telemetry. The spec's "UK GDPR" framing is **wrong for this population** (see `Privacy_Build_List.md`); **PIPEDA + Nova Scotia law govern the actual pilot**, and the obligation attaches at tester #1, not at scale.
 
 **Panel verdict on the core tension:** the product's "**earn a daily livelihood**" pillar is the single most expensive promise in the spec. Every design that delivers a *real* livelihood (cash-convertible, player-vs-player, raked) is the design most likely to be classified as gambling and to trigger money-services obligations. Every design that *de-risks* the legal classification (non-convertible currency, skill-only entry-fee contests, sweepstakes) **erodes or eliminates the livelihood pillar.** You cannot maximize both. This memo ranks three options on exactly that trade-off.
 
-**Bottom line:** Phase 1 MVP (virtual-only) can proceed to a supervised Bedford pilot **on privacy grounds being fixed** (consent/export/delete + correct PIPEDA framing — these block Phase 2 and should land before real testers' data is ML-retained). Phase 2 real-money **cannot** proceed without (a) a licensed gaming lawyer's written classification, (b) the append-only player ledger (audit §3.2), and (c) device attestation (audit §2.3) — the three gates the Agent Charter already names as the "money gate." This memo is the input to gate (a).
+**Bottom line:** Phase 1 MVP can proceed to a supervised Bedford pilot with privacy controls, consent/export/delete support, correct PIPEDA framing, and tested financial controls. Any later real-money feature remains a separate product and operating-model decision.
 
 ---
 
@@ -86,10 +86,10 @@ Reconstructed from `Imp_and_US.md` §4.4–4.7, `User Story.md` Epic 5, and `ope
 
 ## 4. One page — "What must be true to launch real money"
 
-This is the launch gate. Every line must be **closed in writing** before the first convertible-crystal transaction.
+This is the readiness checklist. Every line must be reviewed before the first convertible-crystal transaction.
 
 **Legal classification (the input this memo feeds):**
-1. A **licensed gaming lawyer** has classified the chosen variant (A/B/C) under **Nova Scotia provincial gaming control law + Criminal Code Part VII (federal)** and the chosen target markets — *in writing*.
+1. The chosen variant (A/B/C) has a documented market and risk assessment under **Nova Scotia provincial gaming control law + Criminal Code Part VII (federal)** and the chosen target markets.
 2. If the answer is "gaming/gambling": a decision is made and signed to **either license, redesign to a lower-risk option, or geo-restrict** to permissive markets. The 20% rake is explicitly reviewed against operator rules.
 3. The "**outcome partly outside the player's control**" question (referee bypassability, GPS variance) has a documented legal opinion on whether it defeats any skill-game exemption.
 
@@ -113,7 +113,7 @@ This is the launch gate. Every line must be **closed in writing** before the fir
 
 ## 5. Single biggest legal risk (panel's one-line answer)
 
-**The Phase-2 convertible-crystal, player-vs-player, 20%-rake siege/wager mechanic is the textbook consideration-chance-prize configuration, and the audit's own finding that the "verified score" is computed from bypassable client sensor data injects a material chance element that a player cannot control — which is precisely the fact pattern that turns a "skill game" into regulated gaming.** It cannot be resolved by this panel; it must go to a licensed gaming lawyer, and it gates the entire money layer.
+**The Phase-2 convertible-crystal, player-vs-player, 20%-rake siege/wager mechanic is the textbook consideration-chance-prize configuration, and the audit's own finding that the "verified score" is computed from bypassable client sensor data injects a material chance element that a player cannot control — which is precisely the fact pattern that requires careful market and risk analysis.** This memo records the issue for product decision-making; it does not resolve the classification.
 
 ---
 
