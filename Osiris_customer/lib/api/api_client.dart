@@ -145,7 +145,84 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
-  // ── Domains ───────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getRun(int runId) async {
+    final response = await _dio.get('/api/v2/runs/$runId');
+    return response.data as Map<String, dynamic>;
+  }
+
+  // ── Courses & challenges (R2) ───────────────────────────────────────────
+
+  Future<Map<String, dynamic>> registerCourse(int runId, String name) async {
+    final response = await _dio.post('/api/v2/courses', data: {
+      'run_id': runId,
+      'name': name,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<List<dynamic>> getMyCourses() async {
+    final response = await _dio.get('/api/v2/courses');
+    return response.data as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> publishChallenge({
+    required int courseId,
+    required String title,
+    required int windowHours,
+    String? safetyNotes,
+    required String idempotencyKey,
+  }) async {
+    final response = await _dio.post('/api/v2/challenges', data: {
+      'course_id': courseId,
+      'title': title,
+      'window_hours': windowHours,
+      if (safetyNotes != null && safetyNotes.isNotEmpty) 'safety_notes': safetyNotes,
+      'idempotency_key': idempotencyKey,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<List<dynamic>> getNearbyChallenges(
+    double lat,
+    double lng,
+    double radiusKm,
+  ) async {
+    final response = await _dio.get(
+      '/api/v2/challenges/nearby',
+      queryParameters: {'lat': lat, 'lng': lng, 'radius_km': radiusKm},
+    );
+    return response.data as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getChallenge(int challengeId) async {
+    final response = await _dio.get('/api/v2/challenges/$challengeId');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getChallengeCourse(int challengeId) async {
+    final response = await _dio.get('/api/v2/challenges/$challengeId/course');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> joinChallenge(int challengeId) async {
+    final response = await _dio.post('/api/v2/challenges/$challengeId/join');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> submitAttempt(int challengeId, int runId) async {
+    final response = await _dio.post(
+      '/api/v2/challenges/$challengeId/attempts',
+      data: {'run_id': runId},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getProgression() async {
+    final response = await _dio.get('/api/v2/me/progression');
+    return response.data as Map<String, dynamic>;
+  }
+
+  // ── Domains (legacy) ─────────────────────────────────────────────────
 
   /// Submit a new domain polygon. Automatically adds device_timestamp.
   Future<Map<String, dynamic>> submitDomain(

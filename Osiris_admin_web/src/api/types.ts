@@ -62,3 +62,47 @@ export interface AdminUser {
   email: string;
   role: string;
 }
+
+/* ── R2 trust console ─────────────────────────────────────── */
+
+export interface ReviewQueueItem {
+  attempt_id: number;
+  challenge_id: number;
+  challenge_title: string;
+  user_id: number;
+  run_id: number | null;
+  elapsed_seconds: number | null;
+  target_seconds: number;
+  course_coverage: number | null;
+  submitted_at: string | null;
+}
+
+export interface AdminChallenge {
+  id: number;
+  title: string;
+  status: string;
+  status_reason: string | null;
+  creator_id: number;
+  course_id: number;
+  attempt_count: number;
+  closes_at: string;
+  created_at: string;
+}
+
+export interface AdminUserStatus {
+  user_id: number;
+  email: string;
+  suspended: boolean;
+  suspension_reason: string | null;
+}
+
+export interface AuditEvent {
+  id: number;
+  actor_type: string;
+  actor_id: number | null;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}

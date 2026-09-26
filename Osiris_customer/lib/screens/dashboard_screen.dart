@@ -53,28 +53,47 @@ class DashboardScreen extends ConsumerWidget {
             _ProfileCard(user: user, avatarIcon: _avatarIcon(user.avatarClass)),
             const SizedBox(height: 24),
 
+            const _ProgressionCard(),
+            const SizedBox(height: 24),
+
             // ── Navigation Grid ──
             _NavButton(
-              icon: Icons.map,
-              label: 'DOMAIN EXPANSION',
+              icon: Icons.directions_run,
+              label: 'RUN',
               color: OsirisTheme.primary,
               onTap: () => Navigator.of(context).pushNamed('/map'),
             ),
             const SizedBox(height: 12),
             _NavButton(
-              icon: Icons.assignment,
-              label: 'BOUNTY BOARD',
-              color: OsirisTheme.secondary,
-              onTap: () => Navigator.of(context).pushNamed('/bounties'),
+              icon: Icons.emoji_events,
+              label: 'CHALLENGES',
+              color: Colors.amber,
+              onTap: () => Navigator.of(context).pushNamed('/challenges'),
             ),
             const SizedBox(height: 12),
             _NavButton(
-              icon: Icons.account_balance,
-              label: 'THE VAULT',
-              color: const Color(0xFFFDD835),
-              onTap: () => Navigator.of(context).pushNamed('/vault'),
+              icon: Icons.route,
+              label: 'MY COURSES',
+              color: OsirisTheme.secondary,
+              onTap: () => Navigator.of(context).pushNamed('/courses'),
             ),
             const SizedBox(height: 12),
+            if (kLegacyFeatures) ...[
+              _NavButton(
+                icon: Icons.assignment,
+                label: 'BOUNTY BOARD',
+                color: OsirisTheme.secondary,
+                onTap: () => Navigator.of(context).pushNamed('/bounties'),
+              ),
+              const SizedBox(height: 12),
+              _NavButton(
+                icon: Icons.account_balance,
+                label: 'THE VAULT',
+                color: const Color(0xFFFDD835),
+                onTap: () => Navigator.of(context).pushNamed('/vault'),
+              ),
+              const SizedBox(height: 12),
+            ],
             _NavButton(
               icon: Icons.person,
               label: 'ADVENTURE PROFILE',
@@ -201,6 +220,68 @@ class _StatChip extends StatelessWidget {
           style: const TextStyle(color: Colors.white60, fontSize: 11),
         ),
       ],
+    );
+  }
+}
+
+// ── Progression Card (performance rank + badges) ──────────────────────
+
+class _ProgressionCard extends ConsumerWidget {
+  const _ProgressionCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progression = ref.watch(progressionProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: progression.when(
+          loading: () => const SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
+          error: (_, _) => TextButton(
+            onPressed: () => ref.invalidate(progressionProvider),
+            child: const Text('Could not load progression. Tap to retry.'),
+          ),
+          data: (p) {
+            final next = p.nextRankXp;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.military_tech, color: Colors.amber),
+                  const SizedBox(width: 8),
+                  Text(p.performanceRank.toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 16)),
+                  const Spacer(),
+                  Text(next == null ? 'Top rank' : '${next - p.xp} XP to next',
+                      style: const TextStyle(color: Colors.white60)),
+                ]),
+                if (next != null) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(value: (p.xp / next).clamp(0.0, 1.0), minHeight: 6),
+                ],
+                const SizedBox(height: 12),
+                Text('${p.verifiedRuns} verified runs • ${p.courses} courses • '
+                    '${p.challengesWon} wins • ${p.defenses} defenses',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                if (p.badges.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: p.badges
+                        .map((b) => Chip(
+                              avatar: const Icon(Icons.verified, size: 16, color: OsirisTheme.secondary),
+                              label: Text(b.label, style: const TextStyle(fontSize: 12)),
+                              visualDensity: VisualDensity.compact,
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }

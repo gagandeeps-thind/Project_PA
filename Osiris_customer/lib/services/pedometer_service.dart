@@ -17,7 +17,6 @@ class PedometerService {
   static const int _windowSize = 20; // last N steps for cadence
 
   // Step detection state
-  double _lastMagnitude = 0.0;
   bool _isPeak = false;
   static const double _stepThreshold = 1.8; // m/s² above baseline
 
@@ -59,7 +58,6 @@ class PedometerService {
         _isPeak = false;
       }
 
-      _lastMagnitude = magnitude;
     });
   }
 

@@ -2,6 +2,26 @@ import 'package:dio/dio.dart';
 
 /// Utility class for extracting human-readable error messages from API responses.
 class ApiError {
+  /// The v2 error `code` (e.g. `CHALLENGE_NOT_OPEN`) if the server sent one.
+  static String? getCode(dynamic e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map && data['detail'] is Map) {
+        return (data['detail'] as Map)['code'] as String?;
+      }
+    }
+    return null;
+  }
+
+  /// Whether the request never reached the server (safe to retry later).
+  static bool isOffline(dynamic e) {
+    return e is DioException &&
+        (e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.type == DioExceptionType.receiveTimeout);
+  }
+
   /// Extract a user-friendly error message from any exception.
   static String getMessage(dynamic e) {
     if (e is DioException) {
@@ -25,11 +45,16 @@ class ApiError {
         // Try to extract detail from response body
         String? detail;
         if (data is Map<String, dynamic>) {
-          detail = data['detail'] as String? ??
-              data['message'] as String? ??
-              data['error'] as String?;
+          final raw = data['detail'];
+          if (raw is String) {
+            detail = raw;
+          } else if (raw is Map) {
+            // v2 structured errors: {"code": "...", "message": "..."}
+            detail = raw['message'] as String? ?? raw['code'] as String?;
+          }
+          detail ??= data['message'] as String? ?? data['error'] as String?;
           // Handle FastAPI validation errors (422)
-          if (detail == null && data['detail'] is List) {
+          if (detail == null && raw is List) {
             final errors = data['detail'] as List;
             detail = errors
                 .map((e) => e is Map ? (e['msg'] ?? e.toString()) : e.toString())

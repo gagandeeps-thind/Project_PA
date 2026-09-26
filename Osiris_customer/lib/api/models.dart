@@ -1,4 +1,4 @@
-/// Domain models for the Osiris Customer app.
+// Domain models for the Osiris Customer app.
 
 class UserProfile {
   final int id;

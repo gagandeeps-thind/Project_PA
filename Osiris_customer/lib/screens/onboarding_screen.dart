@@ -155,7 +155,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
                   // ── Path Selection ──
                   DropdownButtonFormField<String>(
-                    value: _selectedPath,
+                    initialValue: _selectedPath,
                     decoration: const InputDecoration(
                       labelText: 'Preferred Path',
                       prefixIcon: Icon(Icons.explore),

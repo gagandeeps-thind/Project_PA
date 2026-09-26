@@ -3,7 +3,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
+import 'api/challenge_models.dart';
 import 'api/models.dart';
+import 'services/run_upload_queue.dart';
 
 // ── SharedPreferences (overridden in main) ─────────────────────────────
 
@@ -22,6 +24,25 @@ final secureStorageProvider = Provider<FlutterSecureStorage>(
 // ── API Client (singleton) ─────────────────────────────────────────────
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
+// ── Feature flags ──────────────────────────────────────────────────────
+
+/// Legacy bounty/vault/domain screens stay reachable only behind this flag while the
+/// product migrates to the run → course → challenge loop (Backlog Phase 3).
+const bool kLegacyFeatures = bool.fromEnvironment('OSIRIS_LEGACY_FEATURES');
+
+// ── Run upload queue (durable across restarts) ─────────────────────────
+
+final runQueueProvider = Provider<RunUploadQueue>(
+  (ref) => RunUploadQueue(ref.read(sharedPreferencesProvider)),
+);
+
+// ── Progression ─────────────────────────────────────────────────────────
+
+final progressionProvider = FutureProvider.autoDispose<Progression>((ref) async {
+  final data = await ref.read(apiClientProvider).getProgression();
+  return Progression.fromJson(data);
+});
 
 // ── Auth State ─────────────────────────────────────────────────────────
 

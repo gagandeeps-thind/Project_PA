@@ -9,6 +9,9 @@ import 'screens/onboarding_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/bounty_board_screen.dart';
+import 'screens/challenge_board_screen.dart';
+import 'screens/challenge_detail_screen.dart';
+import 'screens/my_courses_screen.dart';
 import 'screens/bounty_detail_screen.dart';
 import 'screens/vault_screen.dart';
 import 'screens/profile_screen.dart';
@@ -41,6 +44,9 @@ class OsirisCustomerApp extends StatelessWidget {
         '/onboard': (_) => const OnboardingScreen(),
         '/dashboard': (_) => const DashboardScreen(),
         '/map': (_) => const MapScreen(),
+        '/challenges': (_) => const ChallengeBoardScreen(),
+        '/challenge': (_) => const ChallengeDetailScreen(),
+        '/courses': (_) => const MyCoursesScreen(),
         '/bounties': (_) => const BountyBoardScreen(),
         '/bounty-detail': (_) => const BountyDetailScreen(),
         '/vault': (_) => const VaultScreen(),
