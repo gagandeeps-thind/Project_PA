@@ -187,7 +187,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.flag_circle_outlined),
             title: Text(goalLabels[p.goal] ?? p.goal),
-            subtitle: Text('Goal  •  you are an ${p.identity}'),
+            subtitle: Text('Goal  •  you are ${'aeiou'.contains(p.identity.isEmpty ? 'x' : p.identity[0]) ? 'an' : 'a'} ${p.identity}'),
             onTap: () => _chooseGoal(context, ref, p.goal),
           ),
           ListTile(

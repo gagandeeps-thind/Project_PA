@@ -25,7 +25,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _codeCtrl = TextEditingController();
   int _step = 0;
   String _goal = 'fitness';
-  bool _locationConsent = true;
+  // Consent must be an affirmative choice (PIPEDA meaningful consent); never pre-ticked.
+  bool _locationConsent = false;
   bool _loading = false;
   String? _inviteToken;
 
@@ -139,7 +140,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           value: _locationConsent,
           onChanged: (v) => setState(() => _locationConsent = v),
           title: const Text('Allow location during runs'),
-          subtitle: const Text('You can turn this off later. Runs need it to be verified.'),
+          subtitle: const Text('Runs need it to be verified. You can change this later in Settings.'),
         ),
         const SizedBox(height: 20),
         ElevatedButton(onPressed: () => setState(() => _step = 2), child: const Text('CONTINUE')),

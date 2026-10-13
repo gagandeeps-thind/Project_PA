@@ -43,6 +43,9 @@ class OsirisCustomerApp extends StatelessWidget {
       title: 'Osiris',
       debugShowCheckedModeBanner: false,
       theme: OsirisTheme.darkTheme,
+      // Android 15+ draws apps edge-to-edge; keep every screen's content and buttons clear of
+      // the gesture bar instead of padding each scroll view separately.
+      builder: (context, child) => SafeArea(top: false, left: false, right: false, child: child!),
       home: const AuthWrapper(),
       routes: {
         '/onboard': (_) => const OnboardingScreen(),

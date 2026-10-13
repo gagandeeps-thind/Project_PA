@@ -121,6 +121,8 @@ void main() {
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
     expect(find.text('Allow location during runs'), findsOneWidget);
+    // Consent is an affirmative choice: the switch must start off, never pre-ticked.
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isFalse);
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
     expect(find.text('START MY FIRST QUEST'), findsOneWidget);
