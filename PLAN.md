@@ -30,7 +30,7 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: the endpoint anonymises via `erase_player` and keeps the tombstone row and ledger;
     the GDPR suite asserts route points are gone and the ledger still reconciles.
 
-- [ ] backend: resolve the OpenAPI contract drift
+- [x] backend: resolve the OpenAPI contract drift
   - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.
   - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
     `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contains only intended changes.

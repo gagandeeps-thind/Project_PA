@@ -5471,7 +5471,7 @@
     },
     "/api/v1/domains/nearby": {
       "get": {
-        "description": "Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),\nsorted nearest-first.\n\nPhase 2 / audit \u00a72.2: this is now AUTHENTICATED (a player JWT is required). Previously it\nwas public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any\nlat/lng to any unauthenticated caller \u2014 a stalking + economic-recon primitive. Requiring\nauth closes the unauthenticated leak. NOTE (residual risk, see register): the response\nstill exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an\nopaque handle + centroid-only for non-owners is a follow-up that changes the client\ncontract and is deferred for a product decision. MVP uses an in-memory haversine sweep;\nPostGIS `ST_DWithin` replaces this in Phase 4.",
+        "description": "Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),\nsorted nearest-first.\n\nThis endpoint is AUTHENTICATED (a player JWT is required). Previously it\nwas public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any\nlat/lng to any unauthenticated caller \u2014 a stalking + economic-recon primitive. Requiring\nauth closes the unauthenticated leak. NOTE (residual risk, see register): the response\nstill exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an\nopaque handle + centroid-only for non-owners is a follow-up that changes the client\ncontract and is deferred for a product decision. MVP uses an in-memory haversine sweep;\nPostGIS `ST_DWithin` replaces this in Phase 4.",
         "operationId": "get_nearby_domains_api_v1_domains_nearby_get",
         "parameters": [
           {
@@ -6034,7 +6034,7 @@
     },
     "/api/v1/users/{user_id}": {
       "delete": {
-        "description": "GDPR Right to Erasure (\u00a73.4): deletes user account and cascading relationships.",
+        "description": "GDPR Right to Erasure (\u00a73.4). Same erasure as `POST /api/v2/me/erase`: personal data is\ndeleted and the users row stays as an anonymous tombstone, so the crystal ledger is kept\n(financial records are anonymised, not destroyed \u2014 PRD-009) and the id is never reused.",
         "operationId": "delete_user_account_api_v1_users__user_id__delete",
         "parameters": [
           {
