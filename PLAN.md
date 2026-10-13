@@ -47,9 +47,16 @@ setting the repo up for autonomous agent work (2026-10-12).
   - `index.html` loads `/src/main.tsx`; `src/main.ts`, `src/counter.ts`, `src/style.css` are only referenced by each other.
   - Acceptance: files deleted, `npm run build` passes, the dev server renders the login page.
 
-- [ ] backend: make mypy clean for `spatial_utils.py` and `ml_referee.py`
+- [x] backend: make mypy clean for `spatial_utils.py` and `ml_referee.py`
   - CI's mypy step is `continue-on-error` and currently reports 640 errors in 6 files.
   - Acceptance: the CI mypy command reports zero errors located in these two files; behaviour is unchanged and all backend suites still pass.
+
+- [ ] backend: convert `models.py` to SQLAlchemy 2.0 typed mappings (`Mapped[...]` / `mapped_column`)
+  - Found 2026-10-12: `spatial_utils.py` and `ml_referee.py` already have zero mypy errors. The 640 errors are in
+    main.py (386), growth_communities/api/safety/social (298) and services/ledger.py (1), and ~95% are arg-type /
+    assignment errors because legacy `Column(...)` attributes type as `Column[int]` instead of `int`.
+  - Acceptance: identical DDL (`Base.metadata` produces the same tables, columns, types, nullability, indexes and
+    constraints before and after; no migration); all backend suites pass; the CI mypy error count drops substantially.
 
 - [ ] [human] tooling: decide on formatters (`ruff format` for the backend, `dart format` for the apps)
   - None are adopted (`ruff.toml` defers formatting). `.claude/hooks/format.sh` is a no-op until one is chosen.
