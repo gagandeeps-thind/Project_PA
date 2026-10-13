@@ -195,7 +195,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _startRun() async {
-    if (_currentPos == null) return;
+    if (_currentPos == null) {
+      // The button is disabled until the first fix; this guards any other caller.
+      _snack('Still finding your location. Try again in a moment.', OsirisTheme.secondary);
+      return;
+    }
     setState(() => _busy = true);
     final api = ref.read(apiClientProvider);
     final now = DateTime.now().toUtc();
@@ -571,12 +575,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _busy ? null : _toggleRun,
-        backgroundColor: run != null ? OsirisTheme.error : OsirisTheme.primary,
-        icon: _busy
+        // A run cannot start before the first GPS fix: tapping earlier used to do nothing.
+        onPressed: _busy || (run == null && _currentPos == null) ? null : _toggleRun,
+        backgroundColor: run != null
+            ? OsirisTheme.error
+            : _currentPos == null
+                ? OsirisTheme.surface
+                : OsirisTheme.primary,
+        icon: _busy || (run == null && _currentPos == null)
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
             : Icon(run != null ? Icons.stop : Icons.play_arrow),
-        label: Text(run != null ? 'FINISH RUN' : 'START RUN'),
+        label: Text(run != null
+            ? 'FINISH RUN'
+            : _currentPos == null
+                ? 'LOCATING…'
+                : 'START RUN'),
       ),
     );
   }
