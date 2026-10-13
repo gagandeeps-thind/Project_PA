@@ -14,7 +14,7 @@ CI (`.github/workflows/ci.yml`) exports `OSIRIS_JWT_SECRET=ci-fixed-secret-not-f
 |---|---|---|
 | Install | `pip install -r requirements.lock.txt -r requirements-dev.txt` | Osiris_backend |
 | Lint | `ruff check .` | Osiris_backend |
-| Type-check (non-blocking in CI, ~640 errors) | `mypy --ignore-missing-imports --no-strict-optional main.py models.py spatial_utils.py ml_referee.py` | Osiris_backend |
+| Type-check (clean; still `continue-on-error` in CI) | `mypy --ignore-missing-imports --no-strict-optional main.py models.py spatial_utils.py ml_referee.py` | Osiris_backend |
 | Migrate | `python -m alembic upgrade head` | Osiris_backend |
 | Ledger invariant | `python scripts/reconcile_ledger.py --check` | Osiris_backend |
 | Tests (one per suite) | `python tests/test_<suite>.py` (list in `ci.yml`) | Osiris_backend |

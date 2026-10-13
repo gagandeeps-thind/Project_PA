@@ -132,7 +132,7 @@ def _daily_totals(db: Session, user_id: int, utc_offset_minutes: int, now: datet
         )
         .all()
     )
-    return quest_rules.daily_totals(rows, utc_offset_minutes)
+    return quest_rules.daily_totals([(finished_at, distance) for finished_at, distance in rows], utc_offset_minutes)
 
 
 def _grant_quest(

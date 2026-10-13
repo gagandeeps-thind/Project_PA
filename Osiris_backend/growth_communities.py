@@ -207,8 +207,10 @@ def _daily_by_user(db: Session, user_ids: list[int], start: datetime, end: datet
     """Verified distance per user per local day inside [start, end)."""
     if not user_ids:
         return {}
-    offsets = dict(db.query(models.PlayerProfile.user_id, models.PlayerProfile.utc_offset_minutes)
-                   .filter(models.PlayerProfile.user_id.in_(user_ids)).all())
+    offsets: dict[int, int] = {
+        uid: offset for uid, offset in db.query(models.PlayerProfile.user_id, models.PlayerProfile.utc_offset_minutes)
+        .filter(models.PlayerProfile.user_id.in_(user_ids)).all()
+    }
     rows = db.query(models.RunSession.user_id, models.RunSession.finished_at, models.RunSession.distance_m).filter(
         models.RunSession.user_id.in_(user_ids), models.RunSession.verification_status == "accepted",
         models.RunSession.finished_at >= start, models.RunSession.finished_at < end,
