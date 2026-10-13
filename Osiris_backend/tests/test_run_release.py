@@ -194,8 +194,34 @@ def test_raw_route_points_expire_after_retention_window() -> None:
         db.close()
 
 
+def test_metrics_count_requests_and_verification_outcomes() -> None:
+    from services import metrics
+    _cleanup()
+    metrics.reset()
+    client = TestClient(main.app)
+    headers = {"Authorization": f"Bearer {_login(client)}"}
+    good = _finished_run(client, headers, "metrics-ok")
+    bad = client.post("/api/v2/runs", headers=headers, json={"device_started_at": _now()}).json()["id"]
+    client.post(f"/api/v2/runs/{bad}/start", headers=headers, json={"device_started_at": _now()})
+    client.post(f"/api/v2/runs/{bad}/points", headers=headers, json={"points": [
+        {"sequence": i, "t_ms": i * 1_000, "lat": 44.6 + i * 0.1, "lng": -63.6, "accuracy_m": 10} for i in range(3)]})
+    client.post(f"/api/v2/runs/{bad}/finish", headers=headers, json={
+        "device_finished_at": _now(), "idempotency_key": "run-release-metrics-bad"})
+
+    response = client.get("/metrics")  # test env: no token configured, served in dev/test only
+    assert response.status_code == 200, response.text
+    body = response.text
+    assert 'route="/api/v2/runs/{run_id}/finish"' in body
+    assert f"/api/v2/runs/{good}/" not in body, "raw ids must never become labels"
+    assert 'osiris_run_verifications_total{status="accepted"} 1' in body
+    assert 'osiris_run_verifications_total{status="rejected"} 1' in body
+    assert 'osiris_run_rejection_reasons_total{reason="IMPOSSIBLE_SPEED"} 1' in body
+    assert 'osiris_http_request_duration_seconds_bucket{method="POST",route="/api/v2/runs/{run_id}/points",le="+Inf"}' in body
+
+
 if __name__ == "__main__":
     for test in (
+        test_metrics_count_requests_and_verification_outcomes,
         test_valid_run_is_verified_and_finish_is_idempotent,
         test_invalid_route_is_rejected_with_reason_codes,
         test_route_sequence_and_authentication_are_enforced,

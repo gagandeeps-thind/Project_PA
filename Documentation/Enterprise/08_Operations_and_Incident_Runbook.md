@@ -8,6 +8,20 @@
 - Auth failures, refresh-token reuse, admin actions, export/delete volume, and suspicious route clusters.
 - Mobile crash-free sessions, location permission denial, upload retry, battery impact, and offline queue age.
 
+### What exists today (2026-10-13)
+
+- `GET /metrics` serves Prometheus text: `osiris_http_requests_total` and
+  `osiris_http_request_duration_seconds` (histogram) by method, route template and status;
+  `osiris_run_verifications_total` by status; `osiris_run_rejection_reasons_total` by reason code.
+- Access requires `Authorization: Bearer $OSIRIS_METRICS_TOKEN`. Without the variable the endpoint is
+  served only when `OSIRIS_ENV` is dev/test and returns 404 elsewhere. Values are per process; scrape each
+  worker. Routes are labelled by template, so no ids, users, or query strings reach the metrics store.
+- Suggested starting alerts: p95 of `osiris_http_request_duration_seconds` above 0.5 s for 10 minutes
+  (PRD target); 5xx share above 1%; `osiris_run_verifications_total{status="rejected"}` share rising sharply
+  against the 7-day baseline (verifier regression or spoofing wave).
+- Structured JSON access logs with `X-Request-ID` correlation: set `OSIRIS_LOG_JSON=1`.
+- Not built yet: traces, dashboards, mobile crash reporting, ledger/auth metrics.
+
 ## 2. Severity model
 
 | Severity | Example | Response |

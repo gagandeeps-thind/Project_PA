@@ -78,6 +78,10 @@ setting the repo up for autonomous agent work (2026-10-12).
     and syncing with the screen asleep; the service leaves the foreground on finish/discard. iOS declares the
     background location mode and shows the system indicator.
 
+- [x] backend: Prometheus metrics endpoint (backlog Phase 1 observability, Phase 2 run instrumentation)
+  - Acceptance: request count and latency histogram by route template, run verification outcomes and rejection
+    reasons; token-protected outside dev/test; covered in `test_run_release.py` and `test_phase2_security.py`.
+
 - [ ] [human] customer: request the Android 13+ notification permission
   - The recording notification is posted but hidden until the app holds POST_NOTIFICATIONS; tracking works
     regardless. Requesting it needs a permission plugin (pubspec/lockfile change) or a small platform channel.

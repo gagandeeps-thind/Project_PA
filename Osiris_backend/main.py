@@ -42,6 +42,7 @@ import ml_referee
 import run_verifier
 from services import ledger, stripe_gateway
 from services import challenges as challenge_rules
+from services import metrics
 from services import player_safety
 
 # Bootstrap convenience: creates any missing tables on first run. Alembic is the schema
@@ -156,7 +157,12 @@ async def _access_log_middleware(request: Request, call_next):
         response.headers["X-Request-ID"] = req_id
         return response
     finally:
-        latency_ms = round((_time.perf_counter() - start) * 1000, 2)
+        elapsed = _time.perf_counter() - start
+        latency_ms = round(elapsed * 1000, 2)
+        # Label by route template, never the raw path, so series count stays bounded and no
+        # ids or query strings reach the metrics store. Unmatched paths (404s) share one label.
+        matched = request.scope.get("route")
+        metrics.observe_request(request.method, getattr(matched, "path", None) or "unmatched", status_code, elapsed)
         # user id is best-effort: auth dependencies may set request.state.user_id.
         user_id = getattr(request.state, "user_id", None)
         logger.info(
@@ -174,6 +180,23 @@ async def _access_log_middleware(request: Request, call_next):
 
 # --- Phase 0: liveness/readiness probe ----------------------------------------
 # include_in_schema=False keeps it out of the client OpenAPI contract (ops-only route).
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics(request: Request):
+    """Prometheus scrape endpoint. Requires `Authorization: Bearer $OSIRIS_METRICS_TOKEN`.
+    Without a configured token it is served only in dev/test and is a 404 elsewhere, so a
+    deploy never exposes traffic patterns by accident."""
+    from fastapi.responses import PlainTextResponse
+
+    expected = os.environ.get("OSIRIS_METRICS_TOKEN")
+    if expected:
+        supplied = request.headers.get("Authorization", "")
+        if not hmac.compare_digest(supplied, f"Bearer {expected}"):
+            raise HTTPException(status_code=401, detail="Invalid metrics token")
+    elif not _IS_DEV_ENV:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
+
+
 @app.get("/healthz", include_in_schema=False)
 def healthz():
     """Readiness probe: DB reachable + migrations current.
@@ -1539,6 +1562,7 @@ def finish_run_session(
         }
         for point in points
     ])
+    metrics.observe_run_verification(result.status, result.reason_codes)
     session.status = "closed"
     session.verification_status = result.status
     session.route_hash = result.route_hash

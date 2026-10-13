@@ -185,6 +185,22 @@ def test_suspended_player_blocked_on_v1_routes():
         db.close()
 
 
+# --- Metrics endpoint is closed by default in production-like environments -----------------
+def test_metrics_endpoint_requires_token():
+    client, _models, _db = _client_and_models()
+    os.environ.pop("OSIRIS_METRICS_TOKEN", None)
+    _check("metrics: no token configured in production -> 404", client.get("/metrics").status_code == 404)
+    os.environ["OSIRIS_METRICS_TOKEN"] = "ph2-metrics-token"
+    try:
+        wrong = client.get("/metrics", headers={"Authorization": "Bearer nope"})
+        right = client.get("/metrics", headers={"Authorization": "Bearer ph2-metrics-token"})
+        _check("metrics: wrong token -> 401", wrong.status_code == 401)
+        _check("metrics: correct token -> 200 Prometheus text",
+               right.status_code == 200 and "osiris_http_requests_total" in right.text)
+    finally:
+        os.environ.pop("OSIRIS_METRICS_TOKEN", None)
+
+
 if __name__ == "__main__":
     test_webhook_fail_closed_boot()
     test_unsigned_webhook_rejected()
@@ -194,6 +210,7 @@ if __name__ == "__main__":
     test_legacy_login_rate_limited()
     test_public_events_rate_limited()
     test_suspended_player_blocked_on_v1_routes()
+    test_metrics_endpoint_requires_token()
     print()
     if _FAILURES:
         print(f"{len(_FAILURES)} check(s) FAILED: {_FAILURES}")
