@@ -23,7 +23,7 @@ setting the repo up for autonomous agent work (2026-10-12).
     (orphans for missing users 14, 21, 22, 23; user 6 inherited row 68 from a deleted account).
   - Acceptance: delete those rows (or recreate the dev DB with `alembic upgrade head`); `reconcile_ledger.py --check` exits 0.
 
-- [ ] backend: route `DELETE /api/v1/users/{id}` through `growth_safety.erase_player`
+- [x] backend: route `DELETE /api/v1/users/{id}` through `growth_safety.erase_player`
   - Today it hard-deletes the users row and its crystal ledger rows (financial records must be anonymised and kept,
     PRD-009) while leaving runs, route points, courses, challenges and attempts behind. SQLite then reuses the id,
     so a new account can inherit another person's GPS history.

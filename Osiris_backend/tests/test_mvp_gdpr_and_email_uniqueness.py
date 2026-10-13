@@ -77,14 +77,48 @@ def test_gdpr_and_email_uniqueness():
     _check("GDPR data export returns 200", export_resp.status_code == 200)
     _check("Export contains user_profile", "user_profile" in export_resp.json())
 
-    # 5. Delete account (GDPR Erasure)
+    # 5. Record a run so the account owns raw GPS evidence.
+    now = "2026-06-12T10:10:00Z"
+    run_id = client.post("/api/v2/runs", headers=headers, json={"device_started_at": now}).json()["id"]
+    client.post(f"/api/v2/runs/{run_id}/start", headers=headers, json={"device_started_at": now})
+    client.post(f"/api/v2/runs/{run_id}/points", headers=headers, json={"points": [
+        {"sequence": i, "t_ms": i * 30_000, "lat": 44.6 + i * 0.0005, "lng": -63.6, "accuracy_m": 10}
+        for i in range(4)
+    ]})
+    points_before = db.query(models.RoutePoint).filter(models.RoutePoint.run_session_id == run_id).count()
+    _check("Run recorded route points before deletion", points_before == 4)
+
+    # 6. Delete account (GDPR Erasure)
     del_resp = client.delete(f"/api/v1/users/{user_id}", headers=headers)
     _check("GDPR account deletion returns 200", del_resp.status_code == 200)
 
-    # Verify user is gone from DB
+    # Personal data is erased, but the row stays as an anonymous tombstone so the id is never
+    # reused and the financial ledger is retained (PRD-009).
+    db.expire_all()
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    _check("User row removed from database", db_user is None)
+    _check("User row kept as an anonymous tombstone", db_user is not None and db_user.email != test_email)
+    _check("Route points erased", db.query(models.RoutePoint).filter(
+        models.RoutePoint.run_session_id == run_id).count() == 0)
+    ledger_sum = sum(r.delta for r in db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == user_id))
+    _check("Crystal ledger retained and still reconciles", db_user is not None and
+           ledger_sum == db_user.mana_crystals and ledger_sum > 0)
+    relogin = client.post("/api/v1/auth/login", json={
+        "email": test_email, "password": "password123", "device_timestamp": now})
+    _check("Deleted account can no longer log in", relogin.status_code == 401)
 
+    # Test hygiene only: hard-delete the tombstone so repeated runs do not accumulate rows.
+    import growth_api
+    run_ids = [r.id for r in db.query(models.RunSession).filter(models.RunSession.user_id == user_id)]
+    db.query(models.VerificationDecision).filter(models.VerificationDecision.run_session_id.in_(run_ids)).delete(
+        synchronize_session=False)
+    db.query(models.RoutePoint).filter(models.RoutePoint.run_session_id.in_(run_ids)).delete(
+        synchronize_session=False)
+    db.query(models.RunSession).filter(models.RunSession.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.AuditEvent).filter(models.AuditEvent.actor_id == user_id).delete(synchronize_session=False)
+    growth_api.delete_growth_data(db, [user_id])
+    db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.User).filter(models.User.id == user_id).delete(synchronize_session=False)
+    db.commit()
     db.close()
 
 if __name__ == "__main__":

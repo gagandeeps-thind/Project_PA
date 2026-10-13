@@ -1273,7 +1273,9 @@ async def delete_user_account(
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
-    """GDPR Right to Erasure (§3.4): deletes user account and cascading relationships."""
+    """GDPR Right to Erasure (§3.4). Same erasure as `POST /api/v2/me/erase`: personal data is
+    deleted and the users row stays as an anonymous tombstone, so the crystal ledger is kept
+    (financial records are anonymised, not destroyed — PRD-009) and the id is never reused."""
     caller_id = token_data["id"]
     role = token_data["role"]
     if role == "player" and caller_id != user_id:
@@ -1285,18 +1287,14 @@ async def delete_user_account(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    db.query(models.TelemetrySession).filter(models.TelemetrySession.user_id == user_id).delete(synchronize_session=False)
-    db.query(models.ActivityLog).filter(models.ActivityLog.user_id == user_id).delete(synchronize_session=False)
+    # Legacy v1 personal data that erase_player does not cover: exact territory polygons,
+    # issued coupon codes, and proof hashes.
     db.query(models.BountyCompletion).filter(models.BountyCompletion.user_id == user_id).delete(synchronize_session=False)
-    db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == user_id).delete(synchronize_session=False)
     db.query(models.ProofConsumed).filter(models.ProofConsumed.user_id == user_id).delete(synchronize_session=False)
-    db.query(models.UserBadge).filter(models.UserBadge.user_id == user_id).delete(synchronize_session=False)
     db.query(models.Domain).filter(models.Domain.owner_id == user_id).delete(synchronize_session=False)
-    growth_api.delete_growth_data(db, [user_id])
-
-    db.delete(user)
+    growth_api.growth_safety.erase_player(db, user, role, caller_id)
     db.commit()
-    return {"status": "deleted", "user_id": user_id, "message": "Account and associated data deleted cleanly."}
+    return {"status": "deleted", "user_id": user_id, "message": "Account and personal data erased."}
 
 
 @app.get("/api/v1/users/{user_id}/export")
