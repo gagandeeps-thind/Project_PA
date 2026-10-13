@@ -73,6 +73,27 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: a scheduled job removes raw points of closed runs finished > 45 days ago, keeps run summaries and
     verification decisions, and keeps evidence for attempts in `review_required`; covered in `test_run_release.py`.
 
+- [x] customer: keep recording runs with the screen locked (PRD-002; release status risk 7, background part)
+  - Acceptance: an Android location foreground service runs only while a run is recording; points keep arriving
+    and syncing with the screen asleep; the service leaves the foreground on finish/discard. iOS declares the
+    background location mode and shows the system indicator.
+
+- [ ] [human] customer: request the Android 13+ notification permission
+  - The recording notification is posted but hidden until the app holds POST_NOTIFICATIONS; tracking works
+    regardless. Requesting it needs a permission plugin (pubspec/lockfile change) or a small platform channel.
+  - Acceptance: decision recorded; if adopted, the app asks once before the first run and the notification shows.
+
+- [ ] [human] product: design pause/resume for runs (PRD-002)
+  - Needs a per-point segment (migration) and an anti-cheat rule so a pause cannot hide travel (e.g. resume must be
+    near the pause point, or the paused leg is excluded and capped). Verification rules version must be bumped.
+  - Acceptance: approved design; then migration + verifier + app work can be planned as agent items.
+
+- [ ] [human] product: retire or gate the legacy v1 game endpoints (domains, vault, sieges, bounties, coupons)
+  - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages and the parked
+    merchant app. Retiring them is a product decision.
+  - Acceptance: decision recorded; if retired, the endpoints, their tests, client screens and contract entries are
+    removed in agent items.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.

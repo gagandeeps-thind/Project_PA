@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 /// Wrapper around [Geolocator] for location access.
@@ -41,15 +42,42 @@ class LocationService {
   }
 
   /// Stream of position updates for live tracking.
+  ///
+  /// While a run is [recording], tracking must survive the screen locking or the app going
+  /// to the background, otherwise the route gets a gap and the run is rejected. On Android
+  /// that is a foreground service with a visible, ongoing notification (started while the
+  /// app is open, so "while in use" permission suffices); on iOS, background location
+  /// updates with the system location indicator shown.
   static Stream<Position> getLocationStream({
     int distanceFilter = 5,
+    bool recording = false,
   }) {
-    return Geolocator.getPositionStream(
-      locationSettings: LocationSettings(
+    final LocationSettings settings;
+    if (recording && defaultTargetPlatform == TargetPlatform.android) {
+      settings = AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: distanceFilter,
-      ),
-    );
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'Osiris is recording your run',
+          notificationText: 'GPS stays on until you finish. Your route stays private.',
+          notificationChannelName: 'Run recording',
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
+      );
+    } else if (recording && defaultTargetPlatform == TargetPlatform.iOS) {
+      settings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanceFilter,
+        activityType: ActivityType.fitness,
+        pauseLocationUpdatesAutomatically: false,
+        allowBackgroundLocationUpdates: true,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      settings = LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: distanceFilter);
+    }
+    return Geolocator.getPositionStream(locationSettings: settings);
   }
 
   /// Calculate the distance in meters between two GPS coordinates.

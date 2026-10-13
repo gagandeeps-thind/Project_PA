@@ -112,6 +112,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     await ref.read(runQueueProvider).clear();
     _clock?.cancel();
     if (!mounted) return;
+    _listen(recording: false);
     setState(() => _tracePath.clear());
     _snack('Run discarded.', OsirisTheme.secondary);
   }
@@ -137,21 +138,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _loadingLocation = false;
       });
       unawaited(_fetchNearby());
-
-      _locationSub = LocationService.getLocationStream().listen((pos) {
-        if (!mounted) return;
-        final newPos = LatLng(pos.latitude, pos.longitude);
-        setState(() => _currentPos = newPos);
-        if (_isTracing) {
-          setState(() => _tracePath.add(newPos));
-          unawaited(_capturePoint(pos));
-        }
-      });
+      _listen(recording: _isTracing);
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadingLocation = false);
       _snack(ApiError.getMessage(e), OsirisTheme.error);
     }
+  }
+
+  /// (Re)subscribe to GPS. Recording mode keeps tracking alive with the screen off or the
+  /// app in the background (foreground service on Android); browsing mode does not, so no
+  /// notification shows while the player is only looking at the map.
+  void _listen({required bool recording}) {
+    _locationSub?.cancel();
+    _locationSub = LocationService.getLocationStream(recording: recording).listen((pos) {
+      if (!mounted) return;
+      final newPos = LatLng(pos.latitude, pos.longitude);
+      setState(() => _currentPos = newPos);
+      if (_isTracing) {
+        setState(() => _tracePath.add(newPos));
+        unawaited(_capturePoint(pos));
+      }
+    });
   }
 
   Future<void> _fetchNearby() async {
@@ -201,6 +209,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ..clear()
         ..add(_currentPos!);
       _lastRunPosition = null;
+      _listen(recording: true);
       _startClock();
     } catch (e) {
       _snack(ApiError.getMessage(e), OsirisTheme.error);
@@ -261,6 +270,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           );
       await queue.clear();
       _clock?.cancel();
+      _listen(recording: false);
       ref.invalidate(progressionProvider);
       if (!mounted) return;
       setState(() {});
