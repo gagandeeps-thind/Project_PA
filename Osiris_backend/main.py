@@ -41,6 +41,7 @@ import ml_referee
 import run_verifier
 from services import ledger, stripe_gateway
 from services import challenges as challenge_rules
+from services import player_safety
 
 # Bootstrap convenience: creates any missing tables on first run. Alembic is the schema
 # source-of-truth going forward (see `alembic/` + `alembic.ini`). For new dev DBs, run
@@ -122,7 +123,7 @@ _configure_logging()
 # Initialize the FastAPI application
 app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
 
-# Phase 2 / audit §2.5: explicit CORS allowlist. `allow_origins=["*"]` with
+# Security baseline: explicit CORS allowlist. `allow_origins=["*"]` with
 # `allow_credentials=True` is invalid (browsers refuse credentialed requests to a wildcard
 # origin) and signals "any site may call us with the user's session." Origins come from
 # OSIRIS_CORS_ORIGINS (comma-separated) with a localhost dev default for the Vite admin web.
@@ -242,8 +243,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    issued = datetime.now(timezone.utc)
+    expire = issued + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # iat lets the v2 API refuse tokens issued before a "sign out everywhere" (G4).
+    to_encode.update({"exp": expire, "iat": int(issued.timestamp())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -254,7 +257,7 @@ def get_current_user_token(token: str = Depends(oauth2_scheme)):
         user_id_str: str = payload.get("sub")
         if role is None or user_id_str is None:
             raise HTTPException(status_code=401, detail="Could not validate credentials")
-        return {"id": int(user_id_str), "role": role}
+        return {"id": int(user_id_str), "role": role, "iat": payload.get("iat")}
     except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
@@ -282,7 +285,7 @@ def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
 # Production safety: when OSIRIS_ENV=production, the secret is required at boot. Without it
 # the webhook endpoint would accept any payload — indistinguishable from a forged-webhook
 # attacker activating an arbitrary merchant. Mirrors the JWT secret pattern above.
-# Phase 2 / audit §2.1: FAIL CLOSED. The webhook secret is REQUIRED unless OSIRIS_ENV is an
+# Security baseline: FAIL CLOSED. The webhook secret is REQUIRED unless OSIRIS_ENV is an
 # *explicit* dev/test value. A forgotten or unknown OSIRIS_ENV is treated as production and
 # must refuse to boot — the old behavior (fail open whenever the secret was unset, only
 # fail-fast when OSIRIS_ENV was *explicitly* "production") meant a deploy that forgot the env
@@ -295,12 +298,12 @@ if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
         "OSIRIS_WEBHOOK_SECRET is required unless OSIRIS_ENV is one of "
         f"{sorted(_DEV_ENVS)}. An unset or unknown OSIRIS_ENV is treated as production: "
         "the app refuses to boot rather than serve an unauthenticated, forgeable payment "
-        "webhook (audit §2.1). For local development set OSIRIS_ENV=dev. "
+        "webhook. For local development set OSIRIS_ENV=dev. "
         "Generate a secret with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
         "and configure the same value on the payment provider's webhook settings."
     )
 
-# Stripe fail-closed boot check (audit §2.1 parity). Called here, AFTER the webhook-secret
+# Stripe fail-closed boot check. Called here, AFTER the webhook-secret
 # check above, so that when multiple secrets are missing the OSIRIS_WEBHOOK_SECRET error
 # surfaces first (stripe_gateway is import-side-effect-free by design).
 stripe_gateway.assert_boot_config()
@@ -341,7 +344,7 @@ async def root():
 async def favicon():
     return {}
 
-# --- Phase 2 / audit §4.3: rate limiting ------------------------------------------------
+# --- Rate limiting -----------------------------------------------------------------------
 # Dependency-free, in-memory sliding-window limiter keyed on client IP + scope. Sufficient for
 # the single-VM pilot; at horizontal scale this must move to a shared store (Redis) because the
 # buckets are per-process. Disabled in dev/test (OSIRIS_ENV dev/test) so the suites and local
@@ -534,7 +537,7 @@ class VerificationResult(BaseModel):
 class UserProfile(BaseModel):
     id: int
     email: EmailStr
-    bmi: float
+    bmi: Optional[float] = None  # v2 registrations collect no body measurements
     avatar_class: str
     xp: int
     rank: str
@@ -1098,16 +1101,27 @@ def get_party_role(user: models.User) -> tuple[str, str]:
     leading = max(stats, key=lambda s: s[1])
     return leading[2], leading[0]
 
+def _check_email_unique(db: Session, email: str, exclude_table: Optional[str] = None) -> None:
+    """Verify an email is not already registered in ANY auth table
+    (User, Merchant, Admin) so accounts don't silently shadow each other in auth_login."""
+    if exclude_table != "user":
+        if db.query(models.User).filter(models.User.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered as a player account.")
+    if exclude_table != "merchant":
+        if db.query(models.Merchant).filter(models.Merchant.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered as a merchant account.")
+    if exclude_table != "admin":
+        if db.query(models.Admin).filter(models.Admin.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered as an admin account.")
+
 # --- Endpoints ---
 
 @app.post("/api/v1/onboard", response_model=UserProfile)
 async def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
     """API Endpoint to register a new user, calculate their stats, and assign an avatar."""
 
-    # 0. Check if user already exists
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    # 0. Check if user email already exists across any table
+    _check_email_unique(db, user.email)
 
     # 1. Calculate BMI (Weight / Height^2)
     # (Pydantic 'gt=0' prevents division by zero, but adding a fallback safety check is good practice)
@@ -1253,6 +1267,85 @@ async def get_user_profile(
     return user
 
 
+@app.delete("/api/v1/users/{user_id}")
+async def delete_user_account(
+    user_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """GDPR Right to Erasure (§3.4): deletes user account and cascading relationships."""
+    caller_id = token_data["id"]
+    role = token_data["role"]
+    if role == "player" and caller_id != user_id:
+        raise HTTPException(status_code=403, detail="Players can only delete their own account")
+    if role not in ("player", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.query(models.TelemetrySession).filter(models.TelemetrySession.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.ActivityLog).filter(models.ActivityLog.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.BountyCompletion).filter(models.BountyCompletion.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.ProofConsumed).filter(models.ProofConsumed.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.UserBadge).filter(models.UserBadge.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Domain).filter(models.Domain.owner_id == user_id).delete(synchronize_session=False)
+    growth_api.delete_growth_data(db, [user_id])
+
+    db.delete(user)
+    db.commit()
+    return {"status": "deleted", "user_id": user_id, "message": "Account and associated data deleted cleanly."}
+
+
+@app.get("/api/v1/users/{user_id}/export")
+async def export_user_data(
+    user_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """GDPR Data Portability (§3.4): returns user profile and activity summary."""
+    caller_id = token_data["id"]
+    role = token_data["role"]
+    if role == "player" and caller_id != user_id:
+        raise HTTPException(status_code=403, detail="Players can only export their own account data")
+    if role not in ("player", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    activities_count = db.query(models.ActivityLog).filter(models.ActivityLog.user_id == user_id).count()
+    completions_count = db.query(models.BountyCompletion).filter(models.BountyCompletion.user_id == user_id).count()
+    domains_count = db.query(models.Domain).filter(models.Domain.owner_id == user_id).count()
+    telemetry_count = db.query(models.TelemetrySession).filter(models.TelemetrySession.user_id == user_id).count()
+
+    return {
+        "user_profile": {
+            "id": user.id,
+            "email": user.email,
+            "bmi": user.bmi,
+            "avatar_class": user.avatar_class,
+            "rank": user.rank,
+            "title": user.title,
+            "cumulative_area": user.cumulative_area,
+            "xp": user.xp,
+            "streak": user.streak,
+            "mana_crystals": user.mana_crystals,
+            "last_activity_date": user.last_activity_date.isoformat() if user.last_activity_date else None,
+        },
+        "summary": {
+            "activities_recorded": activities_count,
+            "bounties_completed": completions_count,
+            "domains_owned": domains_count,
+            "telemetry_sessions": telemetry_count,
+        },
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # --- First-release API v2: verified running -----------------------------------
 
 def _api_error(status_code: int, code: str, message: str) -> HTTPException:
@@ -1271,6 +1364,10 @@ def get_active_player(
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     if user.suspended_at is not None:
         raise _api_error(403, "ACCOUNT_SUSPENDED", "This account is suspended. Contact support.")
+    if user.tokens_valid_after is not None:
+        issued_at = token_data.get("iat") or 0
+        if issued_at < int(user.tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()):
+            raise _api_error(401, "SESSION_REVOKED", "This session was signed out. Please sign in again.")
     return token_data
 
 
@@ -1318,6 +1415,9 @@ async def create_run_session(
     token_data: dict = Depends(get_active_player),
 ):
     """Create a run shell. The route is not accepted until it is finished and verified."""
+    if player_safety.needs_location_consent(db, token_data["id"]):
+        raise _api_error(403, "LOCATION_CONSENT_REQUIRED",
+                         "Allow Osiris to use your location during runs before you start one")
     session = models.RunSession(
         user_id=token_data["id"],
         activity_type=req.activity_type.lower(),
@@ -1462,6 +1562,8 @@ async def finish_run_session(
                 verified=True, confidence=1.0,
             )
             _award_badge(db, user.id, "FIRST_VERIFIED_RUN")
+            # Growth G1: daily quest / weekly goal rewards and funnel milestones.
+            xp_awarded += growth_api.on_run_accepted(db, user, session)["quest_xp"]
     _audit(
         db, actor_type="player", actor_id=token_data["id"], action="run.verified",
         entity_type="run_session", entity_id=session.id,
@@ -1693,6 +1795,8 @@ def _apply_attempt_outcome(db: Session, attempt: models.ChallengeAttempt, ch: mo
     if challenger is not None:
         _adjust_xp(challenger, attempt.xp_awarded)
     attempt.decided_at = _now_naive_utc()
+    growth_api.emit_event(db, "challenge_completed", user_id=attempt.user_id,
+                          properties={"challenge_id": ch.id, "outcome": attempt.outcome})
 
 
 def _get_challenge(db: Session, challenge_id: int) -> models.Challenge:
@@ -1889,9 +1993,10 @@ async def nearby_challenges(
     now = _now_naive_utc()
     changed = False
     out: List[ChallengePublic] = []
+    hidden = player_safety.blocked_user_ids(db, token_data["id"])
     for ch, course in rows:
         changed |= _refresh_challenge_status(db, ch, now)
-        if ch.status != "open":
+        if ch.status != "open" or ch.creator_id in hidden:
             continue
         dist = spatial_utils.haversine_distance(lat, lng, course.public_lat, course.public_lng)
         if dist > radius_km:
@@ -1961,6 +2066,8 @@ async def join_challenge(
         raise _api_error(409, "CHALLENGE_NOT_OPEN", f"Challenge is {ch.status}")
     if ch.creator_id == player_id:
         raise _api_error(409, "OWN_CHALLENGE", "You cannot join your own challenge")
+    if player_safety.is_blocked_between(db, player_id, ch.creator_id):
+        raise _api_error(403, "BLOCKED", "You can't join this challenge")
     verified_runs = db.query(models.RunSession).filter(
         models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
     ).count()
@@ -1981,6 +2088,7 @@ async def join_challenge(
     _audit(db, actor_type="player", actor_id=player_id, action="challenge.joined",
            entity_type="challenge_attempt", entity_id=attempt.id,
            details={"challenge_id": ch.id, "terms_hash": ch.terms_hash})
+    growth_api.emit_event(db, "challenge_joined", user_id=player_id, properties={"challenge_id": ch.id})
     db.commit()
     db.refresh(attempt)
     return _attempt_summary(attempt, ch)
@@ -2383,7 +2491,7 @@ async def get_nearby_domains(
     """Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),
     sorted nearest-first.
 
-    Phase 2 / audit §2.2: this is now AUTHENTICATED (a player JWT is required). Previously it
+    This endpoint is AUTHENTICATED (a player JWT is required). Previously it
     was public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any
     lat/lng to any unauthenticated caller — a stalking + economic-recon primitive. Requiring
     auth closes the unauthenticated leak. NOTE (residual risk, see register): the response
@@ -2948,27 +3056,29 @@ def _enforce_proof_gps_in_polygon(
     polygon: list,
     context: str,
 ) -> None:
-    """Co-location guard: if the proof carries GPS samples, their centroid must fall
-    inside `polygon`. Without this, a verified workout from one city can be attached to
-    a Domain in another — the ML referee only checks rhythm, not location.
+    """Co-location guard: if the proof carries GPS samples, at least 80% of samples must fall
+    inside `polygon`. Without this, a single fake sample or centroid trick could bypass location.
 
     Permissive on purpose: an empty GPS channel is treated as 'no check' so legacy clients
-    that don't ship GPS yet still work. Once the frontend reliably samples GPS during all
-    activities, swap this to require samples for outdoor activity_types.
+    that don't ship GPS yet still work.
 
     `polygon` is a list of {lat, lng} dicts (the JSON shape stored in Domain.geometry_json).
     Raises 400 with a referee-style flag on mismatch."""
     if proof is None or not proof.gps or not polygon:
         return
+    inside_count = sum(
+        1 for s in proof.gps if spatial_utils.point_in_polygon(s.lng, s.lat, polygon)
+    )
+    ratio = inside_count / len(proof.gps)
+    if ratio >= 0.8 or (len(proof.gps) == 1 and inside_count == 1):
+        return
     avg_lat = sum(s.lat for s in proof.gps) / len(proof.gps)
     avg_lng = sum(s.lng for s in proof.gps) / len(proof.gps)
-    if spatial_utils.point_in_polygon(avg_lng, avg_lat, polygon):
-        return
     raise HTTPException(
         status_code=400,
         detail=(
-            f"ML Referee rejected proof ({context}): GPS centroid "
-            f"({avg_lat:.6f}, {avg_lng:.6f}) outside expected polygon."
+            f"ML Referee rejected proof ({context}): only {ratio*100:.1f}% of GPS samples "
+            f"(centroid {avg_lat:.6f}, {avg_lng:.6f}) fall inside expected polygon (80% required)."
         ),
     )
 
@@ -2980,21 +3090,26 @@ def _enforce_proof_gps_in_geofence(
     radius_m: float,
     context: str,
 ) -> None:
-    """Geofence variant of the co-location guard for circular bounty zones. Same
-    permissive contract: empty GPS channel skips the check."""
+    """Geofence variant of the co-location guard for circular bounty zones. Requires at least 80%
+    of samples to fall within the geofence radius + 20m GPS margin."""
     if proof is None or not proof.gps or radius_m <= 0:
+        return
+    allowed_radius_m = radius_m + 20.0
+    inside_count = sum(
+        1 for s in proof.gps
+        if spatial_utils.haversine_distance(s.lat, s.lng, center_lat, center_lng) * 1000.0 <= allowed_radius_m
+    )
+    ratio = inside_count / len(proof.gps)
+    if ratio >= 0.8 or (len(proof.gps) == 1 and inside_count == 1):
         return
     avg_lat = sum(s.lat for s in proof.gps) / len(proof.gps)
     avg_lng = sum(s.lng for s in proof.gps) / len(proof.gps)
     dist_km = spatial_utils.haversine_distance(avg_lat, avg_lng, center_lat, center_lng)
-    if dist_km * 1000.0 <= radius_m:
-        return
     raise HTTPException(
         status_code=400,
         detail=(
-            f"ML Referee rejected proof ({context}): GPS centroid "
-            f"({avg_lat:.6f}, {avg_lng:.6f}) is {dist_km*1000:.0f}m from geofence "
-            f"center (radius {radius_m:.0f}m)."
+            f"ML Referee rejected proof ({context}): only {ratio*100:.1f}% of GPS samples "
+            f"are within {allowed_radius_m:.0f}m geofence (centroid is {dist_km*1000:.0f}m away)."
         ),
     )
 
@@ -3037,8 +3152,7 @@ async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_
     Newly-registered merchants start `is_active=False` / `payment_status='payment_pending'`;
     they must complete the pilot-fee flow (or be activated by an admin) before they can
     create merchant_chest bounties."""
-    if db.query(models.Merchant).filter(models.Merchant.email == merchant.email).first():
-        raise HTTPException(status_code=400, detail="Merchant email already registered")
+    _check_email_unique(db, merchant.email)
     new = models.Merchant(
         name=merchant.name,
         email=merchant.email,
@@ -4087,3 +4201,8 @@ def process_challenge_settlement():
 
 # Scheduler + lifespan handler are now defined near the top of the module so FastAPI() can
 # accept lifespan= at construction time. See the @asynccontextmanager above.
+
+
+# Growth release routers. Imported last because they import shared dependencies from this
+# module; each registers its own router on `app` when its import completes.
+import growth_api  # noqa: E402,F401

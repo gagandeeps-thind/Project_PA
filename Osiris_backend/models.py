@@ -51,6 +51,9 @@ class User(Base):
     # v2 API refuses every mutation for a suspended player (see main.get_active_player).
     suspended_at = Column(DateTime, nullable=True)
     suspension_reason = Column(String, nullable=True)
+    # G4 session revocation: tokens issued (iat) before this instant are refused by the v2
+    # API. "Sign out everywhere", password change, and account erasure move it forward.
+    tokens_valid_after = Column(DateTime, nullable=True)
 
     # Relationships
     domains = relationship("Domain", back_populates="owner")
@@ -221,7 +224,7 @@ class PlatformRevenue(Base):
     created_at = Column(DateTime, default=_default_now_naive_utc)
 
 
-# --- Phase 2: Player-side Crystal Ledger (audit §3.2) ---
+# --- Player-side Crystal Ledger ---
 
 class CrystalLedger(Base):
     """Append-only, double-entry-style journal of every Mana Crystal movement on the
@@ -586,3 +589,236 @@ class AuditEvent(Base):
     entity_id = Column(Integer, nullable=True, index=True)
     details_json = Column(String, nullable=False, default="{}")
     created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+
+# --- Growth release G1: core habit loop -------------------------------------------
+
+class PlayerProfile(Base):
+    """Plain-language player profile created by the BMI-free v2 registration.
+
+    No body measurements are stored here: the goal drives quest sizing, and identity is a
+    label derived from it. `utc_offset_minutes` is the device's last reported offset, used
+    only to decide which local day a run belongs to for quests.
+    """
+    __tablename__ = "player_profiles"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    display_name = Column(String, nullable=False)
+    goal = Column(String, nullable=False, default="fitness")
+    utc_offset_minutes = Column(Integer, nullable=False, default=0)
+    # Public achievement page is opt-in. Location is never on it.
+    public_profile = Column(Boolean, nullable=False, default=False)
+    location_consent_at = Column(DateTime, nullable=True)
+    onboarding_completed_at = Column(DateTime, nullable=True)
+    referral_code = Column(String, nullable=False, unique=True, index=True)
+    referred_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Set once the referral reward has been granted (after the referee's first verified run).
+    referral_rewarded_at = Column(DateTime, nullable=True)
+    # none | pending | rewarded | capped | same_device (see growth_social referral rules)
+    referral_status = Column(String, nullable=False, default="none")
+    # Install id reported at sign-up; used only to refuse self-referral rewards.
+    signup_install_id = Column(String, nullable=True, index=True)
+    # G3: the home city the player chose (a slug such as "bedford-ns"), never derived from
+    # GPS. Local rankings group by it. Appearing by name on leaderboards is opt-in.
+    city = Column(String, nullable=True, index=True)
+    leaderboard_opt_in = Column(Boolean, nullable=False, default=False)
+    # G4: v2 registrations must grant location consent before recording a run. Players from
+    # the legacy v1 onboarding predate the consent screen and are not blocked (False).
+    consent_required = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class QuestAward(Base):
+    """One XP award per (player, quest key). The unique constraint makes quest rewards
+    idempotent no matter how many runs complete the same quest."""
+    __tablename__ = "quest_awards"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    quest_key = Column(String, nullable=False)        # daily:YYYY-MM-DD | weekly:YYYY-Www
+    rules_version = Column(String, nullable=False)
+    target_m = Column(Integer, nullable=True)
+    xp_awarded = Column(Integer, nullable=False)
+    run_session_id = Column(Integer, ForeignKey("run_sessions.id"), nullable=True)
+    awarded_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "quest_key", name="uq_quest_awards_user_key"),)
+
+
+class AnalyticsEvent(Base):
+    """Product funnel event. Server-emitted for milestones it can observe (account,
+    onboarding, first verified run, challenge join/complete, invite accepted) and
+    client-emitted for the rest (app_open, install). Never carries coordinates."""
+    __tablename__ = "analytics_events"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    install_id = Column(String, nullable=True, index=True)
+    event_name = Column(String, nullable=False, index=True)
+    source = Column(String, nullable=False, default="server")   # server | client
+    properties_json = Column(String, nullable=False, default="{}")
+    occurred_at = Column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+
+# --- Growth release G2: sharing, invites, public pages --------------------------------
+
+class ShareCard(Base):
+    """A public, unguessable link to one achievement ("I completed this route").
+
+    `stats_json` holds only what the owner agreed to show: distance, time, rank, badge.
+    Never a route, start/finish point, or map. Owners can revoke a card.
+    kind: run | challenge_result | quest | badge
+    """
+    __tablename__ = "share_cards"
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=True)
+    headline = Column(String, nullable=False)
+    stats_json = Column(String, nullable=False, default="{}")
+    challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=True)
+    view_count = Column(Integer, nullable=False, default=0)
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "kind", "entity_id", name="uq_share_cards_user_kind_entity"),)
+
+
+class ChallengeInvite(Base):
+    """Invite-a-friend link for one challenge. Carries the inviter's referral code so a
+    friend who signs up through it is linked for the referral reward."""
+    __tablename__ = "challenge_invites"
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, nullable=False, unique=True, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False, index=True)
+    inviter_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    opens = Column(Integer, nullable=False, default=0)
+    signups = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("challenge_id", "inviter_id", name="uq_challenge_invites_challenge_inviter"),)
+
+
+# --- Growth release G3: communities, seasons ------------------------------------------
+
+class Community(Base):
+    """A running club, gym, university group, trainer group, race, cafe, or workplace with
+    its own branded leaderboard, weekly team goal, and featured challenges.
+
+    Created by a player organiser. `verified` is set by an admin after checking that the
+    organisation is real; unverified communities work but show no verified mark.
+    Private communities (corporate wellness, university teams) need `join_code`.
+    status: active | suspended
+    """
+    __tablename__ = "communities"
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    brand_color = Column(String, nullable=True)       # "#RRGGBB"
+    city = Column(String, nullable=True, index=True)
+    visibility = Column(String, nullable=False, default="public")
+    join_code = Column(String, nullable=True)
+    weekly_team_goal_km = Column(Float, nullable=False, default=100.0)
+    # Non-cash partner perk shown to members, e.g. "10% off at Harbour Cafe with your badge".
+    perk_text = Column(String, nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    verified = Column(Boolean, nullable=False, default=False)
+    status = Column(String, nullable=False, default="active", index=True)
+    status_reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class CommunityMember(Base):
+    __tablename__ = "community_members"
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String, nullable=False, default="member")   # owner | admin | member
+    joined_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("community_id", "user_id", name="uq_community_members_community_user"),)
+
+
+class CommunityChallenge(Base):
+    """A challenge featured by a community (its branded challenge). Featuring never changes
+    the challenge's immutable terms."""
+    __tablename__ = "community_challenges"
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False, index=True)
+    added_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("community_id", "challenge_id", name="uq_community_challenges"),)
+
+
+class Season(Base):
+    """A time-boxed city campaign (e.g. "Bedford Autumn Season"). Players who join, and the
+    communities they belong to, are ranked by capped activity points inside the window."""
+    __tablename__ = "seasons"
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=False)
+    city = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    perk_text = Column(String, nullable=True)
+    starts_at = Column(DateTime, nullable=False)
+    ends_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class SeasonEntry(Base):
+    __tablename__ = "season_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    season_id = Column(Integer, ForeignKey("seasons.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    joined_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("season_id", "user_id", name="uq_season_entries_season_user"),)
+
+
+# --- Growth release G4: safety and trust -----------------------------------------------
+
+class ConsentRecord(Base):
+    """Append-only consent ledger. The current state lives on PlayerProfile; this table is
+    the evidence of when each choice was made and under which policy version.
+    kind: location | public_profile | leaderboard"""
+    __tablename__ = "consent_records"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    granted = Column(Boolean, nullable=False)
+    policy_version = Column(String, nullable=False)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class Report(Base):
+    """A player report about a user, challenge, course, community, or share card.
+    status: open | actioned | dismissed. `reporter_id` is cleared if the reporter erases
+    their account; the report itself is kept for the abuse record."""
+    __tablename__ = "reports"
+    id = Column(Integer, primary_key=True, index=True)
+    reporter_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    target_type = Column(String, nullable=False, index=True)
+    target_id = Column(Integer, nullable=False, index=True)
+    reason = Column(String, nullable=False)
+    details = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="open", index=True)
+    resolution_note = Column(String, nullable=True)
+    reviewed_by_admin_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+    __table_args__ = (UniqueConstraint("reporter_id", "target_type", "target_id", name="uq_reports_reporter_target"),)
+
+
+class UserBlock(Base):
+    """`blocker_id` never sees `blocked_id`'s challenges, and neither can join the other's."""
+    __tablename__ = "user_blocks"
+    id = Column(Integer, primary_key=True, index=True)
+    blocker_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    blocked_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id", name="uq_user_blocks_pair"),)

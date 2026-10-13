@@ -75,6 +75,8 @@
 
 ## Next release items
 
+The growth release (doc 11) has since delivered consent, data export and deletion, session revocation, reporting, and blocking for the v2 API.
+
 - R2 hardening: pause/resume and background tracking, privacy zones, report-a-challenge, device integrity.
 - Phase 1 platform: consent ledger, data export/deletion (PRD-009), refresh tokens, admin MFA, observability.
 - R3 crystals: blocked on the approved settlement equation (D-ECON-001 / ADR-005).

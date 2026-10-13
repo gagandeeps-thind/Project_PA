@@ -1,4 +1,4 @@
-"""Phase 2 regression suite for the named security holes (audit §2.1, §2.2, §2.5).
+"""Regression suite for the named security hardening requirements.
 
 No pytest dependency — run directly:
 
@@ -55,7 +55,7 @@ def test_webhook_fail_closed_boot():
 os.environ["OSIRIS_ENV"] = "production"
 os.environ["OSIRIS_WEBHOOK_SECRET"] = "phase2-test-webhook-secret"
 os.environ.setdefault("OSIRIS_JWT_SECRET", "phase2-test-jwt-secret-aaaaaaaaaaaaaaaaaaaa")
-# Phase 3: production now also requires Stripe config (fail-closed, audit §2.1 parity), so a
+# Production also requires Stripe config (fail-closed), so a
 # correct prod-like env must supply these too — same pattern as the secrets above.
 os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_phase2_dummy")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_phase2_dummy")

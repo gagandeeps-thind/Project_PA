@@ -106,3 +106,59 @@ export interface AuditEvent {
   details: Record<string, unknown>;
   created_at: string;
 }
+
+/* ── Growth release (G1–G4) ─────────────────────────────── */
+export interface FunnelStep {
+  step: string;
+  users: number;
+  rate_from_previous: number | null;
+}
+
+export interface Funnel {
+  window_days: number;
+  installs: number;
+  steps: FunnelStep[];
+  week1_retention: number | null;
+  week4_retention: number | null;
+  inviters: number;
+  challenges_joined: number;
+  challenges_completed: number;
+  challenge_completion_rate: number | null;
+}
+
+export interface AdminCommunity {
+  id: number;
+  slug: string;
+  name: string;
+  kind: string;
+  city: string | null;
+  verified: boolean;
+  status: string;
+  status_reason: string | null;
+  member_count: number;
+  owner_user_id: number;
+  created_at: string;
+}
+
+export interface AdminReport {
+  id: number;
+  target_type: string;
+  target_id: number;
+  target_summary: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  open_reports_on_target: number;
+  created_at: string;
+}
+
+export interface SeasonOut {
+  slug: string;
+  name: string;
+  city: string;
+  description: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  participants: number;
+}

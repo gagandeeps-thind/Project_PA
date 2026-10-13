@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
 import 'api/challenge_models.dart';
+import 'api/growth_models.dart';
 import 'api/models.dart';
 import 'services/run_upload_queue.dart';
 
@@ -42,6 +43,50 @@ final runQueueProvider = Provider<RunUploadQueue>(
 final progressionProvider = FutureProvider.autoDispose<Progression>((ref) async {
   final data = await ref.read(apiClientProvider).getProgression();
   return Progression.fromJson(data);
+});
+
+// ── Growth: install id, today, profile ─────────────────────────────────
+
+/// Random per-install id for anonymous funnel events (install, first open). Not tied to
+/// the device hardware and cleared if the app is reinstalled.
+final installIdProvider = Provider<String>((ref) {
+  final prefs = ref.read(sharedPreferencesProvider);
+  var id = prefs.getString('install_id');
+  if (id == null) {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    id = 'i-${now.toRadixString(36)}-${(now * 7919 % 1000003).toRadixString(36)}';
+    prefs.setString('install_id', id);
+    ref.read(apiClientProvider).trackEvent('app_installed', installId: id);
+  }
+  return id;
+});
+
+int localUtcOffsetMinutes() => DateTime.now().timeZoneOffset.inMinutes;
+
+/// Home screen data. Includes a starter challenge once a position is known.
+final todayProvider = FutureProvider.autoDispose<TodayData>((ref) async {
+  final pos = ref.watch(lastKnownPositionProvider);
+  final data = await ref.read(apiClientProvider).getToday(
+        lat: pos?.$1,
+        lng: pos?.$2,
+        utcOffsetMinutes: localUtcOffsetMinutes(),
+      );
+  return TodayData.fromJson(data);
+});
+
+/// Last known position, used only to suggest one nearby starter challenge. Never stored.
+final lastKnownPositionProvider =
+    NotifierProvider<LastPositionNotifier, (double, double)?>(LastPositionNotifier.new);
+
+class LastPositionNotifier extends Notifier<(double, double)?> {
+  @override
+  (double, double)? build() => null;
+
+  void set(double lat, double lng) => state = (lat, lng);
+}
+
+final myProfileV2Provider = FutureProvider.autoDispose<PlayerProfileV2>((ref) async {
+  return PlayerProfileV2.fromJson(await ref.read(apiClientProvider).getMyProfile());
 });
 
 // ── Auth State ─────────────────────────────────────────────────────────
@@ -118,26 +163,47 @@ class AuthNotifier extends Notifier<UserProfile?> {
 
   // ── Register ─────────────────────────────────────────────────────────
 
-  /// Onboard a new player then auto-login.
-  Future<void> register(
-    String email,
-    String password,
-    double weightKg,
-    double heightM,
-    String preferredPath,
-  ) async {
-    final timestamp = DateTime.now().toUtc().toIso8601String();
-    await _api.onboardUser(
-      email,
-      password,
-      weightKg,
-      heightM,
-      preferredPath,
-      timestamp,
+  /// Plain sign-up: name, email, password, a goal, and the location consent choice.
+  /// No weight, height, or BMI. Signs the player in on success.
+  Future<void> register({
+    required String email,
+    required String password,
+    required String displayName,
+    required String goal,
+    required bool locationConsent,
+    String? referralCode,
+    String? inviteToken,
+  }) async {
+    final data = await _api.registerPlayer(
+      email: email,
+      password: password,
+      displayName: displayName,
+      goal: goal,
+      locationConsent: locationConsent,
+      utcOffsetMinutes: localUtcOffsetMinutes(),
+      referralCode: referralCode,
+      inviteToken: inviteToken,
+      installId: ref.read(installIdProvider),
     );
+    final token = data['access_token'] as String;
+    final userId = (data['profile'] as Map<String, dynamic>)['user_id'] as int;
+    await _adoptToken(token, userId);
+    await _api.updateMyProfile({'onboarding_completed': true});
+  }
 
-    // Auto-login after successful registration
-    await login(email, password);
+  /// Replace the stored token (after sign-up, "sign out everywhere", or a password change).
+  Future<void> _adoptToken(String token, int userId) async {
+    _api.setToken(token);
+    await _storage.write(key: 'auth_token', value: token);
+    await _storage.write(key: 'user_id', value: userId.toString());
+    state = UserProfile.fromJson(await _api.getUserProfile(userId));
+  }
+
+  /// Sign out of every other device; this device keeps a fresh token.
+  Future<void> signOutEverywhere() async {
+    final data = await _api.revokeAllSessions();
+    final current = state;
+    if (current != null) await _adoptToken(data['access_token'] as String, current.id);
   }
 
   // ── Logout ───────────────────────────────────────────────────────────

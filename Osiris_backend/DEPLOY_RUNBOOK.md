@@ -22,7 +22,7 @@ A single container built from `Osiris_backend/Dockerfile`:
 | `STRIPE_SECRET_KEY` | always in prod (fatal if missing) | Stripe server API key (`sk_live_…` / `sk_test_…`) |
 | `STRIPE_WEBHOOK_SECRET` | always in prod (fatal if missing) | Stripe webhook signing secret (`whsec_…`) for `/payments/stripe/webhook` |
 | `STRIPE_PUBLISHABLE_KEY` | optional | `pk_…` returned to the Flutter client to init the Stripe SDK (public, not a secret) |
-| `OSIRIS_ENV` | prod | set to `production` to enforce the secrets above at boot (fail-closed, audit §2.1) |
+| `OSIRIS_ENV` | prod | set to `production` to enforce the secrets above at boot (fail-closed production setting) |
 | `OSIRIS_LOG_JSON` | containers | `1` → structured JSON access logs |
 | `OSIRIS_LOG_LEVEL` | optional | default `INFO` |
 | `OSIRIS_TELEMETRY_TTL_DAYS` | optional | raw-sample retention; `0` disables purge |

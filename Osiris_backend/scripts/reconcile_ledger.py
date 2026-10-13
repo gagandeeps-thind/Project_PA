@@ -1,4 +1,4 @@
-"""Crystal ledger backfill + reconciliation (audit §3.2).
+"""Crystal ledger backfill + reconciliation.
 
 Two modes:
 
@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, BACKEND_DIR)
 
-# The fail-closed boot check (audit §2.1) needs an explicit env for a non-prod run.
+# The fail-closed boot check needs an explicit env for a non-prod run.
 os.environ.setdefault("OSIRIS_ENV", "dev")
 
 from sqlalchemy import func  # noqa: E402

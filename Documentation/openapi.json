@@ -193,6 +193,119 @@
         "title": "AdminChallengeItem",
         "type": "object"
       },
+      "AdminCommunityItem": {
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "member_count": {
+            "title": "Member Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "title": "Owner User Id",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "kind",
+          "verified",
+          "status",
+          "member_count",
+          "owner_user_id",
+          "created_at"
+        ],
+        "title": "AdminCommunityItem",
+        "type": "object"
+      },
+      "AdminCommunityStatus": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "AdminCommunityStatus",
+        "type": "object"
+      },
       "AdminCourseStatus": {
         "properties": {
           "id": {
@@ -319,6 +432,89 @@
           "reason"
         ],
         "title": "AdminReason",
+        "type": "object"
+      },
+      "AdminReportItem": {
+        "properties": {
+          "created_at": {
+            "title": "Created At"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "open_reports_on_target": {
+            "title": "Open Reports On Target",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "target_summary": {
+            "title": "Target Summary",
+            "type": "string"
+          },
+          "target_type": {
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_type",
+          "target_id",
+          "target_summary",
+          "reason",
+          "status",
+          "open_reports_on_target",
+          "created_at"
+        ],
+        "title": "AdminReportItem",
+        "type": "object"
+      },
+      "AdminReportResolve": {
+        "properties": {
+          "all_for_target": {
+            "default": true,
+            "title": "All For Target",
+            "type": "boolean"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "note"
+        ],
+        "title": "AdminReportResolve",
         "type": "object"
       },
       "AdminReviewDecision": {
@@ -671,6 +867,57 @@
           "pressure_hpa"
         ],
         "title": "BarometerSample",
+        "type": "object"
+      },
+      "BlockCreate": {
+        "properties": {
+          "challenge_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Challenge Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          }
+        },
+        "title": "BlockCreate",
+        "type": "object"
+      },
+      "BlockOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "title": "BlockOut",
         "type": "object"
       },
       "BountyCompleteRequest": {
@@ -1189,6 +1436,291 @@
         "title": "ChallengePublic",
         "type": "object"
       },
+      "CommunityCreate": {
+        "properties": {
+          "brand_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand Color"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 3,
+            "title": "Name",
+            "type": "string"
+          },
+          "perk_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perk Text"
+          },
+          "visibility": {
+            "default": "public",
+            "title": "Visibility",
+            "type": "string"
+          },
+          "weekly_team_goal_km": {
+            "default": 100.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Weekly Team Goal Km",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "CommunityCreate",
+        "type": "object"
+      },
+      "CommunityOut": {
+        "properties": {
+          "brand_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand Color"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "join_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Code"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "member_count": {
+            "title": "Member Count",
+            "type": "integer"
+          },
+          "my_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Role"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "perk_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perk Text"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "team_goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "kind",
+          "visibility",
+          "verified",
+          "member_count"
+        ],
+        "title": "CommunityOut",
+        "type": "object"
+      },
+      "CommunityStandingRow": {
+        "properties": {
+          "average_points": {
+            "title": "Average Points",
+            "type": "integer"
+          },
+          "entered_members": {
+            "title": "Entered Members",
+            "type": "integer"
+          },
+          "is_mine": {
+            "title": "Is Mine",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rank",
+          "slug",
+          "name",
+          "average_points",
+          "entered_members",
+          "is_mine"
+        ],
+        "title": "CommunityStandingRow",
+        "type": "object"
+      },
+      "CommunityUpdate": {
+        "properties": {
+          "brand_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand Color"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "perk_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perk Text"
+          },
+          "weekly_team_goal_km": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Team Goal Km"
+          }
+        },
+        "title": "CommunityUpdate",
+        "type": "object"
+      },
       "Coordinate": {
         "properties": {
           "lat": {
@@ -1694,6 +2226,160 @@
         "title": "DomainSummary",
         "type": "object"
       },
+      "EraseRequest": {
+        "properties": {
+          "confirm": {
+            "title": "Confirm",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "confirm"
+        ],
+        "title": "EraseRequest",
+        "type": "object"
+      },
+      "EventIn": {
+        "properties": {
+          "event_name": {
+            "title": "Event Name",
+            "type": "string"
+          },
+          "install_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Id"
+          },
+          "properties": {
+            "additionalProperties": true,
+            "title": "Properties",
+            "type": "object"
+          }
+        },
+        "required": [
+          "event_name"
+        ],
+        "title": "EventIn",
+        "type": "object"
+      },
+      "FunnelResponse": {
+        "properties": {
+          "challenge_completion_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Challenge Completion Rate"
+          },
+          "challenges_completed": {
+            "title": "Challenges Completed",
+            "type": "integer"
+          },
+          "challenges_joined": {
+            "title": "Challenges Joined",
+            "type": "integer"
+          },
+          "installs": {
+            "title": "Installs",
+            "type": "integer"
+          },
+          "inviters": {
+            "title": "Inviters",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/FunnelStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "week1_retention": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week1 Retention"
+          },
+          "week4_retention": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week4 Retention"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_days",
+          "installs",
+          "steps",
+          "week1_retention",
+          "week4_retention",
+          "inviters",
+          "challenges_joined",
+          "challenges_completed",
+          "challenge_completion_rate"
+        ],
+        "title": "FunnelResponse",
+        "type": "object"
+      },
+      "FunnelStep": {
+        "properties": {
+          "rate_from_previous": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate From Previous"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          },
+          "users": {
+            "title": "Users",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "users"
+        ],
+        "title": "FunnelStep",
+        "type": "object"
+      },
       "GpsSample": {
         "properties": {
           "accuracy_m": {
@@ -1791,6 +2477,261 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InviteOut": {
+        "properties": {
+          "challenge_id": {
+            "title": "Challenge Id",
+            "type": "integer"
+          },
+          "share_text": {
+            "title": "Share Text",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "url",
+          "share_text",
+          "challenge_id"
+        ],
+        "title": "InviteOut",
+        "type": "object"
+      },
+      "InvitePreview": {
+        "properties": {
+          "app_link": {
+            "title": "App Link",
+            "type": "string"
+          },
+          "challenge_status": {
+            "title": "Challenge Status",
+            "type": "string"
+          },
+          "challenge_title": {
+            "title": "Challenge Title",
+            "type": "string"
+          },
+          "closes_at": {
+            "format": "date-time",
+            "title": "Closes At",
+            "type": "string"
+          },
+          "course_distance_km": {
+            "title": "Course Distance Km",
+            "type": "number"
+          },
+          "free_entry": {
+            "title": "Free Entry",
+            "type": "boolean"
+          },
+          "inviter_name": {
+            "title": "Inviter Name",
+            "type": "string"
+          },
+          "referral_code": {
+            "title": "Referral Code",
+            "type": "string"
+          },
+          "safety_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Notes"
+          },
+          "target_time": {
+            "title": "Target Time",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "inviter_name",
+          "challenge_title",
+          "challenge_status",
+          "course_distance_km",
+          "target_time",
+          "closes_at",
+          "free_entry",
+          "referral_code",
+          "app_link"
+        ],
+        "title": "InvitePreview",
+        "type": "object"
+      },
+      "InviteStats": {
+        "properties": {
+          "challenge_id": {
+            "title": "Challenge Id",
+            "type": "integer"
+          },
+          "challenge_title": {
+            "title": "Challenge Title",
+            "type": "string"
+          },
+          "joins": {
+            "title": "Joins",
+            "type": "integer"
+          },
+          "opens": {
+            "title": "Opens",
+            "type": "integer"
+          },
+          "signups": {
+            "title": "Signups",
+            "type": "integer"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "challenge_id",
+          "challenge_title",
+          "opens",
+          "signups",
+          "joins"
+        ],
+        "title": "InviteStats",
+        "type": "object"
+      },
+      "JoinRequest": {
+        "properties": {
+          "join_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Code"
+          }
+        },
+        "title": "JoinRequest",
+        "type": "object"
+      },
+      "Leaderboard": {
+        "properties": {
+          "my_row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LeaderboardRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "period_end": {
+            "format": "date-time",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "ranked_players": {
+            "title": "Ranked Players",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "rules_version": {
+            "title": "Rules Version",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "scoring": {
+            "title": "Scoring",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "title",
+          "period_start",
+          "period_end",
+          "rules_version",
+          "scoring",
+          "rows",
+          "ranked_players"
+        ],
+        "title": "Leaderboard",
+        "type": "object"
+      },
+      "LeaderboardRow": {
+        "properties": {
+          "active_days": {
+            "title": "Active Days",
+            "type": "integer"
+          },
+          "distance_km": {
+            "title": "Distance Km",
+            "type": "number"
+          },
+          "is_me": {
+            "title": "Is Me",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rank",
+          "name",
+          "points",
+          "active_days",
+          "distance_km",
+          "is_me"
+        ],
+        "title": "LeaderboardRow",
         "type": "object"
       },
       "MagnetometerSample": {
@@ -2080,6 +3021,26 @@
         "title": "PartyRoleResponse",
         "type": "object"
       },
+      "PasswordChange": {
+        "properties": {
+          "current_password": {
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChange",
+        "type": "object"
+      },
       "PaymentIntentResponse": {
         "description": "Returned when a merchant initiates the pilot-fee payment. `client_secret` is what the\nFlutter Stripe SDK uses to confirm the card on-device; `publishable_key` lets the client\ninit the SDK from the server's config so the pk isn't pinned in two places.",
         "properties": {
@@ -2235,6 +3196,174 @@
         "title": "PoseSummary",
         "type": "object"
       },
+      "ProfileOut": {
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "identity": {
+            "title": "Identity",
+            "type": "string"
+          },
+          "leaderboard_opt_in": {
+            "default": false,
+            "title": "Leaderboard Opt In",
+            "type": "boolean"
+          },
+          "location_consent": {
+            "title": "Location Consent",
+            "type": "boolean"
+          },
+          "onboarding_completed": {
+            "title": "Onboarding Completed",
+            "type": "boolean"
+          },
+          "public_profile": {
+            "title": "Public Profile",
+            "type": "boolean"
+          },
+          "referral_code": {
+            "title": "Referral Code",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "utc_offset_minutes": {
+            "title": "Utc Offset Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "goal",
+          "identity",
+          "public_profile",
+          "location_consent",
+          "onboarding_completed",
+          "referral_code",
+          "utc_offset_minutes"
+        ],
+        "title": "ProfileOut",
+        "type": "object"
+      },
+      "ProfileUpdate": {
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "leaderboard_opt_in": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leaderboard Opt In"
+          },
+          "location_consent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Consent"
+          },
+          "onboarding_completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarding Completed"
+          },
+          "public_profile": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Profile"
+          },
+          "utc_offset_minutes": {
+            "anyOf": [
+              {
+                "maximum": 840.0,
+                "minimum": -840.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utc Offset Minutes"
+          }
+        },
+        "title": "ProfileUpdate",
+        "type": "object"
+      },
       "ProgressionResponse": {
         "properties": {
           "badges": {
@@ -2295,6 +3424,390 @@
           "badges"
         ],
         "title": "ProgressionResponse",
+        "type": "object"
+      },
+      "PublicBadge": {
+        "properties": {
+          "awarded_at": {
+            "format": "date-time",
+            "title": "Awarded At",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "awarded_at"
+        ],
+        "title": "PublicBadge",
+        "type": "object"
+      },
+      "PublicPlayer": {
+        "properties": {
+          "badges": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBadge"
+            },
+            "title": "Badges",
+            "type": "array"
+          },
+          "challenges_won": {
+            "title": "Challenges Won",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "identity": {
+            "title": "Identity",
+            "type": "string"
+          },
+          "member_since": {
+            "format": "date-time",
+            "title": "Member Since",
+            "type": "string"
+          },
+          "performance_rank": {
+            "title": "Performance Rank",
+            "type": "string"
+          },
+          "streak_weeks": {
+            "title": "Streak Weeks",
+            "type": "integer"
+          },
+          "total_distance_km": {
+            "title": "Total Distance Km",
+            "type": "number"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "verified_runs": {
+            "title": "Verified Runs",
+            "type": "integer"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "display_name",
+          "identity",
+          "performance_rank",
+          "xp",
+          "verified_runs",
+          "total_distance_km",
+          "streak_weeks",
+          "challenges_won",
+          "badges",
+          "member_since",
+          "url"
+        ],
+        "title": "PublicPlayer",
+        "type": "object"
+      },
+      "QuestOut": {
+        "properties": {
+          "completed": {
+            "default": false,
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "optional": {
+            "title": "Optional",
+            "type": "boolean"
+          },
+          "progress_m": {
+            "default": 0.0,
+            "title": "Progress M",
+            "type": "number"
+          },
+          "rewarded": {
+            "default": false,
+            "title": "Rewarded",
+            "type": "boolean"
+          },
+          "target_m": {
+            "title": "Target M",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "title",
+          "description",
+          "target_m",
+          "xp",
+          "optional"
+        ],
+        "title": "QuestOut",
+        "type": "object"
+      },
+      "ReferralSummary": {
+        "properties": {
+          "not_rewarded": {
+            "title": "Not Rewarded",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "referral_code": {
+            "title": "Referral Code",
+            "type": "string"
+          },
+          "rewarded": {
+            "title": "Rewarded",
+            "type": "integer"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "referral_code",
+          "url",
+          "pending",
+          "rewarded",
+          "not_rewarded",
+          "rules"
+        ],
+        "title": "ReferralSummary",
+        "type": "object"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "display_name": {
+            "maxLength": 30,
+            "minLength": 2,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "goal": {
+            "default": "fitness",
+            "title": "Goal",
+            "type": "string"
+          },
+          "install_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Id"
+          },
+          "invite_token": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Token"
+          },
+          "location_consent": {
+            "default": false,
+            "title": "Location Consent",
+            "type": "boolean"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "referral_code": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referral Code"
+          },
+          "utc_offset_minutes": {
+            "default": 0,
+            "maximum": 840.0,
+            "minimum": -840.0,
+            "title": "Utc Offset Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "display_name"
+        ],
+        "title": "RegisterRequest",
+        "type": "object"
+      },
+      "RegisterResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileOut"
+          },
+          "role": {
+            "default": "player",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "profile"
+        ],
+        "title": "RegisterResponse",
+        "type": "object"
+      },
+      "ReportCreate": {
+        "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "target_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Ref"
+          },
+          "target_type": {
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "reason"
+        ],
+        "title": "ReportCreate",
+        "type": "object"
+      },
+      "ReportOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_type": {
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_type",
+          "reason",
+          "status",
+          "created_at",
+          "message"
+        ],
+        "title": "ReportOut",
         "type": "object"
       },
       "ReviewQueueItem": {
@@ -2602,6 +4115,244 @@
         "title": "RunSessionSummary",
         "type": "object"
       },
+      "SeasonCreate": {
+        "properties": {
+          "city": {
+            "maxLength": 60,
+            "minLength": 2,
+            "title": "City",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Name",
+            "type": "string"
+          },
+          "perk_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perk Text"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "city",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "SeasonCreate",
+        "type": "object"
+      },
+      "SeasonLeaderboard": {
+        "properties": {
+          "communities": {
+            "items": {
+              "$ref": "#/components/schemas/CommunityStandingRow"
+            },
+            "title": "Communities",
+            "type": "array"
+          },
+          "players": {
+            "$ref": "#/components/schemas/Leaderboard"
+          },
+          "season": {
+            "$ref": "#/components/schemas/SeasonOut"
+          }
+        },
+        "required": [
+          "season",
+          "players",
+          "communities"
+        ],
+        "title": "SeasonLeaderboard",
+        "type": "object"
+      },
+      "SeasonOut": {
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "entered": {
+            "title": "Entered",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "participants": {
+            "title": "Participants",
+            "type": "integer"
+          },
+          "perk_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perk Text"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "city",
+          "starts_at",
+          "ends_at",
+          "status",
+          "entered",
+          "participants"
+        ],
+        "title": "SeasonOut",
+        "type": "object"
+      },
+      "ShareCardOut": {
+        "properties": {
+          "challenge_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Challenge Id"
+          },
+          "challenge_open": {
+            "default": false,
+            "title": "Challenge Open",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "headline": {
+            "title": "Headline",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "share_text": {
+            "title": "Share Text",
+            "type": "string"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "title": "Stats",
+            "type": "object"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "url",
+          "kind",
+          "headline",
+          "stats",
+          "share_text",
+          "display_name",
+          "created_at"
+        ],
+        "title": "ShareCardOut",
+        "type": "object"
+      },
+      "ShareCreate": {
+        "properties": {
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "entity_id"
+        ],
+        "title": "ShareCreate",
+        "type": "object"
+      },
       "SiegeResolveRequest": {
         "properties": {
           "challenger_proof": {
@@ -2684,6 +4435,137 @@
           "message"
         ],
         "title": "SiegeResolveResponse",
+        "type": "object"
+      },
+      "TeamGoal": {
+        "properties": {
+          "active_members": {
+            "title": "Active Members",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "goal_km": {
+            "title": "Goal Km",
+            "type": "number"
+          },
+          "progress_km": {
+            "title": "Progress Km",
+            "type": "number"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start",
+          "goal_km",
+          "progress_km",
+          "completed",
+          "active_members"
+        ],
+        "title": "TeamGoal",
+        "type": "object"
+      },
+      "TodayResponse": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "identity": {
+            "title": "Identity",
+            "type": "string"
+          },
+          "needs_location_consent": {
+            "default": false,
+            "title": "Needs Location Consent",
+            "type": "boolean"
+          },
+          "performance_rank": {
+            "title": "Performance Rank",
+            "type": "string"
+          },
+          "rules_version": {
+            "title": "Rules Version",
+            "type": "string"
+          },
+          "safety_note": {
+            "title": "Safety Note",
+            "type": "string"
+          },
+          "starter_challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChallengePublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "streak_weeks": {
+            "title": "Streak Weeks",
+            "type": "integer"
+          },
+          "tagline": {
+            "title": "Tagline",
+            "type": "string"
+          },
+          "today": {
+            "$ref": "#/components/schemas/QuestOut"
+          },
+          "tomorrow": {
+            "$ref": "#/components/schemas/QuestOut"
+          },
+          "week": {
+            "$ref": "#/components/schemas/WeeklyOut"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tagline",
+          "display_name",
+          "identity",
+          "goal",
+          "xp",
+          "performance_rank",
+          "rules_version",
+          "today",
+          "tomorrow",
+          "week",
+          "streak_weeks",
+          "safety_note"
+        ],
+        "title": "TodayResponse",
+        "type": "object"
+      },
+      "TokenOut": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "message"
+        ],
+        "title": "TokenOut",
         "type": "object"
       },
       "UserCreate": {
@@ -2772,8 +4654,15 @@
             "type": "string"
           },
           "bmi": {
-            "title": "Bmi",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bmi"
           },
           "con_stat": {
             "title": "Con Stat",
@@ -2829,7 +4718,6 @@
         "required": [
           "id",
           "email",
-          "bmi",
           "avatar_class",
           "xp",
           "rank",
@@ -2973,6 +4861,54 @@
           "flags"
         ],
         "title": "VerificationResult",
+        "type": "object"
+      },
+      "WeeklyOut": {
+        "properties": {
+          "active_days": {
+            "title": "Active Days",
+            "type": "integer"
+          },
+          "active_days_target": {
+            "title": "Active Days Target",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "distance_m": {
+            "title": "Distance M",
+            "type": "number"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "rewarded": {
+            "title": "Rewarded",
+            "type": "boolean"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "week_start",
+          "active_days_target",
+          "active_days",
+          "distance_m",
+          "xp",
+          "completed",
+          "rewarded"
+        ],
+        "title": "WeeklyOut",
         "type": "object"
       }
     },
@@ -4097,6 +6033,47 @@
       }
     },
     "/api/v1/users/{user_id}": {
+      "delete": {
+        "description": "GDPR Right to Erasure (\u00a73.4): deletes user account and cascading relationships.",
+        "operationId": "delete_user_account_api_v1_users__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete User Account"
+      },
       "get": {
         "description": "Fetches the latest stats, Rank, and XP for the app dashboard. RBAC: a player can\nonly fetch their own profile; admins can fetch any. Merchants get 403 \u2014 they have no\nlegitimate reason to read player profiles.",
         "operationId": "get_user_profile_api_v1_users__user_id__get",
@@ -4139,6 +6116,49 @@
           }
         ],
         "summary": "Get User Profile"
+      }
+    },
+    "/api/v1/users/{user_id}/export": {
+      "get": {
+        "description": "GDPR Data Portability (\u00a73.4): returns user profile and activity summary.",
+        "operationId": "export_user_data_api_v1_users__user_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export User Data"
       }
     },
     "/api/v1/users/{user_id}/party-role": {
@@ -4462,6 +6482,88 @@
         "summary": "Admin Challenge Status"
       }
     },
+    "/api/v2/admin/communities": {
+      "get": {
+        "operationId": "admin_list_communities_api_v2_admin_communities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminCommunityItem"
+                  },
+                  "title": "Response Admin List Communities Api V2 Admin Communities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin List Communities"
+      }
+    },
+    "/api/v2/admin/communities/{community_id}/status": {
+      "post": {
+        "description": "Verify a real organisation, or suspend an abusive community. Reason required.",
+        "operationId": "admin_community_status_api_v2_admin_communities__community_id__status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "community_id",
+            "required": true,
+            "schema": {
+              "title": "Community Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCommunityStatus"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCommunityItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Community Status"
+      }
+    },
     "/api/v2/admin/courses/{course_id}/suspend": {
       "post": {
         "description": "Take a course off the map (e.g. unsafe or sensitive location) and suspend its live\nchallenges.",
@@ -4517,6 +6619,154 @@
         "summary": "Admin Suspend Course"
       }
     },
+    "/api/v2/admin/funnel": {
+      "get": {
+        "description": "Activation funnel and retention for players who registered in the window.\nWeek-N retention = share of the cohort (old enough to measure) with a verified run\n7N..7N+6 days after sign-up.",
+        "operationId": "admin_funnel_api_v2_admin_funnel_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FunnelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Funnel"
+      }
+    },
+    "/api/v2/admin/reports": {
+      "get": {
+        "operationId": "admin_reports_api_v2_admin_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "open",
+              "title": "Status",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminReportItem"
+                  },
+                  "title": "Response Admin Reports Api V2 Admin Reports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Reports"
+      }
+    },
+    "/api/v2/admin/reports/{report_id}/resolve": {
+      "post": {
+        "description": "Record the outcome. Enforcement (suspend a player, challenge, or community) uses the\nexisting admin controls; this closes the reports and tells reporters it was reviewed.",
+        "operationId": "admin_resolve_report_api_v2_admin_reports__report_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReportResolve"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Resolve Report"
+      }
+    },
     "/api/v2/admin/review-queue": {
       "get": {
         "operationId": "admin_review_queue_api_v2_admin_review_queue_get",
@@ -4542,6 +6792,154 @@
           }
         ],
         "summary": "Admin Review Queue"
+      }
+    },
+    "/api/v2/admin/seasons": {
+      "post": {
+        "operationId": "admin_create_season_api_v2_admin_seasons_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeasonCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Create Season"
+      }
+    },
+    "/api/v2/admin/users/{user_id}/erase": {
+      "post": {
+        "description": "Erase on a verified request received outside the app (e.g. by email).",
+        "operationId": "admin_erase_user_api_v2_admin_users__user_id__erase_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReason"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Erase User"
+      }
+    },
+    "/api/v2/admin/users/{user_id}/reset-display-name": {
+      "post": {
+        "operationId": "admin_reset_display_name_api_v2_admin_users__user_id__reset_display_name_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReason"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Reset Display Name"
       }
     },
     "/api/v2/admin/users/{user_id}/suspend": {
@@ -4640,6 +7038,126 @@
           }
         ],
         "summary": "Admin Unsuspend User"
+      }
+    },
+    "/api/v2/auth/register": {
+      "post": {
+        "description": "Plain registration: email, password, a display name, and a goal. No weight, height,\nor BMI. A referral code links the account to the inviter; the inviter's reward waits\nuntil this player completes a verified run (see G2 referral rules).",
+        "operationId": "register_player_api_v2_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Player"
+      }
+    },
+    "/api/v2/blocks": {
+      "post": {
+        "description": "Block by public handle, or block the creator of a challenge without learning who\nthey are.",
+        "operationId": "block_player_api_v2_blocks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Block Player"
+      }
+    },
+    "/api/v2/blocks/{block_id}": {
+      "delete": {
+        "operationId": "unblock_player_api_v2_blocks__block_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Unblock Player"
       }
     },
     "/api/v2/challenges": {
@@ -4898,6 +7416,51 @@
         "summary": "Get Challenge Course"
       }
     },
+    "/api/v2/challenges/{challenge_id}/invites": {
+      "post": {
+        "description": "One invite link per (challenge, inviter). Anyone may invite friends to an open\nchallenge; the link also carries the inviter's referral.",
+        "operationId": "create_challenge_invite_api_v2_challenges__challenge_id__invites_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Challenge Invite"
+      }
+    },
     "/api/v2/challenges/{challenge_id}/join": {
       "post": {
         "description": "Join while the challenge is open (PRD-007). Idempotent: joining twice returns the same\nattempt. The attempt snapshots the terms hash it agreed to.",
@@ -4941,6 +7504,452 @@
           }
         ],
         "summary": "Join Challenge"
+      }
+    },
+    "/api/v2/communities": {
+      "get": {
+        "description": "Public communities, optionally in one city or of one kind. Verified first.",
+        "operationId": "list_communities_api_v2_communities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "city",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CommunityOut"
+                  },
+                  "title": "Response List Communities Api V2 Communities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Communities"
+      },
+      "post": {
+        "description": "A club, gym, or group organiser creates their community and becomes its owner.\nOrganisers need one verified run, which keeps throwaway accounts out.",
+        "operationId": "create_community_api_v2_communities_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Community"
+      }
+    },
+    "/api/v2/communities/{slug}": {
+      "get": {
+        "operationId": "get_community_api_v2_communities__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Community"
+      },
+      "patch": {
+        "operationId": "update_community_api_v2_communities__slug__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Community"
+      }
+    },
+    "/api/v2/communities/{slug}/challenges": {
+      "get": {
+        "operationId": "community_challenges_api_v2_communities__slug__challenges_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChallengePublic"
+                  },
+                  "title": "Response Community Challenges Api V2 Communities  Slug  Challenges Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Community Challenges"
+      }
+    },
+    "/api/v2/communities/{slug}/challenges/{challenge_id}": {
+      "post": {
+        "description": "Owners and admins feature an open challenge as their community's branded challenge.",
+        "operationId": "feature_challenge_api_v2_communities__slug__challenges__challenge_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Feature Challenge"
+      }
+    },
+    "/api/v2/communities/{slug}/join": {
+      "post": {
+        "operationId": "join_community_api_v2_communities__slug__join_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Join Community"
+      }
+    },
+    "/api/v2/communities/{slug}/leaderboard": {
+      "get": {
+        "description": "This week's branded leaderboard. Members only.",
+        "operationId": "community_leaderboard_api_v2_communities__slug__leaderboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Leaderboard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Community Leaderboard"
+      }
+    },
+    "/api/v2/communities/{slug}/leave": {
+      "post": {
+        "operationId": "leave_community_api_v2_communities__slug__leave_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Leave Community"
       }
     },
     "/api/v2/courses": {
@@ -5012,6 +8021,378 @@
         "summary": "Register Course"
       }
     },
+    "/api/v2/events": {
+      "post": {
+        "description": "Client funnel events (installs, app opens, shares). Anonymous events need an\ninstall id. Server-owned milestones are rejected here so they cannot be forged.",
+        "operationId": "track_event_api_v2_events_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Track Event"
+      }
+    },
+    "/api/v2/invites/{token}": {
+      "get": {
+        "description": "Public preview of an invite. No coordinates: the exact course is shown only to\nplayers who join, as for any challenge.",
+        "operationId": "get_invite_api_v2_invites__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Invite"
+      }
+    },
+    "/api/v2/leaderboards/local": {
+      "get": {
+        "description": "This week's ranking among players who chose the same home city.",
+        "operationId": "local_leaderboard_api_v2_leaderboards_local_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Leaderboard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Local Leaderboard"
+      }
+    },
+    "/api/v2/me/blocks": {
+      "get": {
+        "operationId": "my_blocks_api_v2_me_blocks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlockOut"
+                  },
+                  "title": "Response My Blocks Api V2 Me Blocks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Blocks"
+      }
+    },
+    "/api/v2/me/communities": {
+      "get": {
+        "operationId": "my_communities_api_v2_me_communities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CommunityOut"
+                  },
+                  "title": "Response My Communities Api V2 Me Communities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Communities"
+      }
+    },
+    "/api/v2/me/erase": {
+      "post": {
+        "description": "Permanently erase the account. Needs the password and the word DELETE.",
+        "operationId": "erase_my_account_api_v2_me_erase_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EraseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Erase My Account"
+      }
+    },
+    "/api/v2/me/export": {
+      "get": {
+        "description": "Everything Osiris holds about the player, including raw route points, as JSON.",
+        "operationId": "export_my_data_api_v2_me_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export My Data"
+      }
+    },
+    "/api/v2/me/invites": {
+      "get": {
+        "description": "How each of the player's invite links performed. A join counts a friend who signed\nup through the inviter and then joined that challenge.",
+        "operationId": "my_invites_api_v2_me_invites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InviteStats"
+                  },
+                  "title": "Response My Invites Api V2 Me Invites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Invites"
+      }
+    },
+    "/api/v2/me/password": {
+      "post": {
+        "operationId": "change_password_api_v2_me_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Change Password"
+      }
+    },
+    "/api/v2/me/profile": {
+      "get": {
+        "operationId": "get_my_profile_api_v2_me_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get My Profile"
+      },
+      "put": {
+        "operationId": "update_my_profile_api_v2_me_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update My Profile"
+      }
+    },
     "/api/v2/me/progression": {
       "get": {
         "description": "Transparent progression: XP, versioned performance rank, badges, and the counts\nbehind them.",
@@ -5034,6 +8415,263 @@
           }
         ],
         "summary": "My Progression"
+      }
+    },
+    "/api/v2/me/referrals": {
+      "get": {
+        "operationId": "my_referrals_api_v2_me_referrals_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferralSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Referrals"
+      }
+    },
+    "/api/v2/me/reports": {
+      "get": {
+        "operationId": "my_reports_api_v2_me_reports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportOut"
+                  },
+                  "title": "Response My Reports Api V2 Me Reports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Reports"
+      }
+    },
+    "/api/v2/me/sessions/revoke": {
+      "post": {
+        "description": "Sign out everywhere. Returns a fresh token so this device stays signed in.",
+        "operationId": "revoke_all_sessions_api_v2_me_sessions_revoke_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke All Sessions"
+      }
+    },
+    "/api/v2/me/today": {
+      "get": {
+        "description": "The home screen in one call: today's quest, tomorrow's preview, the weekly goal,\nthe weekly streak, and one nearby starter challenge when a location is supplied.\nThe location is used for this lookup only and is not stored.",
+        "operationId": "my_today_api_v2_me_today_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lat"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lng"
+            }
+          },
+          {
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Utc Offset Minutes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Today"
+      }
+    },
+    "/api/v2/public/players/{code}": {
+      "get": {
+        "operationId": "public_player_api_v2_public_players__code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPlayer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Player"
+      }
+    },
+    "/api/v2/reports": {
+      "post": {
+        "operationId": "create_report_api_v2_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Report"
+      }
+    },
+    "/api/v2/rules": {
+      "get": {
+        "description": "Plain-language rules shown in the app before a player relies on them. Public.",
+        "operationId": "rules_api_v2_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Rules"
       }
     },
     "/api/v2/runs": {
@@ -5284,6 +8922,269 @@
           }
         ],
         "summary": "Start Run Session"
+      }
+    },
+    "/api/v2/seasons": {
+      "get": {
+        "description": "Live and upcoming seasons, for one city or the player's home city.",
+        "operationId": "list_seasons_api_v2_seasons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "city",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeasonOut"
+                  },
+                  "title": "Response List Seasons Api V2 Seasons Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Seasons"
+      }
+    },
+    "/api/v2/seasons/{slug}/join": {
+      "post": {
+        "operationId": "join_season_api_v2_seasons__slug__join_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Join Season"
+      }
+    },
+    "/api/v2/seasons/{slug}/leaderboard": {
+      "get": {
+        "operationId": "season_leaderboard_api_v2_seasons__slug__leaderboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonLeaderboard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Season Leaderboard"
+      }
+    },
+    "/api/v2/share": {
+      "post": {
+        "description": "Create (or return) the share card for one of the player's achievements.\nIdempotent per (kind, entity). A revoked card is re-activated with a fresh token.",
+        "operationId": "create_share_card_api_v2_share_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareCardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Share Card"
+      }
+    },
+    "/api/v2/share/{token}": {
+      "delete": {
+        "operationId": "revoke_share_card_api_v2_share__token__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke Share Card"
+      },
+      "get": {
+        "description": "Public: the card behind a share link. No authentication.",
+        "operationId": "get_share_card_api_v2_share__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareCardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Share Card"
       }
     }
   }

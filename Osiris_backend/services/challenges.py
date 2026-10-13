@@ -71,6 +71,11 @@ BADGES = {
     "FIRST_CHALLENGE_PUBLISHED": "Published a challenge",
     "FIRST_CHALLENGE_WIN": "Won a challenge",
     "FIRST_DEFENSE": "Defended a course",
+    # Growth release badges (quests, sharing, referrals).
+    "FIRST_DAILY_QUEST": "Completed a daily quest",
+    "FIRST_WEEKLY_GOAL": "Met a weekly goal",
+    "RECRUITER": "Brought a friend to their first verified run",
+    "WELCOMED": "Joined through a friend's invite",
 }
 
 # Performance ladder (Domain spec §4). Based on verified-activity XP only.

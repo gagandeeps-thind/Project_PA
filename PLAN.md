@@ -1,0 +1,48 @@
+# PLAN
+
+## Goal
+Get every check that CI runs green locally, and close the coverage and tooling gaps found while
+setting the repo up for autonomous agent work (2026-10-12).
+
+## Constraints
+- Follow CLAUDE.md: one item per commit, gate green, conventional commit on a feature branch, never push to main/master.
+- Items marked `[human]` touch danger zones (CI, migrations, lockfiles, .env, Dockerfile, deploy runbook) and need a human.
+- The working tree contains uncommitted mixed WIP from earlier sessions. Do not commit files unrelated to the item.
+
+## Tasks
+
+- [ ] backend: diagnose the crystal ledger reconciliation failure
+  - `python scripts/reconcile_ledger.py --check` fails on the dev DB (seen: `challenger.09270021@example.com` ledger 200 vs wallet 100;
+    `growth_g3_test_seeker@example.com` ledger 100 vs wallet 0). The count changed while the test suites ran.
+  - Determine whether a code path writes `mana_crystals` without `services.ledger.apply_crystal_delta`, or whether test cleanup deletes users/ledger rows partially.
+  - Acceptance: a written root cause in the commit body, plus a failing-then-passing regression test in the owning suite.
+    After running all 13 CI suites, `reconcile_ledger.py --check` exits 0 for every user the suites create.
+
+- [ ] backend: resolve the OpenAPI contract drift
+  - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.
+  - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
+    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contains only intended changes.
+
+- [ ] [human] ci: add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
+  - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
+  - Acceptance: the CI job runs the suite and it passes.
+
+- [ ] [human] ci: add jobs for `Osiris_admin_web` (`npm run build`) and `Osiris_customer` (`flutter analyze`, `flutter test`)
+  - Today CI covers the backend only. Both commands pass locally.
+  - Acceptance: a pull request that touches either app runs its job, and the job passes.
+
+- [ ] admin web: remove dead Vite template files
+  - `index.html` loads `/src/main.tsx`; `src/main.ts`, `src/counter.ts`, `src/style.css` are only referenced by each other.
+  - Acceptance: files deleted, `npm run build` passes, the dev server renders the login page.
+
+- [ ] backend: make mypy clean for `spatial_utils.py` and `ml_referee.py`
+  - CI's mypy step is `continue-on-error` and currently reports 640 errors in 6 files.
+  - Acceptance: the CI mypy command reports zero errors located in these two files; behaviour is unchanged and all backend suites still pass.
+
+- [ ] [human] tooling: decide on formatters (`ruff format` for the backend, `dart format` for the apps)
+  - None are adopted (`ruff.toml` defers formatting). `.claude/hooks/format.sh` is a no-op until one is chosen.
+  - Acceptance: decision recorded; if adopted, a one-off formatting commit, then format.sh and CLAUDE.md are updated with the command.
+
+- [ ] [human] tooling: decide on lint and tests for `Osiris_admin_web`
+  - There is no ESLint config and no test runner; only `tsc` (via `npm run build`) guards it.
+  - Acceptance: decision recorded; if adopted, the scripts are added to `package.json` and wired into the gate.

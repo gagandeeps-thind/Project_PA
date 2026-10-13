@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- API access in every build type (debug/profile manifests add it only for tooling). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Run recording (PRD-002). Foreground only in this release; background tracking
+         needs ACCESS_BACKGROUND_LOCATION + a foreground service and its own consent. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
-        android:label="osiris_customer"
+        android:label="Osiris"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

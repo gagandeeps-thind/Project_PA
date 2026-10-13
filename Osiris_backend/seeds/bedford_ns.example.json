@@ -1,0 +1,106 @@
+{
+  "_note": "EXAMPLE ONLY. Placeholder straight-line geometry and fictional organisations. Replace every route with one walked on the ground (lit, public paths, 150 m lead-in at each end) and every community with a real partner who has agreed to be listed.",
+  "city": "Bedford NS",
+  "official_email": "official@osiris.invalid",
+  "routes": [
+    {
+      "name": "Starter Walk 1 km",
+      "challenge_title": "Starter quest: walk 1 km",
+      "waypoints": [
+        [
+          44.73,
+          -63.66
+        ],
+        [
+          44.741691,
+          -63.66
+        ]
+      ],
+      "benchmark_pace_s_per_km": 720,
+      "window_days": 30,
+      "safety_notes": "Walking pace is fine. Stay on the path and watch for cyclists."
+    },
+    {
+      "name": "Waterfront 2 km",
+      "challenge_title": "Waterfront 2 km",
+      "waypoints": [
+        [
+          44.72,
+          -63.65
+        ],
+        [
+          44.729893,
+          -63.65
+        ],
+        [
+          44.729893,
+          -63.634809
+        ]
+      ],
+      "benchmark_pace_s_per_km": 420,
+      "window_days": 30,
+      "safety_notes": "Shared path. Keep right and slow down near the playground."
+    },
+    {
+      "name": "Hillside 3 km",
+      "challenge_title": "Hillside 3 km",
+      "waypoints": [
+        [
+          44.715,
+          -63.67
+        ],
+        [
+          44.730288,
+          -63.67
+        ],
+        [
+          44.730288,
+          -63.649746
+        ]
+      ],
+      "benchmark_pace_s_per_km": 390,
+      "window_days": 30,
+      "safety_notes": "Some road crossings. Use the lights and run facing traffic where there is no sidewalk."
+    }
+  ],
+  "communities": [
+    {
+      "name": "Example Harbour Run Club",
+      "kind": "running_club",
+      "brand_color": "#0E7490",
+      "weekly_team_goal_km": 150,
+      "description": "Tuesday and Saturday group runs. All paces welcome.",
+      "featured_routes": [
+        "Waterfront 2 km"
+      ]
+    },
+    {
+      "name": "Example Strength Gym",
+      "kind": "gym",
+      "brand_color": "#B45309",
+      "weekly_team_goal_km": 80,
+      "description": "Members' outdoor challenge board.",
+      "perk_text": "Show your Osiris badge at the front desk for a free guest pass.",
+      "featured_routes": [
+        "Starter Walk 1 km",
+        "Hillside 3 km"
+      ]
+    },
+    {
+      "name": "Example Workplace Wellness",
+      "kind": "corporate",
+      "visibility": "private",
+      "weekly_team_goal_km": 60,
+      "description": "Lunchtime walks for our team.",
+      "featured_routes": [
+        "Starter Walk 1 km"
+      ]
+    }
+  ],
+  "season": {
+    "name": "Bedford Autumn Season",
+    "starts_at": "2026-10-01T00:00:00",
+    "ends_at": "2026-12-01T00:00:00",
+    "description": "Eight weeks of local quests. Every active week counts."
+  }
+}

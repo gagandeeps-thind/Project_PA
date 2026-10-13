@@ -25,11 +25,19 @@ class LocationService {
       );
     }
 
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-      ),
-    );
+    // Without a time limit this waits forever when there is no fix (indoors, emulator).
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+    } on TimeoutException {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return last;
+      throw Exception('Could not get a GPS fix. Move somewhere with a clear view of the sky and try again.');
+    }
   }
 
   /// Stream of position updates for live tracking.

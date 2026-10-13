@@ -257,7 +257,12 @@ class _ProgressionCard extends ConsumerWidget {
                 ]),
                 if (next != null) ...[
                   const SizedBox(height: 8),
-                  LinearProgressIndicator(value: (p.xp / next).clamp(0.0, 1.0), minHeight: 6),
+                  LinearProgressIndicator(
+                    value: (p.xp / next).clamp(0.0, 1.0),
+                    minHeight: 6,
+                    color: Colors.amber,
+                    backgroundColor: Colors.white12,
+                  ),
                 ],
                 const SizedBox(height: 12),
                 Text('${p.verifiedRuns} verified runs • ${p.courses} courses • '

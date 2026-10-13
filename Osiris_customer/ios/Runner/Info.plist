@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Osiris records your route while you run so it can verify the run and time challenge attempts. Your exact route stays private.</string>
 </dict>
 </plist>

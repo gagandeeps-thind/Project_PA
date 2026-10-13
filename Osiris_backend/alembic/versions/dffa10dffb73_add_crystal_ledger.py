@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Create the player-side crystal_ledger journal (audit §3.2)."""
+    """Create the player-side crystal_ledger journal."""
     op.create_table(
         'crystal_ledger',
         sa.Column('id', sa.Integer(), nullable=False),

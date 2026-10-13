@@ -1,7 +1,7 @@
 name: backend-ci
 
 # Phase 0 build baseline. Nothing in later phases merges without this pipeline passing.
-# Gate order (per the Delegation Playbook): lint -> type-check -> tests -> build image ->
+# Gate order: lint -> type-check -> tests -> build image ->
 # OpenAPI drift check against the committed contract.
 
 on:
@@ -23,7 +23,7 @@ jobs:
     env:
       # Deterministic test env. A fixed JWT secret keeps tokens stable across the run.
       # OSIRIS_ENV=test marks an explicit dev/test environment so the fail-closed webhook
-      # boot check (audit §2.1) does not demand a webhook secret for the test job.
+      # The boot check does not demand a webhook secret for the test job.
       OSIRIS_JWT_SECRET: ci-fixed-secret-not-for-production-use-only
       OSIRIS_ENV: test
       OSIRIS_LOG_JSON: "1"
@@ -52,7 +52,7 @@ jobs:
         run: python -m alembic upgrade head
 
       - name: Crystal ledger reconciliation (sum(deltas) == mana_crystals for every user)
-        # Money-path invariant gate (audit §3.2). Runs after migrations on the seed world;
+        # Money-path invariant gate. Runs after migrations on the seed world;
         # any user whose ledger does not reconcile fails the build.
         run: python scripts/reconcile_ledger.py --check
 
@@ -82,6 +82,18 @@ jobs:
 
       - name: Tests — R2 course and challenge suite
         run: python tests/test_challenge_release.py
+
+      - name: Tests — Growth G1 quests, streaks, funnel
+        run: python tests/test_growth_core_loop.py
+
+      - name: Tests — Growth G2 sharing, invites, referrals, public pages
+        run: python tests/test_growth_sharing.py
+
+      - name: Tests — Growth G3 communities, rankings, seasons, city seeding
+        run: python tests/test_growth_communities.py
+
+      - name: Tests — Growth G4 consent, reports, blocks, sessions, export and erasure
+        run: python tests/test_growth_safety.py
 
       - name: Crystal ledger reconciliation after suites (challenges must not touch crystals)
         run: python scripts/reconcile_ledger.py --check

@@ -6,7 +6,12 @@ class ApiClient {
   late final Dio _dio;
   String? _accessToken;
 
-  ApiClient({String baseUrl = 'http://10.0.2.2:8000'}) {
+  void Function()? onUnauthorized;
+
+  ApiClient({
+    String baseUrl = const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000'),
+    this.onUnauthorized,
+  }) {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 15),
@@ -21,6 +26,12 @@ class ApiClient {
           options.headers['Authorization'] = 'Bearer $_accessToken';
         }
         return handler.next(options);
+      },
+      onError: (DioException error, handler) {
+        if (error.response?.statusCode == 401) {
+          onUnauthorized?.call();
+        }
+        return handler.next(error);
       },
     ));
   }

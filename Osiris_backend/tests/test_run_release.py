@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..")))
 from fastapi.testclient import TestClient
 
 import database
+import growth_api
 import main
 import models
 
@@ -41,6 +42,7 @@ def _cleanup() -> None:
                 db.query(models.RoutePoint).filter(models.RoutePoint.run_session_id.in_(run_ids)).delete(synchronize_session=False)
             db.query(models.RunSession).filter(models.RunSession.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.ActivityLog).filter(models.ActivityLog.user_id.in_(ids)).delete(synchronize_session=False)
+            growth_api.delete_growth_data(db, ids)
             db.query(models.User).filter(models.User.id.in_(ids)).delete(synchronize_session=False)
         db.commit()
     finally:

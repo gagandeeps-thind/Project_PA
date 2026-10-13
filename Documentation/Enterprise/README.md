@@ -4,7 +4,7 @@
 **Date:** 2026-09-23  
 **Scope:** Osiris health-improvement platform, starting with GPS-verified running challenges
 
-This directory is the current startup-level source of truth for the next product direction. Existing prototype documents remain useful historical references; where they conflict with this package, the decision log and approved product requirements in this directory take precedence.
+This directory is the maintained startup-level source of truth for Osiris. Obsolete prototype material has been removed; the decision log and approved product requirements in this directory govern implementation.
 
 ## Document map
 
@@ -19,6 +19,8 @@ This directory is the current startup-level source of truth for the next product
 | [07 End-to-End Delivery Backlog](07_End-to-End_Delivery_Backlog.md) | Sequenced implementation plan and acceptance gates |
 | [08 Operations and Incident Runbook](08_Operations_and_Incident_Runbook.md) | Monitoring, support, incident response, rollback, and launch readiness |
 | [09 Architecture Decision Records](09_Architecture_Decision_Records.md) | Decisions that prevent drift and re-litigation |
+| [10 First Release Status](10_First_Release_Status.md) | R0–R2 verified running and challenge pilot: delivered scope and residual risks |
+| [11 Growth Release Status](11_Growth_Release_Status.md) | Daily quests, sharing, referrals, clubs, rankings, seasons, and trust controls |
 
 ## Product north star
 

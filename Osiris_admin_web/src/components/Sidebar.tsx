@@ -8,10 +8,12 @@ import {
   MapPin,
   ShieldCheck,
   LogOut,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 import type { AdminUser } from "../api/types";
 
-export type PageKey = "dashboard" | "trust" | "merchants" | "bounties";
+export type PageKey = "dashboard" | "growth" | "community" | "trust" | "merchants" | "bounties";
 
 interface SidebarProps {
   activePage: PageKey;
@@ -22,6 +24,8 @@ interface SidebarProps {
 
 const navItems: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "growth", label: "Growth", icon: TrendingUp },
+  { key: "community", label: "Community", icon: Users },
   { key: "trust", label: "Trust & Safety", icon: ShieldCheck },
   { key: "merchants", label: "Merchants", icon: Store },
   { key: "bounties", label: "Bounties", icon: MapPin },

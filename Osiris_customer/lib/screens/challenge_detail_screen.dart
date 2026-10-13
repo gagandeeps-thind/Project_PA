@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_error.dart';
 import '../api/challenge_models.dart';
 import '../providers.dart';
+import '../services/share_helper.dart';
 import '../theme.dart';
 
 /// Challenge terms, join, course preview (after joining), and the player's result.
@@ -75,11 +76,51 @@ class _ChallengeDetailScreenState extends ConsumerState<ChallengeDetailScreen> {
     }
   }
 
+  Future<void> _safetyAction(String action) async {
+    final api = ref.read(apiClientProvider);
+    try {
+      String message;
+      if (action == 'block') {
+        await api.blockChallengeCreator(_id!);
+        message = "Blocked. You won't see this player's challenges.";
+      } else {
+        final res = await api.report(targetType: 'challenge', targetId: _id, reason: action);
+        message = res['message'] as String;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      if (action == 'block') Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiError.getMessage(e)), backgroundColor: OsirisTheme.error),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = _challenge;
     return Scaffold(
-      appBar: AppBar(title: const Text('CHALLENGE')),
+      appBar: AppBar(title: const Text('CHALLENGE'), actions: [
+        if (c != null && c.status == 'open')
+          IconButton(
+            icon: const Icon(Icons.person_add_alt),
+            tooltip: 'Invite a friend',
+            onPressed: () => ShareHelper.inviteToChallenge(context, ref, c.id),
+          ),
+        if (c != null && !c.isMine)
+          PopupMenuButton<String>(
+            onSelected: _safetyAction,
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'unsafe_route', child: Text('Report unsafe route')),
+              PopupMenuItem(value: 'cheating', child: Text('Report cheating')),
+              PopupMenuItem(value: 'inappropriate_name', child: Text('Report offensive title')),
+              PopupMenuItem(value: 'block', child: Text('Block this player')),
+            ],
+          ),
+      ]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -217,6 +258,15 @@ class _ChallengeDetailScreenState extends ConsumerState<ChallengeDetailScreen> {
             ],
             if (a.courseCoverage != null) _row('On course', '${(a.courseCoverage! * 100).round()}%'),
             if (a.xpAwarded > 0) _row('XP earned', '+${a.xpAwarded}'),
+            if (a.status == 'accepted' && (a.outcome == 'won' || a.outcome == 'lost'))
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => ShareHelper.shareAchievement(context, ref, 'challenge_result', a.id),
+                  icon: const Icon(Icons.ios_share, size: 18),
+                  label: const Text('SHARE RESULT'),
+                ),
+              ),
             for (final r in a.reasonCodes)
               Padding(
                 padding: const EdgeInsets.only(top: 6),

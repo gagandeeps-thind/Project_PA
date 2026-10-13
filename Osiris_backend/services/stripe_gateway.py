@@ -13,7 +13,7 @@ Config (env vars — never hard-coded, never committed):
   STRIPE_WEBHOOK_SECRET    whsec_...                   webhook signature verification
   STRIPE_PUBLISHABLE_KEY   pk_test_... / pk_live_...   handed to the Flutter client (public)
 
-Fail-closed (audit §2.1 parity): in a non-dev OSIRIS_ENV, a missing STRIPE_SECRET_KEY or
+Fail-closed security baseline: in a non-dev OSIRIS_ENV, a missing STRIPE_SECRET_KEY or
 STRIPE_WEBHOOK_SECRET makes the app refuse to boot rather than silently disable real
 payments or accept forgeable webhooks. In an explicit dev/test OSIRIS_ENV the gateway is
 simply DISABLED (`STRIPE_ENABLED is False`) and the payment endpoints return 503 — local
@@ -44,7 +44,7 @@ if STRIPE_SECRET_KEY:
 
 
 def assert_boot_config() -> None:
-    """Fail-closed boot check (audit §2.1 parity). Call this from app startup, NOT at import —
+    """Fail-closed boot check. Call this from app startup, NOT at import —
     keeping import side-effect-free means this module never preempts main.py's own JWT/webhook
     boot checks (their error messages must surface first). In a non-dev OSIRIS_ENV a missing
     STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET raises, so a deploy that forgot the keys refuses
@@ -62,7 +62,7 @@ def assert_boot_config() -> None:
             f"Stripe is not fully configured (missing {missing}). These are REQUIRED unless "
             f"OSIRIS_ENV is one of {sorted(_DEV_ENVS)}. An unset or unknown OSIRIS_ENV is treated "
             "as production: the app refuses to boot rather than silently disable real payments or "
-            "accept forgeable webhooks (audit §2.1 parity). For local development set OSIRIS_ENV=dev. "
+            "accept forgeable webhooks. For local development set OSIRIS_ENV=dev. "
             "Get the secret key from the Stripe Dashboard (Developers -> API keys) and the webhook "
             "signing secret from the Webhooks page; set both via environment variables / .env."
         )

@@ -1,4 +1,4 @@
-"""Phase 2 money-path tests: player-side Crystal Ledger (audit §3.2) + the §3.1
+"""Money-path tests: player-side Crystal Ledger + the
 free-tier time-trial conquest bug.
 
 No pytest dependency — run directly:
@@ -29,7 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BACKEND = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, BACKEND)
 
-# Phase 2 fail-closed boot check (audit §2.1) requires an explicit dev/test env.
+# Fail-closed boot check requires an explicit dev/test env.
 os.environ.setdefault("OSIRIS_ENV", "test")
 os.environ.setdefault("OSIRIS_JWT_SECRET", "phase2-ledger-test-secret-aaaaaaaaaaaaaaaa")
 

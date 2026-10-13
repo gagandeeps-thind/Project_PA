@@ -1,12 +1,12 @@
 # Osiris Quick Start Guide
 
-This project consists of three main applications and a central backend:
+This project consists of a customer mobile app, an admin console, an optional partner app, and a central backend:
 
 ## Project Structure
 - `Osiris_backend/`: FastAPI backend server. Handles core logic, payments, and connects to the SQLite db (`fitness_mvp.db`).
 - `Osiris_admin_web/`: Vite/React admin panel for managing the ecosystem.
-- `Osiris_customer/`: Flutter mobile app for players (customers) to claim territories and engage in fitness activities.
-- `Osiris_merchant/`: Flutter mobile app for merchants to issue bounties, check analytics, and manage their store presence in the game.
+- `Osiris_customer/`: Flutter mobile app for players to complete verified runs, quests, courses, challenges, communities, and progression.
+- `Osiris_merchant/`: Future partner app retained for sponsor/merchant functionality; it is not required for the first player release.
 
 ## Prerequisites
 - Node.js & npm (for Admin Web)
@@ -31,7 +31,7 @@ npm install
 npm run dev
 ```
 
-### 3. Mobile Apps (Customer & Merchant)
+### 3. Customer Mobile App
 First, ensure an Android emulator is running:
 ```sh
 flutter emulators --launch test_device
@@ -40,15 +40,10 @@ flutter emulators --launch test_device
 
 Then, to run the apps:
 ```sh
-# For Customer App:
+# Customer app:
 cd Osiris_customer
-flutter run -d emulator-5554
-
-# For Merchant App:
-cd Osiris_merchant
 flutter run -d emulator-5554
 ```
 
 ## Troubleshooting
-- If `Osiris_merchant` fails to run complaining about a missing `lib/main.dart`, ensure that it is restored (as it may have been deleted during previous architecture audits).
-- For API issues on the Android emulator, check `Osiris_frontend/lib/api/api_client.dart` to make sure the base URL points to `http://10.0.2.2:8000` (which loops back to localhost on the host machine).
+- For API issues on the Android emulator, check `Osiris_customer/lib/api/api_client.dart` and confirm the base URL is `http://10.0.2.2:8000`.

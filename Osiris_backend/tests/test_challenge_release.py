@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..")))
 from fastapi.testclient import TestClient
 
 import database
+import growth_api
 import main
 import models
 from services import challenges as rules
@@ -100,6 +101,7 @@ def _cleanup() -> None:
             db.query(models.RunSession).filter(models.RunSession.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.ActivityLog).filter(models.ActivityLog.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id.in_(ids)).delete(synchronize_session=False)
+            growth_api.delete_growth_data(db, ids)
             db.query(models.User).filter(models.User.id.in_(ids)).delete(synchronize_session=False)
         db.query(models.Admin).filter(models.Admin.email == ADMIN_EMAIL).delete(synchronize_session=False)
         db.commit()

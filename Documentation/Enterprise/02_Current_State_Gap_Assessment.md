@@ -35,7 +35,7 @@ The repository is a useful prototype foundation, not yet the target startup prod
 ## Existing documentation conflicts to resolve
 
 1. Rank names vary between physical grade, peerage, and user-requested bronze/silver/gold. Use one product-facing ladder and keep territory titles separate.
-2. Economy percentages differ across `Imp_and_US.md`, current backend constants, and the new request. Do not code new settlement until [03](03_Domain_and_Economy_Specification.md) decision D-ECON-001 is approved.
+2. Economy percentages differ across legacy prototype notes, current backend constants, and the new request. Do not code new settlement until [03](03_Domain_and_Economy_Specification.md) decision D-ECON-001 is approved.
 3. Older documents describe UK GDPR for a Nova Scotia pilot. The current privacy baseline should be PIPEDA/Canadian privacy counsel-led, with a reusable extension for other regions.
 4. BMI/avatar logic is not a health or fitness truth and should not drive rank or user treatment.
 5. “ML verified” is stronger than the current client-supplied heuristic evidence supports. Product copy must say “verified under current checks” until the anti-cheat evidence chain is strengthened.

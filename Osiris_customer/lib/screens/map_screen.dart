@@ -7,8 +7,10 @@ import 'package:latlong2/latlong.dart';
 
 import '../api/api_error.dart';
 import '../api/challenge_models.dart';
+import '../api/growth_models.dart';
 import '../providers.dart';
 import '../services/location_service.dart';
+import '../services/share_helper.dart';
 import '../theme.dart';
 
 /// Run screen: live route recording, challenge course overlay, and nearby challenge
@@ -77,14 +79,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     try {
       final pos = await LocationService.getCurrentLocation();
       if (!mounted) return;
+      // The map is not in the tree until loading ends, so it takes this fix as its
+      // initialCenter; calling MapController.move here would throw.
       setState(() {
         _currentPos = LatLng(pos.latitude, pos.longitude);
         _loadingLocation = false;
       });
-      _mapCtrl.move(_currentPos!, 16);
       unawaited(_fetchNearby());
 
       _locationSub = LocationService.getLocationStream().listen((pos) {
+        if (!mounted) return;
         final newPos = LatLng(pos.latitude, pos.longitude);
         setState(() => _currentPos = newPos);
         if (_isTracing) {
@@ -220,7 +224,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (run.challengeId != null) {
         await _submitToChallenge(run.challengeId!, run.runId);
       } else {
-        await _offerCourse(run.runId, result);
+        await _celebrate(run.runId, result);
+        if (mounted) await _offerCourse(run.runId, result);
       }
     } catch (e) {
       _snack(ApiError.getMessage(e), OsirisTheme.error);
@@ -251,21 +256,61 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  /// Clear, immediate payoff after a verified run: distance, XP, quest status, what comes
+  /// tomorrow, and a one-tap share.
+  Future<void> _celebrate(int runId, Map<String, dynamic> result) async {
+    TodayData? today;
+    try {
+      today = TodayData.fromJson(await ref.read(apiClientProvider).getToday());
+    } catch (_) {}
+    ref.invalidate(todayProvider);
+    if (!mounted) return;
+    final questDone = today?.today.completed ?? false;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: OsirisTheme.surface,
+        title: Row(children: [
+          const Icon(Icons.celebration, color: OsirisTheme.conColor),
+          const SizedBox(width: 8),
+          Text(questDone ? 'Quest complete!' : 'Run verified'),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${formatDistance((result['distance_m'] as num).toDouble())} in '
+              '${formatDuration((result['duration_seconds'] as num).toDouble())}',
+              style: Theme.of(ctx).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text('+${result['xp_awarded']} XP', style: const TextStyle(color: OsirisTheme.secondary)),
+          if (today != null) ...[
+            const SizedBox(height: 12),
+            Text('This week: ${today.week.activeDays} of ${today.week.activeDaysTarget} active days'),
+            const SizedBox(height: 4),
+            Text('Tomorrow: ${today.tomorrow.title}', style: const TextStyle(color: Colors.white70)),
+          ],
+        ]),
+        actions: [
+          TextButton.icon(
+            onPressed: () => ShareHelper.shareAchievement(ctx, ref, 'run', runId),
+            icon: const Icon(Icons.ios_share),
+            label: const Text('SHARE'),
+          ),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('NICE')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _offerCourse(int runId, Map<String, dynamic> result) async {
     final ctrl = TextEditingController();
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: OsirisTheme.surface,
-        title: const Text('Run verified'),
+        title: const Text('Make it a challenge?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${formatDistance((result['distance_m'] as num).toDouble())} in '
-                '${formatDuration((result['duration_seconds'] as num).toDouble())}  •  '
-                '+${result['xp_awarded']} XP'),
-            const SizedBox(height: 16),
             const Text('Register this route as a course others can challenge? '
                 'The first and last 150 m are trimmed off for your privacy.'),
             const SizedBox(height: 12),

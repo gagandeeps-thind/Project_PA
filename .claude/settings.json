@@ -1,0 +1,97 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(pip install -r requirements.lock.txt -r requirements-dev.txt:*)",
+      "Bash(ruff check .:*)",
+      "Bash(mypy --ignore-missing-imports --no-strict-optional main.py models.py spatial_utils.py ml_referee.py:*)",
+      "Bash(python -m alembic upgrade head:*)",
+      "Bash(python scripts/reconcile_ledger.py --check:*)",
+      "Bash(python scripts/check_openapi_drift.py:*)",
+      "Bash(python scripts/export_openapi.py:*)",
+      "Bash(python tests/test_ml_referee.py:*)",
+      "Bash(python tests/test_v2_10_flows.py:*)",
+      "Bash(python tests/test_phase2_security.py:*)",
+      "Bash(python tests/test_phase3_stripe.py:*)",
+      "Bash(python tests/test_phase2_ledger.py:*)",
+      "Bash(python tests/test_replay_guard.py:*)",
+      "Bash(python tests/test_party_stats.py:*)",
+      "Bash(python tests/test_run_release.py:*)",
+      "Bash(python tests/test_challenge_release.py:*)",
+      "Bash(python tests/test_growth_core_loop.py:*)",
+      "Bash(python tests/test_growth_sharing.py:*)",
+      "Bash(python tests/test_growth_communities.py:*)",
+      "Bash(python tests/test_growth_safety.py:*)",
+      "Bash(python tests/test_mvp_gdpr_and_email_uniqueness.py:*)",
+      "Bash(docker build -t osiris-backend:ci Osiris_backend:*)",
+      "Bash(..\\.venv\\Scripts\\uvicorn.exe main:app --reload --host 0.0.0.0:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run preview:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter test:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter build apk --debug:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin master:*)",
+      "Bash(rm -rf:*)",
+      "Read(.env*)",
+      "Read(**/.env*)",
+      "Read(**/*secret*)",
+      "Edit(**/.env*)",
+      "Write(**/.env*)",
+      "Edit(**/alembic/versions/**)",
+      "Write(**/alembic/versions/**)",
+      "Edit(**/alembic.ini)",
+      "Edit(**/*.db)",
+      "Write(**/*.db)",
+      "Edit(**/requirements.lock.txt)",
+      "Write(**/requirements.lock.txt)",
+      "Edit(**/package-lock.json)",
+      "Write(**/package-lock.json)",
+      "Edit(**/pubspec.lock)",
+      "Write(**/pubspec.lock)",
+      "Edit(**/.github/workflows/**)",
+      "Write(**/.github/workflows/**)",
+      "Edit(**/Dockerfile)",
+      "Write(**/Dockerfile)",
+      "Edit(**/DEPLOY_RUNBOOK.md)",
+      "Write(**/DEPLOY_RUNBOOK.md)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh\"" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\"" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.sh\"", "timeout": 600 }
+        ]
+      }
+    ]
+  }
+}

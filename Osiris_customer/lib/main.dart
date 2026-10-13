@@ -15,6 +15,10 @@ import 'screens/my_courses_screen.dart';
 import 'screens/bounty_detail_screen.dart';
 import 'screens/vault_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/today_screen.dart';
+import 'screens/communities_screen.dart';
+import 'screens/rankings_screen.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,12 +55,16 @@ class OsirisCustomerApp extends StatelessWidget {
         '/bounty-detail': (_) => const BountyDetailScreen(),
         '/vault': (_) => const VaultScreen(),
         '/profile': (_) => const ProfileScreen(),
+        '/today': (_) => const TodayScreen(),
+        '/communities': (_) => const CommunitiesScreen(),
+        '/rankings': (_) => const RankingsScreen(),
+        '/settings': (_) => const SettingsScreen(),
       },
     );
   }
 }
 
-/// Root wrapper that shows Dashboard if logged in, Login otherwise.
+/// Root wrapper: today's quest when signed in, sign-in otherwise.
 class AuthWrapper extends ConsumerWidget {
   const AuthWrapper({super.key});
 
@@ -65,7 +73,7 @@ class AuthWrapper extends ConsumerWidget {
     final user = ref.watch(authProvider);
 
     if (user != null) {
-      return const DashboardScreen();
+      return const TodayScreen();
     }
 
     return const LoginScreen();

@@ -1,4 +1,4 @@
-"""Player-side Mana Crystal ledger service (audit §3.2).
+"""Player-side Mana Crystal ledger service.
 
 This module is the SINGLE authorized writer of `User.mana_crystals`. Every crystal
 movement on the player side goes through `apply_crystal_delta`, which:
