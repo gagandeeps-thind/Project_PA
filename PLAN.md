@@ -43,7 +43,7 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Today CI covers the backend only. Both commands pass locally.
   - Acceptance: a pull request that touches either app runs its job, and the job passes.
 
-- [ ] admin web: remove dead Vite template files
+- [x] admin web: remove dead Vite template files
   - `index.html` loads `/src/main.tsx`; `src/main.ts`, `src/counter.ts`, `src/style.css` are only referenced by each other.
   - Acceptance: files deleted, `npm run build` passes, the dev server renders the login page.
 
