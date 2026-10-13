@@ -69,6 +69,10 @@ setting the repo up for autonomous agent work (2026-10-12).
     suspension check.
   - Acceptance: regression checks in `test_phase2_security.py` fail before and pass after.
 
+- [x] backend: delete raw route points after a retention window (Security plan §2, release status risk 3)
+  - Acceptance: a scheduled job removes raw points of closed runs finished > 45 days ago, keeps run summaries and
+    verification decisions, and keeps evidence for attempts in `review_required`; covered in `test_run_release.py`.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.

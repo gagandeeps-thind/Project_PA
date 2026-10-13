@@ -38,6 +38,7 @@ def _cleanup() -> None:
             runs = db.query(models.RunSession).filter(models.RunSession.user_id.in_(ids)).all()
             run_ids = [run.id for run in runs]
             if run_ids:
+                db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.run_session_id.in_(run_ids)).delete(synchronize_session=False)
                 db.query(models.VerificationDecision).filter(models.VerificationDecision.run_session_id.in_(run_ids)).delete(synchronize_session=False)
                 db.query(models.RoutePoint).filter(models.RoutePoint.run_session_id.in_(run_ids)).delete(synchronize_session=False)
             db.query(models.RunSession).filter(models.RunSession.user_id.in_(ids)).delete(synchronize_session=False)
@@ -145,11 +146,60 @@ def test_route_sequence_and_authentication_are_enforced() -> None:
     assert response.status_code == 409
 
 
+def _finished_run(client: TestClient, headers: dict, key: str) -> int:
+    run_id = client.post("/api/v2/runs", headers=headers, json={"device_started_at": _now()}).json()["id"]
+    client.post(f"/api/v2/runs/{run_id}/start", headers=headers, json={"device_started_at": _now()})
+    client.post(f"/api/v2/runs/{run_id}/points", headers=headers, json={"points": [
+        {"sequence": i, "t_ms": i * 30_000, "lat": 44.6 + i * 0.0005, "lng": -63.6, "accuracy_m": 10} for i in range(4)
+    ]})
+    response = client.post(f"/api/v2/runs/{run_id}/finish", headers=headers, json={
+        "device_finished_at": _now(), "idempotency_key": f"run-release-retention-{key}"})
+    assert response.status_code == 200, response.text
+    return run_id
+
+
+def test_raw_route_points_expire_after_retention_window() -> None:
+    """Security plan §2: raw telemetry is kept only as long as needed. Summaries stay."""
+    from datetime import timedelta
+    _cleanup()
+    client = TestClient(main.app)
+    headers = {"Authorization": f"Bearer {_login(client)}"}
+    old_run = _finished_run(client, headers, "old")
+    recent_run = _finished_run(client, headers, "recent")
+    in_review = _finished_run(client, headers, "review")
+    db = database.SessionLocal()
+    try:
+        long_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=main.ROUTE_POINT_RETENTION_DAYS + 5)
+        for rid in (old_run, in_review):
+            db.query(models.RunSession).filter(models.RunSession.id == rid).update({"finished_at": long_ago})
+        # Evidence for an attempt still awaiting a human reviewer must survive.
+        db.add(models.ChallengeAttempt(challenge_id=0, user_id=0, status="review_required", terms_hash="x",
+                                       run_session_id=in_review))
+        db.commit()
+
+        main.process_route_point_ttl()
+
+        db.expire_all()
+        def points(rid: int) -> int:
+            return db.query(models.RoutePoint).filter(models.RoutePoint.run_session_id == rid).count()
+
+        assert points(old_run) == 0, "raw points of an old closed run are deleted"
+        assert points(recent_run) == 4, "recent runs keep their points"
+        assert points(in_review) == 4, "runs under review keep their evidence"
+        summary = db.query(models.RunSession).filter(models.RunSession.id == old_run).first()
+        assert summary.verification_status == "accepted" and summary.distance_m > 100 and summary.point_count == 4
+        assert db.query(models.VerificationDecision).filter(
+            models.VerificationDecision.run_session_id == old_run).count() == 1
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     for test in (
         test_valid_run_is_verified_and_finish_is_idempotent,
         test_invalid_route_is_rejected_with_reason_codes,
         test_route_sequence_and_authentication_are_enforced,
+        test_raw_route_points_expire_after_retention_window,
     ):
         test()
         print(f"PASS {test.__name__}")

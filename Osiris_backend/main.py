@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI):
     # v2.11 telemetry retention: nightly cleanup of raw sample blobs older than TTL.
     scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)
     scheduler.add_job(process_challenge_settlement, 'interval', hours=1)
+    scheduler.add_job(process_route_point_ttl, 'interval', hours=24)
     scheduler.start()
     try:
         yield
@@ -4184,6 +4185,45 @@ def process_telemetry_ttl():
             db.commit()
             print(f"[telemetry-ttl] purged {deleted} TelemetryData rows older than {ttl_days} days "
                   f"(across {len(old_session_ids)} sessions; metadata retained).")
+    finally:
+        db.close()
+
+
+# Raw GPS samples are personal location history (Security plan §2: keep raw telemetry only as
+# long as needed). They must outlive the longest challenge window (720 h) plus its submission
+# grace, because a run can be linked to an attempt until the challenge closes; 45 days does.
+ROUTE_POINT_RETENTION_DAYS = int(os.environ.get("OSIRIS_ROUTE_POINT_TTL_DAYS", "45"))
+
+
+def process_route_point_ttl() -> int:
+    """Nightly job: delete raw RoutePoint rows of closed runs that finished before the
+    retention window. The RunSession summary (distance, duration, verification status, route
+    hash) and its VerificationDecision stay, as do courses, which keep their own trimmed
+    route. Runs whose challenge attempt awaits human review keep their evidence until it is
+    decided. Returns the number of points deleted; 0 or a negative TTL disables the job."""
+    if ROUTE_POINT_RETENTION_DAYS <= 0:
+        return 0
+    cutoff = _now_naive_utc() - timedelta(days=ROUTE_POINT_RETENTION_DAYS)
+    db = database.SessionLocal()
+    try:
+        under_review = db.query(models.ChallengeAttempt.run_session_id).filter(
+            models.ChallengeAttempt.status == "review_required",
+            models.ChallengeAttempt.run_session_id.isnot(None),
+        )
+        expired_runs = db.query(models.RunSession.id).filter(
+            models.RunSession.status == "closed",
+            models.RunSession.finished_at < cutoff,
+            models.RunSession.id.notin_(under_review),
+        )
+        deleted = (
+            db.query(models.RoutePoint)
+            .filter(models.RoutePoint.run_session_id.in_(expired_runs))
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        if deleted:
+            logger.info("route-point-ttl", extra={"ctx": {"deleted": deleted, "retention_days": ROUTE_POINT_RETENTION_DAYS}})
+        return deleted
     finally:
         db.close()
 

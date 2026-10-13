@@ -60,17 +60,18 @@
 
 1. **Time evidence is device-sourced.** Point timestamps come from the phone. Clock-skew checks, the speed ceiling, and the outlier review queue mitigate this, but signed chunks, device-integrity signals, and mock-location detection are not built.
 2. **Joined players see the exact trimmed route.** Any verified runner can join, so in practice the trimmed course is available to verified runners. The 150 m trim protects endpoints. User-defined privacy zones and a "hide from discovery" setting are not built.
-3. **Raw route points have no retention TTL yet.** Security §2 requires one; a retention job must run before pilot.
-4. **Suspension is enforced on v2 endpoints only.** The legacy v1 endpoints do not check it; they should be removed or gated before pilot.
-5. **SQLite and in-memory rate limits.** ADR-002 requires PostgreSQL/PostGIS for SIT onward. Rate limits are per process.
-6. **Admin MFA, refresh-token rotation, and token revocation are not built.**
+3. ~~Raw route points have no retention TTL.~~ Resolved 2026-10-12: a nightly job deletes raw points of closed runs after 45 days (`OSIRIS_ROUTE_POINT_TTL_DAYS`), keeping run summaries and verification decisions, and keeping evidence for attempts under review.
+4. ~~Suspension is enforced on v2 endpoints only.~~ Resolved 2026-10-12: every player route, v1 included, checks suspension. The legacy v1 game endpoints still exist and should be retired.
+5. **SQLite and in-memory rate limits.** ADR-002 requires PostgreSQL/PostGIS for SIT onward. Rate limits are per process. Load test 2026-10-12 (20 concurrent users, WAL on): every main endpoint p95 < 500 ms, but write endpoints show p99 0.8–1.1 s from SQLite's single writer.
+6. **Admin MFA and refresh-token rotation are not built.** "Sign out everywhere" token revocation exists (growth release).
 7. **Mobile foreground-only tracking.** Background location, pause/resume, and battery policy (PRD-002) are not implemented. The run records while the app is in the foreground.
 
 ## Before promotion to SIT
 
 - PostgreSQL/PostGIS migration and integration run.
-- Route-point retention job; remove or gate legacy v1 domain/siege endpoints.
-- Physical-device field test of a full run → course → challenge → attempt loop, including an airplane-mode segment.
+- Remove or gate the legacy v1 domain/siege/vault/bounty endpoints.
+- Physical-device field test of a full run → course → challenge → attempt loop, including an airplane-mode segment. (Emulator run with a 60 s airplane-mode gap passed 2026-10-12: no points lost, run verified, quest credited.)
+- Frame-time profiling on a physical device (emulator rendering is not representative).
 - Human sign-off on the residual-risk list above.
 
 ## Next release items
