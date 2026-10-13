@@ -63,6 +63,12 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: endpoints that never await run as plain `def` (FastAPI thread pool); p95 < 500 ms at 20 concurrent
     users for the main player endpoints (PRD NFR); all suites pass.
 
+- [x] backend: close auth gaps found by the route inventory (2026-10-12)
+  - Legacy `POST /api/v1/login` had no rate limit (brute-force bypass of `/auth/login`); unauthenticated
+    `POST /api/v2/events` had none; 8 v1 player routes (incl. crystal purchase intent, vault, siege) skipped the
+    suspension check.
+  - Acceptance: regression checks in `test_phase2_security.py` fail before and pass after.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.

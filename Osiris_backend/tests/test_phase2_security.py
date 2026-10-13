@@ -135,12 +135,65 @@ def test_login_rate_limited():
     _check("B3 §4.3 /auth/login is rate limited (429 after a burst)", 429 in codes)
 
 
+# --- Route audit 2026-10-12: the legacy login and the public events endpoint are limited ----
+def test_legacy_login_rate_limited():
+    import main
+    client, _models, _db = _client_and_models()
+    main._rate_buckets.clear()  # the bucket is shared with /auth/login, so start empty
+    body = {"email": "nobody-ph2@example.com", "password": "wrongpass",
+            "device_timestamp": "2026-06-11T00:00:00+00:00"}
+    codes = [client.post("/api/v1/login", json=body).status_code for _ in range(15)]
+    _check("audit: legacy /api/v1/login is rate limited (no brute-force bypass)", 429 in codes)
+
+
+def test_public_events_rate_limited():
+    import main
+    client, _models, _db = _client_and_models()
+    main._rate_buckets.clear()
+    codes = [client.post("/api/v2/events", json={"event_name": "app_opened", "install_id": "ph2-sec-install"}).status_code
+             for _ in range(70)]
+    _check("audit: unauthenticated /api/v2/events is rate limited", 429 in codes)
+
+
+# --- Route audit 2026-10-12: suspension applies to legacy player routes too ---------------
+def test_suspended_player_blocked_on_v1_routes():
+    import main
+    from datetime import datetime
+    client, models, database = _client_and_models()
+    db = database.SessionLocal()
+    user = models.User(email="ph2_suspended@example.com", hashed_password="x", xp=0, mana_crystals=0,
+                       suspended_at=datetime(2026, 10, 12), suspension_reason="audit test")
+    db.add(user)
+    db.commit()
+    uid = user.id
+    try:
+        headers = {"Authorization": f"Bearer {main.create_access_token({'sub': str(uid), 'role': 'player'})}"}
+        calls = {
+            "GET /api/v1/domains/nearby": client.get("/api/v1/domains/nearby", params={"lat": 44.6, "lng": -63.6},
+                                                     headers=headers),
+            "GET /api/v1/bounties/nearby": client.get("/api/v1/bounties/nearby", params={"lat": 44.6, "lng": -63.6},
+                                                      headers=headers),
+            "GET /api/v1/users/{id}/party-role": client.get(f"/api/v1/users/{uid}/party-role", headers=headers),
+            "POST /api/v1/payments/crystals/intent": client.post("/api/v1/payments/crystals/intent",
+                                                                 json={"pack_id": "starter"}, headers=headers),
+        }
+        for name, resp in calls.items():
+            _check(f"audit: suspended player gets 403 on {name}", resp.status_code == 403)
+    finally:
+        db.query(models.User).filter(models.User.id == uid).delete()
+        db.commit()
+        db.close()
+
+
 if __name__ == "__main__":
     test_webhook_fail_closed_boot()
     test_unsigned_webhook_rejected()
     test_domains_nearby_requires_auth()
     test_cors_no_wildcard_reflection()
     test_login_rate_limited()
+    test_legacy_login_rate_limited()
+    test_public_events_rate_limited()
+    test_suspended_player_blocked_on_v1_routes()
     print()
     if _FAILURES:
         print(f"{len(_FAILURES)} check(s) FAILED: {_FAILURES}")

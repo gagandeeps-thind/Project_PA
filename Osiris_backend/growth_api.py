@@ -29,6 +29,7 @@ from main import (
     _award_badge,
     _now_naive_utc,
     _refresh_challenge_status,
+    _rl_events,
     _rl_onboard,
     app,
     ChallengePublic,
@@ -640,6 +641,7 @@ def my_today(
 @router.post("/api/v2/events", status_code=202)
 def track_event(
     event: EventIn, db: Session = Depends(get_db), token_data: Optional[dict] = Depends(optional_token),
+    _rl: None = Depends(_rl_events),
 ):
     """Client funnel events (installs, app opens, shares). Anonymous events need an
     install id. Server-owned milestones are rejected here so they cannot be forged."""

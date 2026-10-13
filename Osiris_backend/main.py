@@ -395,6 +395,8 @@ _rl_webhook = _rate_limit(60, 60, "webhook")
 # Security §2: route upload, challenge join/submit, and publish are abuse targets too.
 _rl_route = _rate_limit(120, 60, "route")
 _rl_challenge = _rate_limit(30, 60, "challenge")
+# Public analytics ingestion accepts unauthenticated writes; cap it per IP.
+_rl_events = _rate_limit(60, 60, "events")
 
 
 # --- Security ---
@@ -1174,7 +1176,7 @@ def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: None = De
     return new_user
 
 @app.post("/api/v1/login", response_model=UserProfile)
-def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+def login_user(credentials: UserLogin, db: Session = Depends(get_db), _rl: None = Depends(_rl_login)):
     """Player-only login. Kept for backward compatibility; new clients should use the
     role-aware `/api/v1/auth/login` endpoint and switch UI based on the returned `role`."""
     user = db.query(models.User).filter(models.User.email == credentials.email).first()
@@ -2489,7 +2491,7 @@ def get_nearby_domains(
     lng: float,
     radius_km: float = 5.0,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     """Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),
     sorted nearest-first.
@@ -2538,7 +2540,7 @@ def get_nearby_domains(
 
 
 @app.post("/api/v1/domains", response_model=DomainResponse)
-def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Processes a completed Domain Trace, validates anti-cheat, and claims the territory."""
 
     if token_data["id"] != domain_req.owner_id:
@@ -2652,7 +2654,7 @@ def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token
     )
 
 @app.post("/api/v1/domains/{domain_id}/vault", response_model=VaultLockResponse)
-def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Lock (or top up) an Ownership Fee on a domain. Crystals are deducted from the owner's
     wallet and added to the domain's Vault. Vault balance doubles as the required Challenger
     Match amount. Topping up is allowed; unlocking (lowering) is deferred to Phase 2."""
@@ -2700,7 +2702,7 @@ def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_
 
 
 @app.post("/api/v1/sieges/{siege_id}/resolve", response_model=SiegeResolveResponse)
-def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Resolve a pending siege. Challenger submits their Defense Feat score.
     WIN: defender's polygon erased, pot (defender vault + challenger match) paid 80/20 to
          challenger/system.
@@ -2921,7 +2923,7 @@ def get_user_party_role(
     user_id: int,
     window_days: Optional[int] = None,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     if token_data["id"] != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to view this user's role")
@@ -3637,7 +3639,7 @@ def list_crystal_packs():
 @app.post("/api/v1/payments/crystals/intent", response_model=CrystalPurchaseIntentResponse)
 def create_crystal_purchase_intent(
     req: CrystalPurchaseIntentRequest,
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
     db: Session = Depends(get_db),
 ):
     """Start a real-money crystal top-up. The price and crystal grant come from CRYSTAL_PACKS
@@ -3845,7 +3847,7 @@ def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_dat
 
 
 @app.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
-def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
     nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
     `ST_DWithin` in Phase 2."""
@@ -3886,7 +3888,7 @@ def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Sess
 
 
 @app.post("/api/v1/bounties/{bounty_id}/complete", response_model=BountyCompleteResponse)
-def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     if token_data["id"] != req.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to complete bounty for this user")
     """Validates proximity + score, awards XP/crystals, increments the matching attribute stat,
