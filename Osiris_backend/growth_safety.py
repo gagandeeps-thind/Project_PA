@@ -179,7 +179,7 @@ def _resolve_target(db: Session, req: ReportCreate) -> int:
 
 
 @router.post("/api/v2/reports", response_model=ReportOut, status_code=201)
-async def create_report(req: ReportCreate, db: Session = Depends(get_db),
+def create_report(req: ReportCreate, db: Session = Depends(get_db),
                         token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     if req.target_type not in REPORT_TARGETS:
@@ -225,7 +225,7 @@ async def create_report(req: ReportCreate, db: Session = Depends(get_db),
 
 
 @router.get("/api/v2/me/reports", response_model=List[ReportOut])
-async def my_reports(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def my_reports(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     rows = db.query(models.Report).filter(models.Report.reporter_id == token_data["id"]).order_by(
         models.Report.created_at.desc()).limit(100).all()
     return [ReportOut(id=r.id, target_type=r.target_type, reason=r.reason, status=r.status,
@@ -237,7 +237,7 @@ async def my_reports(db: Session = Depends(get_db), token_data: dict = Depends(g
 # --- blocking --------------------------------------------------------------------
 
 @router.post("/api/v2/blocks", response_model=BlockOut, status_code=201)
-async def block_player(req: BlockCreate, db: Session = Depends(get_db),
+def block_player(req: BlockCreate, db: Session = Depends(get_db),
                        token_data: dict = Depends(get_active_player)):
     """Block by public handle, or block the creator of a challenge without learning who
     they are."""
@@ -272,14 +272,14 @@ def _blocked_name(db: Session, block: models.UserBlock, n: int) -> str:
 
 
 @router.get("/api/v2/me/blocks", response_model=List[BlockOut])
-async def my_blocks(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def my_blocks(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     rows = db.query(models.UserBlock).filter(models.UserBlock.blocker_id == token_data["id"]).order_by(
         models.UserBlock.created_at.asc()).all()
     return [BlockOut(id=b.id, name=_blocked_name(db, b, i), created_at=b.created_at) for i, b in enumerate(rows, 1)]
 
 
 @router.delete("/api/v2/blocks/{block_id}", status_code=204)
-async def unblock_player(block_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def unblock_player(block_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     block = db.query(models.UserBlock).filter(models.UserBlock.id == block_id).first()
     if block is None or block.blocker_id != token_data["id"]:
         raise _api_error(404, "BLOCK_NOT_FOUND", "Block not found")
@@ -290,7 +290,7 @@ async def unblock_player(block_id: int, db: Session = Depends(get_db), token_dat
 # --- sessions and password ---------------------------------------------------------
 
 @router.post("/api/v2/me/sessions/revoke", response_model=TokenOut)
-async def revoke_all_sessions(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def revoke_all_sessions(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Sign out everywhere. Returns a fresh token so this device stays signed in."""
     user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
     revoke_sessions(user)
@@ -301,7 +301,7 @@ async def revoke_all_sessions(db: Session = Depends(get_db), token_data: dict = 
 
 
 @router.post("/api/v2/me/password", response_model=TokenOut)
-async def change_password(req: PasswordChange, db: Session = Depends(get_db),
+def change_password(req: PasswordChange, db: Session = Depends(get_db),
                           token_data: dict = Depends(get_active_player)):
     user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
     if not verify_password(req.current_password, user.hashed_password):
@@ -321,7 +321,7 @@ def _rows(query, fields: tuple) -> list:
 
 
 @router.get("/api/v2/me/export")
-async def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Everything Osiris holds about the player, including raw route points, as JSON."""
     uid = token_data["id"]
     user = db.query(models.User).filter(models.User.id == uid).first()
@@ -418,7 +418,7 @@ def erase_player(db: Session, user: models.User, actor_type: str, actor_id: Opti
 
 
 @router.post("/api/v2/me/erase", status_code=202)
-async def erase_my_account(req: EraseRequest, db: Session = Depends(get_db),
+def erase_my_account(req: EraseRequest, db: Session = Depends(get_db),
                            token_data: dict = Depends(get_active_player)):
     """Permanently erase the account. Needs the password and the word DELETE."""
     user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
@@ -434,7 +434,7 @@ async def erase_my_account(req: EraseRequest, db: Session = Depends(get_db),
 # --- rules -----------------------------------------------------------------------
 
 @router.get("/api/v2/rules")
-async def rules():
+def rules():
     """Plain-language rules shown in the app before a player relies on them. Public."""
     return {
         "policy_version": POLICY_VERSION,
@@ -483,7 +483,7 @@ def _target_summary(db: Session, target_type: str, target_id: int) -> str:
 
 
 @router.get("/api/v2/admin/reports", response_model=List[AdminReportItem])
-async def admin_reports(status: str = "open", db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
+def admin_reports(status: str = "open", db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
     rows = db.query(models.Report).filter(models.Report.status == status).order_by(
         models.Report.created_at.asc()).limit(500).all()
     out = []
@@ -499,7 +499,7 @@ async def admin_reports(status: str = "open", db: Session = Depends(get_db), _ad
 
 
 @router.post("/api/v2/admin/reports/{report_id}/resolve")
-async def admin_resolve_report(report_id: int, req: AdminReportResolve, db: Session = Depends(get_db),
+def admin_resolve_report(report_id: int, req: AdminReportResolve, db: Session = Depends(get_db),
                                admin: dict = Depends(get_current_admin)):
     """Record the outcome. Enforcement (suspend a player, challenge, or community) uses the
     existing admin controls; this closes the reports and tells reporters it was reviewed."""
@@ -528,7 +528,7 @@ async def admin_resolve_report(report_id: int, req: AdminReportResolve, db: Sess
 
 
 @router.post("/api/v2/admin/users/{user_id}/reset-display-name")
-async def admin_reset_display_name(user_id: int, req: AdminReason, db: Session = Depends(get_db),
+def admin_reset_display_name(user_id: int, req: AdminReason, db: Session = Depends(get_db),
                                    admin: dict = Depends(get_current_admin)):
     profile = db.query(models.PlayerProfile).filter(models.PlayerProfile.user_id == user_id).first()
     if profile is None:
@@ -541,7 +541,7 @@ async def admin_reset_display_name(user_id: int, req: AdminReason, db: Session =
 
 
 @router.post("/api/v2/admin/users/{user_id}/erase", status_code=202)
-async def admin_erase_user(user_id: int, req: AdminReason, db: Session = Depends(get_db),
+def admin_erase_user(user_id: int, req: AdminReason, db: Session = Depends(get_db),
                            admin: dict = Depends(get_current_admin)):
     """Erase on a verified request received outside the app (e.g. by email)."""
     user = db.query(models.User).filter(models.User.id == user_id).first()

@@ -418,7 +418,7 @@ def _load_user(db: Session, user_id: int) -> models.User:
 # --- endpoints -------------------------------------------------------------------
 
 @router.post("/api/v2/auth/register", response_model=RegisterResponse, status_code=201)
-async def register_player(req: RegisterRequest, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
+def register_player(req: RegisterRequest, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
     """Plain registration: email, password, a display name, and a goal. No weight, height,
     or BMI. A referral code links the account to the inviter; the inviter's reward waits
     until this player completes a verified run (see G2 referral rules)."""
@@ -485,7 +485,7 @@ async def register_player(req: RegisterRequest, db: Session = Depends(get_db), _
 
 
 @router.get("/api/v2/me/profile", response_model=ProfileOut)
-async def get_my_profile(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def get_my_profile(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     user = _load_user(db, token_data["id"])
     profile = get_or_create_profile(db, user)
     db.commit()
@@ -493,7 +493,7 @@ async def get_my_profile(db: Session = Depends(get_db), token_data: dict = Depen
 
 
 @router.put("/api/v2/me/profile", response_model=ProfileOut)
-async def update_my_profile(
+def update_my_profile(
     req: ProfileUpdate, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player),
 ):
     _validate_goal(req.goal)
@@ -577,7 +577,7 @@ def _starter_challenge(db: Session, lat: float, lng: float, viewer_id: int) -> O
 
 
 @router.get("/api/v2/me/today", response_model=TodayResponse)
-async def my_today(
+def my_today(
     lat: Optional[float] = None,
     lng: Optional[float] = None,
     utc_offset_minutes: Optional[int] = None,
@@ -638,7 +638,7 @@ async def my_today(
 
 
 @router.post("/api/v2/events", status_code=202)
-async def track_event(
+def track_event(
     event: EventIn, db: Session = Depends(get_db), token_data: Optional[dict] = Depends(optional_token),
 ):
     """Client funnel events (installs, app opens, shares). Anonymous events need an
@@ -673,7 +673,7 @@ def _rate(n: int, d: int) -> Optional[float]:
 
 
 @router.get("/api/v2/admin/funnel", response_model=FunnelResponse)
-async def admin_funnel(
+def admin_funnel(
     days: int = 90, db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin),
 ):
     """Activation funnel and retention for players who registered in the window.

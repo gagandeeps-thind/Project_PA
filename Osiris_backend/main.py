@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
+import functools
 import json
 import logging
 import os
@@ -204,8 +205,12 @@ def healthz():
     return {"status": "ok", **checks}
 
 
+@functools.lru_cache(maxsize=1)
 def _alembic_head_revision() -> Optional[str]:
-    """Latest revision id from the local alembic/versions scripts, or None if unavailable."""
+    """Latest revision id from the local alembic/versions scripts, or None if unavailable.
+
+    Cached: the migration scripts shipped with this process cannot change while it runs, and
+    parsing every script on each probe made /healthz the slowest endpoint under load."""
     try:
         from alembic.config import Config
         from alembic.script import ScriptDirectory
@@ -333,7 +338,7 @@ def get_current_admin_or_merchant(token_data: dict = Depends(get_current_user_to
 
 # A simple root endpoint to verify the server is running
 @app.get("/")
-async def root():
+def root():
     return {
         "message": "Verified Fitness Reward System API is running",
         "docs": "/docs"
@@ -341,7 +346,7 @@ async def root():
 
 
 @app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
+def favicon():
     return {}
 
 # --- Rate limiting -----------------------------------------------------------------------
@@ -1117,7 +1122,7 @@ def _check_email_unique(db: Session, email: str, exclude_table: Optional[str] = 
 # --- Endpoints ---
 
 @app.post("/api/v1/onboard", response_model=UserProfile)
-async def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
+def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
     """API Endpoint to register a new user, calculate their stats, and assign an avatar."""
 
     # 0. Check if user email already exists across any table
@@ -1169,7 +1174,7 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: Non
     return new_user
 
 @app.post("/api/v1/login", response_model=UserProfile)
-async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
     """Player-only login. Kept for backward compatibility; new clients should use the
     role-aware `/api/v1/auth/login` endpoint and switch UI based on the returned `role`."""
     user = db.query(models.User).filter(models.User.email == credentials.email).first()
@@ -1189,7 +1194,7 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/auth/login", response_model=AuthLoginResponse)
-async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl: None = Depends(_rl_login)):
+def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl: None = Depends(_rl_login)):
     try:
         device_ts = _to_naive_utc(credentials.device_timestamp)
 
@@ -1246,7 +1251,7 @@ async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/v1/users/{user_id}", response_model=UserProfile)
-async def get_user_profile(
+def get_user_profile(
     user_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -1268,7 +1273,7 @@ async def get_user_profile(
 
 
 @app.delete("/api/v1/users/{user_id}")
-async def delete_user_account(
+def delete_user_account(
     user_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -1298,7 +1303,7 @@ async def delete_user_account(
 
 
 @app.get("/api/v1/users/{user_id}/export")
-async def export_user_data(
+def export_user_data(
     user_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -1407,7 +1412,7 @@ def _get_player_run(db: Session, run_id: int, player_id: int) -> models.RunSessi
 
 
 @app.post("/api/v2/runs", response_model=RunSessionSummary, status_code=201)
-async def create_run_session(
+def create_run_session(
     req: RunSessionCreate,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -1429,7 +1434,7 @@ async def create_run_session(
 
 
 @app.post("/api/v2/runs/{run_id}/start", response_model=RunSessionSummary)
-async def start_run_session(
+def start_run_session(
     run_id: int,
     req: RunSessionStart,
     db: Session = Depends(get_db),
@@ -1450,7 +1455,7 @@ async def start_run_session(
 
 
 @app.post("/api/v2/runs/{run_id}/points", response_model=RunSessionSummary)
-async def append_run_points(
+def append_run_points(
     run_id: int,
     req: RoutePointBatch,
     db: Session = Depends(get_db),
@@ -1489,7 +1494,7 @@ async def append_run_points(
 
 
 @app.post("/api/v2/runs/{run_id}/finish", response_model=RunSessionSummary)
-async def finish_run_session(
+def finish_run_session(
     run_id: int,
     req: RunSessionFinish,
     db: Session = Depends(get_db),
@@ -1575,7 +1580,7 @@ async def finish_run_session(
 
 
 @app.get("/api/v2/runs/{run_id}", response_model=RunSessionSummary)
-async def get_run_session(
+def get_run_session(
     run_id: int,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -1805,7 +1810,7 @@ def _get_challenge(db: Session, challenge_id: int) -> models.Challenge:
 
 
 @app.post("/api/v2/courses", response_model=CourseSummary, status_code=201)
-async def register_course(
+def register_course(
     req: CourseCreate,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -1881,7 +1886,7 @@ async def register_course(
 
 
 @app.get("/api/v2/courses", response_model=List[CourseSummary])
-async def list_my_courses(
+def list_my_courses(
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
@@ -1895,7 +1900,7 @@ async def list_my_courses(
 
 
 @app.post("/api/v2/challenges", response_model=ChallengePublic, status_code=201)
-async def publish_challenge(
+def publish_challenge(
     req: ChallengeCreate,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -1961,7 +1966,7 @@ async def publish_challenge(
 
 
 @app.get("/api/v2/challenges/nearby", response_model=List[ChallengePublic])
-async def nearby_challenges(
+def nearby_challenges(
     lat: float,
     lng: float,
     radius_km: float = 5.0,
@@ -2007,7 +2012,7 @@ async def nearby_challenges(
 
 
 @app.get("/api/v2/challenges/{challenge_id}", response_model=ChallengePublic)
-async def get_challenge(
+def get_challenge(
     challenge_id: int,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -2020,7 +2025,7 @@ async def get_challenge(
 
 
 @app.get("/api/v2/challenges/{challenge_id}/course", response_model=ChallengeCourseRoute)
-async def get_challenge_course(
+def get_challenge_course(
     challenge_id: int,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -2043,7 +2048,7 @@ async def get_challenge_course(
 
 
 @app.post("/api/v2/challenges/{challenge_id}/join", response_model=AttemptSummary)
-async def join_challenge(
+def join_challenge(
     challenge_id: int,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
@@ -2093,7 +2098,7 @@ async def join_challenge(
 
 
 @app.post("/api/v2/challenges/{challenge_id}/attempts", response_model=AttemptSummary)
-async def submit_attempt(
+def submit_attempt(
     challenge_id: int,
     req: AttemptSubmit,
     db: Session = Depends(get_db),
@@ -2166,7 +2171,7 @@ async def submit_attempt(
 
 
 @app.get("/api/v2/me/progression", response_model=ProgressionResponse)
-async def my_progression(
+def my_progression(
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
@@ -2283,7 +2288,7 @@ def _admin_challenge_item(db: Session, ch: models.Challenge) -> AdminChallengeIt
 
 
 @app.get("/api/v2/admin/review-queue", response_model=List[ReviewQueueItem])
-async def admin_review_queue(
+def admin_review_queue(
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
@@ -2306,7 +2311,7 @@ async def admin_review_queue(
 
 
 @app.post("/api/v2/admin/attempts/{attempt_id}/review", response_model=AttemptSummary)
-async def admin_review_attempt(
+def admin_review_attempt(
     attempt_id: int,
     req: AdminReviewDecision,
     db: Session = Depends(get_db),
@@ -2340,7 +2345,7 @@ async def admin_review_attempt(
 
 
 @app.get("/api/v2/admin/challenges", response_model=List[AdminChallengeItem])
-async def admin_list_challenges(
+def admin_list_challenges(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
@@ -2352,7 +2357,7 @@ async def admin_list_challenges(
 
 
 @app.post("/api/v2/admin/challenges/{challenge_id}/status", response_model=AdminChallengeItem)
-async def admin_challenge_status(
+def admin_challenge_status(
     challenge_id: int,
     req: AdminChallengeAction,
     db: Session = Depends(get_db),
@@ -2394,7 +2399,7 @@ async def admin_challenge_status(
 
 
 @app.post("/api/v2/admin/courses/{course_id}/suspend", response_model=AdminCourseStatus)
-async def admin_suspend_course(
+def admin_suspend_course(
     course_id: int,
     req: AdminReason,
     db: Session = Depends(get_db),
@@ -2434,7 +2439,7 @@ def _set_user_suspension(db: Session, user_id: int, admin_id: int, reason: Optio
 
 
 @app.post("/api/v2/admin/users/{user_id}/suspend", response_model=AdminUserStatus)
-async def admin_suspend_user(
+def admin_suspend_user(
     user_id: int,
     req: AdminReason,
     db: Session = Depends(get_db),
@@ -2444,7 +2449,7 @@ async def admin_suspend_user(
 
 
 @app.post("/api/v2/admin/users/{user_id}/unsuspend", response_model=AdminUserStatus)
-async def admin_unsuspend_user(
+def admin_unsuspend_user(
     user_id: int,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
@@ -2453,7 +2458,7 @@ async def admin_unsuspend_user(
 
 
 @app.get("/api/v2/admin/audit-events", response_model=List[AuditEventOut])
-async def admin_audit_events(
+def admin_audit_events(
     entity_type: Optional[str] = None,
     entity_id: Optional[int] = None,
     action: Optional[str] = None,
@@ -2479,7 +2484,7 @@ async def admin_audit_events(
     ]
 
 @app.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
-async def get_nearby_domains(
+def get_nearby_domains(
     lat: float,
     lng: float,
     radius_km: float = 5.0,
@@ -2533,7 +2538,7 @@ async def get_nearby_domains(
 
 
 @app.post("/api/v1/domains", response_model=DomainResponse)
-async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Processes a completed Domain Trace, validates anti-cheat, and claims the territory."""
 
     if token_data["id"] != domain_req.owner_id:
@@ -2647,7 +2652,7 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
     )
 
 @app.post("/api/v1/domains/{domain_id}/vault", response_model=VaultLockResponse)
-async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Lock (or top up) an Ownership Fee on a domain. Crystals are deducted from the owner's
     wallet and added to the domain's Vault. Vault balance doubles as the required Challenger
     Match amount. Topping up is allowed; unlocking (lowering) is deferred to Phase 2."""
@@ -2695,7 +2700,7 @@ async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depend
 
 
 @app.post("/api/v1/sieges/{siege_id}/resolve", response_model=SiegeResolveResponse)
-async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Resolve a pending siege. Challenger submits their Defense Feat score.
     WIN: defender's polygon erased, pot (defender vault + challenger match) paid 80/20 to
          challenger/system.
@@ -2912,7 +2917,7 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
 
 
 @app.get("/api/v1/users/{user_id}/party-role", response_model=PartyRoleResponse)
-async def get_user_party_role(
+def get_user_party_role(
     user_id: int,
     window_days: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -3113,7 +3118,7 @@ def _enforce_proof_gps_in_geofence(
 
 
 @app.post("/api/v1/activities/verify", response_model=VerificationResult)
-async def verify_activity_endpoint(proof: ActivityProof, _rl: None = Depends(_rl_verify)):
+def verify_activity_endpoint(proof: ActivityProof, _rl: None = Depends(_rl_verify)):
     """Stateless preview of the ML Referee. The frontend can call this to confirm a workout
     will pass before submitting the real action (claim, siege, bounty). No DB writes.
     Note: the co-location check is NOT applied here — that requires the target polygon /
@@ -3130,7 +3135,7 @@ class PlatformRevenueSummary(BaseModel):
 
 
 @app.get("/api/v1/platform/revenue", response_model=PlatformRevenueSummary)
-async def get_platform_revenue(db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin)):
+def get_platform_revenue(db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin)):
     """Aggregates the PlatformRevenue ledger so admins can audit total platform earnings and
     the breakdown by source. Read-only; safe to expose internally during MVP. Production will
     gate this behind an admin role."""
@@ -3145,7 +3150,7 @@ async def get_platform_revenue(db: Session = Depends(get_db), token_data: dict =
 # --- Epic 1: Bounty Board Endpoints ---
 
 @app.post("/api/v1/merchants/register", response_model=MerchantResponse)
-async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
+def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
     """Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.
     Newly-registered merchants start `is_active=False` / `payment_status='payment_pending'`;
     they must complete the pilot-fee flow (or be activated by an admin) before they can
@@ -3166,7 +3171,7 @@ async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_
 # --- v2.9: Merchant payment + activation endpoints ---
 
 @app.get("/api/v1/merchants/{merchant_id}", response_model=MerchantProfile)
-async def get_merchant_profile(
+def get_merchant_profile(
     merchant_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -3188,7 +3193,7 @@ async def get_merchant_profile(
 
 
 @app.get("/api/v1/merchants/{merchant_id}/bounties", response_model=List[MerchantBountyAnalytics])
-async def get_merchant_bounties(
+def get_merchant_bounties(
     merchant_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -3243,7 +3248,7 @@ async def get_merchant_bounties(
 
 
 @app.post("/api/v1/merchants/{merchant_id}/payments/intent", response_model=PaymentIntentResponse)
-async def create_payment_intent(
+def create_payment_intent(
     merchant_id: int,
     token_data: dict = Depends(get_current_merchant),
     db: Session = Depends(get_db),
@@ -3288,7 +3293,7 @@ async def create_payment_intent(
 
 
 @app.post("/api/v1/payments/webhook", response_model=PaymentWebhookResponse)
-async def payment_webhook(
+def payment_webhook(
     body: bytes = Depends(verify_webhook_signature),
     db: Session = Depends(get_db),
     _rl: None = Depends(_rl_webhook),
@@ -3617,7 +3622,7 @@ async def stripe_webhook(
 # --- Phase 3: player crystal top-up (one-way purchase) endpoints ---
 
 @app.get("/api/v1/payments/crystals/packs", response_model=List[CrystalPackInfo])
-async def list_crystal_packs():
+def list_crystal_packs():
     """Buyable crystal packs with server-authoritative pricing. The client renders these and
     sends back only a `pack_id`; it never sets a price."""
     return [
@@ -3630,7 +3635,7 @@ async def list_crystal_packs():
 
 
 @app.post("/api/v1/payments/crystals/intent", response_model=CrystalPurchaseIntentResponse)
-async def create_crystal_purchase_intent(
+def create_crystal_purchase_intent(
     req: CrystalPurchaseIntentRequest,
     token_data: dict = Depends(get_current_player),
     db: Session = Depends(get_db),
@@ -3694,7 +3699,7 @@ async def create_crystal_purchase_intent(
 # --- v2.9: Admin merchant management (manual fallback for refunds / disputes / demos) ---
 
 @app.get("/api/v1/admin/merchants", response_model=List[AdminMerchantListItem])
-async def admin_list_merchants(
+def admin_list_merchants(
     status: Optional[str] = None,           # 'pending' | 'active' | 'declined' | 'all' (default 'all')
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -3714,7 +3719,7 @@ async def admin_list_merchants(
 
 
 @app.post("/api/v1/admin/merchants/{merchant_id}/activate", response_model=AdminMerchantToggleResponse)
-async def admin_activate_merchant(
+def admin_activate_merchant(
     merchant_id: int,
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -3747,7 +3752,7 @@ async def admin_activate_merchant(
 
 
 @app.post("/api/v1/admin/merchants/{merchant_id}/deactivate", response_model=AdminMerchantToggleResponse)
-async def admin_deactivate_merchant(
+def admin_deactivate_merchant(
     merchant_id: int,
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -3768,7 +3773,7 @@ async def admin_deactivate_merchant(
 
 
 @app.post("/api/v1/bounties", response_model=BountySummary)
-async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
+def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
     """Seed a bounty. Admins can create both 'daily' (system-issued) and 'merchant_chest'
     (any merchant). Merchants can only create 'merchant_chest' bounties keyed to their own
     merchant_id. Geofence radius is in metres; distance to caller is filled with 0 since
@@ -3840,7 +3845,7 @@ async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), tok
 
 
 @app.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
-async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
     nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
     `ST_DWithin` in Phase 2."""
@@ -3881,7 +3886,7 @@ async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db
 
 
 @app.post("/api/v1/bounties/{bounty_id}/complete", response_model=BountyCompleteResponse)
-async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
     if token_data["id"] != req.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to complete bounty for this user")
     """Validates proximity + score, awards XP/crystals, increments the matching attribute stat,
@@ -4056,7 +4061,7 @@ def _load_coupon_for_merchant(
 
 
 @app.get("/api/v1/coupons/{code}", response_model=CouponLookupResponse)
-async def lookup_coupon(
+def lookup_coupon(
     code: str,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_user_token),
@@ -4079,7 +4084,7 @@ async def lookup_coupon(
 
 
 @app.post("/api/v1/coupons/{code}/redeem", response_model=CouponRedeemResponse)
-async def redeem_coupon(
+def redeem_coupon(
     code: str,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_user_token),

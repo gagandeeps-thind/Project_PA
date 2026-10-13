@@ -228,7 +228,7 @@ def _display_name(db: Session, user_id: int) -> str:
 
 
 @router.post("/api/v2/share", response_model=ShareCardOut, status_code=201)
-async def create_share_card(
+def create_share_card(
     req: ShareCreate, request: Request, db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
@@ -258,7 +258,7 @@ async def create_share_card(
 
 
 @router.delete("/api/v2/share/{token}", status_code=204)
-async def revoke_share_card(token: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def revoke_share_card(token: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     card = db.query(models.ShareCard).filter(models.ShareCard.token == token).first()
     if card is None or card.user_id != token_data["id"]:
         raise _api_error(404, "SHARE_NOT_FOUND", "Share card not found")
@@ -277,7 +277,7 @@ def _live_card(db: Session, token: str) -> models.ShareCard:
 
 
 @router.get("/api/v2/share/{token}", response_model=ShareCardOut)
-async def get_share_card(token: str, request: Request, db: Session = Depends(get_db)):
+def get_share_card(token: str, request: Request, db: Session = Depends(get_db)):
     """Public: the card behind a share link. No authentication."""
     card = _live_card(db, token)
     card.view_count = (card.view_count or 0) + 1
@@ -288,7 +288,7 @@ async def get_share_card(token: str, request: Request, db: Session = Depends(get
 # --- invite-a-friend challenges ------------------------------------------------------
 
 @router.post("/api/v2/challenges/{challenge_id}/invites", response_model=InviteOut, status_code=201)
-async def create_challenge_invite(
+def create_challenge_invite(
     challenge_id: int, request: Request, db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
@@ -339,7 +339,7 @@ def _invite_preview(db: Session, token: str) -> tuple[models.ChallengeInvite, In
 
 
 @router.get("/api/v2/invites/{token}", response_model=InvitePreview)
-async def get_invite(token: str, db: Session = Depends(get_db)):
+def get_invite(token: str, db: Session = Depends(get_db)):
     """Public preview of an invite. No coordinates: the exact course is shown only to
     players who join, as for any challenge."""
     invite, preview = _invite_preview(db, token)
@@ -349,7 +349,7 @@ async def get_invite(token: str, db: Session = Depends(get_db)):
 
 
 @router.get("/api/v2/me/invites", response_model=List[InviteStats])
-async def my_invites(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def my_invites(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """How each of the player's invite links performed. A join counts a friend who signed
     up through the inviter and then joined that challenge."""
     uid = token_data["id"]
@@ -371,7 +371,7 @@ async def my_invites(db: Session = Depends(get_db), token_data: dict = Depends(g
 
 
 @router.get("/api/v2/me/referrals", response_model=ReferralSummary)
-async def my_referrals(request: Request, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def my_referrals(request: Request, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     user = db.query(models.User).filter(models.User.id == uid).first()
     profile = get_or_create_profile(db, user)
@@ -426,7 +426,7 @@ def _public_player(db: Session, code: str, request: Request) -> PublicPlayer:
 
 
 @router.get("/api/v2/public/players/{code}", response_model=PublicPlayer)
-async def public_player(code: str, request: Request, db: Session = Depends(get_db)):
+def public_player(code: str, request: Request, db: Session = Depends(get_db)):
     return _public_player(db, code, request)
 
 
@@ -476,7 +476,7 @@ def _not_found(url: str) -> HTMLResponse:
 
 
 @router.get("/s/{token}", include_in_schema=False)
-async def share_page(token: str, request: Request, db: Session = Depends(get_db)):
+def share_page(token: str, request: Request, db: Session = Depends(get_db)):
     url = f"{_base_url(request)}/s/{token}"
     try:
         card = _live_card(db, token)
@@ -499,7 +499,7 @@ async def share_page(token: str, request: Request, db: Session = Depends(get_db)
 
 
 @router.get("/i/{token}", include_in_schema=False)
-async def invite_page(token: str, request: Request, db: Session = Depends(get_db)):
+def invite_page(token: str, request: Request, db: Session = Depends(get_db)):
     url = f"{_base_url(request)}/i/{token}"
     try:
         invite, p = _invite_preview(db, token)
@@ -521,7 +521,7 @@ async def invite_page(token: str, request: Request, db: Session = Depends(get_db
 
 
 @router.get("/p/{code}", include_in_schema=False)
-async def player_page(code: str, request: Request, db: Session = Depends(get_db)):
+def player_page(code: str, request: Request, db: Session = Depends(get_db)):
     """Opt-in public achievement page, built for search and link previews."""
     url = f"{_base_url(request)}/p/{code}"
     try:
@@ -546,7 +546,7 @@ async def player_page(code: str, request: Request, db: Session = Depends(get_db)
 
 
 @router.get("/join/{code}", include_in_schema=False)
-async def join_page(code: str, request: Request, db: Session = Depends(get_db)):
+def join_page(code: str, request: Request, db: Session = Depends(get_db)):
     """Referral landing page. Names the inviter only if their profile is public."""
     url = f"{_base_url(request)}/join/{code}"
     profile = db.query(models.PlayerProfile).filter(models.PlayerProfile.referral_code == code.upper()).first()

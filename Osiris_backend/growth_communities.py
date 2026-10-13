@@ -299,7 +299,7 @@ def _get_season(db: Session, slug: str) -> models.Season:
 # --- communities -----------------------------------------------------------------
 
 @router.post("/api/v2/communities", response_model=CommunityOut, status_code=201)
-async def create_community(req: CommunityCreate, db: Session = Depends(get_db),
+def create_community(req: CommunityCreate, db: Session = Depends(get_db),
                            token_data: dict = Depends(get_active_player)):
     """A club, gym, or group organiser creates their community and becomes its owner.
     Organisers need one verified run, which keeps throwaway accounts out."""
@@ -333,7 +333,7 @@ async def create_community(req: CommunityCreate, db: Session = Depends(get_db),
 
 
 @router.get("/api/v2/communities", response_model=List[CommunityOut])
-async def list_communities(city: Optional[str] = None, kind: Optional[str] = None,
+def list_communities(city: Optional[str] = None, kind: Optional[str] = None,
                            db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Public communities, optionally in one city or of one kind. Verified first."""
     q = db.query(models.Community).filter(models.Community.status == "active",
@@ -347,7 +347,7 @@ async def list_communities(city: Optional[str] = None, kind: Optional[str] = Non
 
 
 @router.get("/api/v2/me/communities", response_model=List[CommunityOut])
-async def my_communities(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def my_communities(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     rows = (db.query(models.Community)
             .join(models.CommunityMember, models.CommunityMember.community_id == models.Community.id)
@@ -356,7 +356,7 @@ async def my_communities(db: Session = Depends(get_db), token_data: dict = Depen
 
 
 @router.get("/api/v2/communities/{slug}", response_model=CommunityOut)
-async def get_community(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def get_community(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     c = _get_community(db, slug)
     if c.visibility == "private" and _membership(db, c.id, token_data["id"]) is None:
         raise _api_error(404, "COMMUNITY_NOT_FOUND", "Community not found")
@@ -364,7 +364,7 @@ async def get_community(slug: str, db: Session = Depends(get_db), token_data: di
 
 
 @router.patch("/api/v2/communities/{slug}", response_model=CommunityOut)
-async def update_community(slug: str, req: CommunityUpdate, db: Session = Depends(get_db),
+def update_community(slug: str, req: CommunityUpdate, db: Session = Depends(get_db),
                            token_data: dict = Depends(get_active_player)):
     c = _get_community(db, slug)
     m = _membership(db, c.id, token_data["id"])
@@ -381,7 +381,7 @@ async def update_community(slug: str, req: CommunityUpdate, db: Session = Depend
 
 
 @router.post("/api/v2/communities/{slug}/join", response_model=CommunityOut)
-async def join_community(slug: str, req: JoinRequest, db: Session = Depends(get_db),
+def join_community(slug: str, req: JoinRequest, db: Session = Depends(get_db),
                          token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     c = _get_community(db, slug)
@@ -395,7 +395,7 @@ async def join_community(slug: str, req: JoinRequest, db: Session = Depends(get_
 
 
 @router.post("/api/v2/communities/{slug}/leave", status_code=204)
-async def leave_community(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def leave_community(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     c = _get_community(db, slug)
     m = _membership(db, c.id, token_data["id"])
     if m is None:
@@ -407,7 +407,7 @@ async def leave_community(slug: str, db: Session = Depends(get_db), token_data: 
 
 
 @router.get("/api/v2/communities/{slug}/leaderboard", response_model=Leaderboard)
-async def community_leaderboard(slug: str, db: Session = Depends(get_db),
+def community_leaderboard(slug: str, db: Session = Depends(get_db),
                                 token_data: dict = Depends(get_active_player)):
     """This week's branded leaderboard. Members only."""
     c = _get_community(db, slug)
@@ -419,7 +419,7 @@ async def community_leaderboard(slug: str, db: Session = Depends(get_db),
 
 
 @router.post("/api/v2/communities/{slug}/challenges/{challenge_id}", status_code=201)
-async def feature_challenge(slug: str, challenge_id: int, db: Session = Depends(get_db),
+def feature_challenge(slug: str, challenge_id: int, db: Session = Depends(get_db),
                             token_data: dict = Depends(get_active_player)):
     """Owners and admins feature an open challenge as their community's branded challenge."""
     uid = token_data["id"]
@@ -443,7 +443,7 @@ async def feature_challenge(slug: str, challenge_id: int, db: Session = Depends(
 
 
 @router.get("/api/v2/communities/{slug}/challenges", response_model=List[ChallengePublic])
-async def community_challenges(slug: str, db: Session = Depends(get_db),
+def community_challenges(slug: str, db: Session = Depends(get_db),
                                token_data: dict = Depends(get_active_player)):
     c = _get_community(db, slug)
     if c.visibility == "private" and _membership(db, c.id, token_data["id"]) is None:
@@ -465,7 +465,7 @@ async def community_challenges(slug: str, db: Session = Depends(get_db),
 # --- local rankings --------------------------------------------------------------
 
 @router.get("/api/v2/leaderboards/local", response_model=Leaderboard)
-async def local_leaderboard(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def local_leaderboard(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """This week's ranking among players who chose the same home city."""
     uid = token_data["id"]
     user = db.query(models.User).filter(models.User.id == uid).first()
@@ -485,7 +485,7 @@ async def local_leaderboard(db: Session = Depends(get_db), token_data: dict = De
 # --- seasons ---------------------------------------------------------------------
 
 @router.get("/api/v2/seasons", response_model=List[SeasonOut])
-async def list_seasons(city: Optional[str] = None, db: Session = Depends(get_db),
+def list_seasons(city: Optional[str] = None, db: Session = Depends(get_db),
                        token_data: dict = Depends(get_active_player)):
     """Live and upcoming seasons, for one city or the player's home city."""
     uid = token_data["id"]
@@ -499,7 +499,7 @@ async def list_seasons(city: Optional[str] = None, db: Session = Depends(get_db)
 
 
 @router.post("/api/v2/seasons/{slug}/join", response_model=SeasonOut)
-async def join_season(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def join_season(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     s = _get_season(db, slug)
     if _season_status(s, _now_naive_utc()) == "ended":
@@ -513,7 +513,7 @@ async def join_season(slug: str, db: Session = Depends(get_db), token_data: dict
 
 
 @router.get("/api/v2/seasons/{slug}/leaderboard", response_model=SeasonLeaderboard)
-async def season_leaderboard(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def season_leaderboard(slug: str, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     s = _get_season(db, slug)
     entrants = [u for (u,) in db.query(models.SeasonEntry.user_id).filter(models.SeasonEntry.season_id == s.id).all()]
@@ -544,7 +544,7 @@ async def season_leaderboard(slug: str, db: Session = Depends(get_db), token_dat
 # --- admin -----------------------------------------------------------------------
 
 @router.post("/api/v2/admin/seasons", response_model=SeasonOut, status_code=201)
-async def admin_create_season(req: SeasonCreate, db: Session = Depends(get_db),
+def admin_create_season(req: SeasonCreate, db: Session = Depends(get_db),
                               admin: dict = Depends(get_current_admin)):
     starts = req.starts_at.replace(tzinfo=None)
     ends = req.ends_at.replace(tzinfo=None)
@@ -562,7 +562,7 @@ async def admin_create_season(req: SeasonCreate, db: Session = Depends(get_db),
 
 
 @router.get("/api/v2/admin/communities", response_model=List[AdminCommunityItem])
-async def admin_list_communities(db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
+def admin_list_communities(db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
     rows = db.query(models.Community).order_by(models.Community.created_at.desc()).limit(500).all()
     return [AdminCommunityItem(
         id=c.id, slug=c.slug, name=c.name, kind=c.kind, city=c.city, verified=bool(c.verified),
@@ -572,7 +572,7 @@ async def admin_list_communities(db: Session = Depends(get_db), _admin: dict = D
 
 
 @router.post("/api/v2/admin/communities/{community_id}/status", response_model=AdminCommunityItem)
-async def admin_community_status(community_id: int, req: AdminCommunityStatus, db: Session = Depends(get_db),
+def admin_community_status(community_id: int, req: AdminCommunityStatus, db: Session = Depends(get_db),
                                  admin: dict = Depends(get_current_admin)):
     """Verify a real organisation, or suspend an abusive community. Reason required."""
     c = db.query(models.Community).filter(models.Community.id == community_id).first()

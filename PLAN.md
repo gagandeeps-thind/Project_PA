@@ -58,6 +58,16 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: identical DDL (`Base.metadata` produces the same tables, columns, types, nullability, indexes and
     constraints before and after; no migration); all backend suites pass; the CI mypy error count drops substantially.
 
+- [x] backend: stop blocking the event loop (found by load test 2026-10-12)
+  - 101 `async def` endpoints made blocking SQLAlchemy calls, so a single worker served requests one at a time.
+  - Acceptance: endpoints that never await run as plain `def` (FastAPI thread pool); p95 < 500 ms at 20 concurrent
+    users for the main player endpoints (PRD NFR); all suites pass.
+
+- [ ] [human] infra: SQLite single-writer tail latency
+  - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
+    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
+  - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
+
 - [ ] [human] ci: make the mypy step blocking
   - Since the typed-models refactor the CI mypy command reports zero errors, but the CI workflow still marks the
     step `continue-on-error: true`, so a regression would not fail CI. After the CI edit, an agent adds mypy to gate.sh.

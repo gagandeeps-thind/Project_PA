@@ -22,6 +22,8 @@ ENV/
 # live outside the repo (see Documentation/Enterprise/08_Operations_and_Incident_Runbook.md).
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
