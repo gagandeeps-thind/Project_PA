@@ -43,6 +43,8 @@ def _cleanup() -> None:
             db.query(models.RunSession).filter(models.RunSession.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.ActivityLog).filter(models.ActivityLog.user_id.in_(ids)).delete(synchronize_session=False)
             growth_api.delete_growth_data(db, ids)
+            # Ledger rows must go too: SQLite reuses freed user ids, so orphans would be inherited.
+            db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.User).filter(models.User.id.in_(ids)).delete(synchronize_session=False)
         db.commit()
     finally:

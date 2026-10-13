@@ -30,7 +30,11 @@ def test_gdpr_and_email_uniqueness():
 
     test_email = "gdpr_unique_test@osirisseed.com"
     
-    # Cleanup previous test runs
+    # Cleanup previous test runs. Ledger rows go first: SQLite reuses freed user ids, so
+    # orphaned rows would be inherited by the next account.
+    stale_ids = [u.id for u in db.query(models.User).filter(models.User.email == test_email).all()]
+    db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id.in_(stale_ids)).delete(
+        synchronize_session=False)
     db.query(models.User).filter(models.User.email == test_email).delete()
     db.query(models.Merchant).filter(models.Merchant.email == test_email).delete()
     db.commit()

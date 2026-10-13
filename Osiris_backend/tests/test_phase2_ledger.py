@@ -312,12 +312,31 @@ def test_reconciliation_check_passes():
         db.close()
 
 
+# --- Test 5: orphaned ledger rows are reported (PLAN item 1 regression) ---------------------
+def test_orphan_ledger_rows_are_reported():
+    """Deleting a user but not their ledger rows leaves orphans. SQLite reuses the freed id,
+    so the next account silently inherits that history and reconciliation fails much later
+    for an unrelated user. The check must flag orphans as soon as they exist."""
+    uid = _onboard("ledger_orphan@example.com")
+    db = TestingSessionLocal()
+    try:
+        db.query(models.User).filter(models.User.id == uid).delete(synchronize_session=False)
+        db.commit()
+        _check("reconcile.check reports a ledger row whose user was deleted", reconcile.check(db) >= 1)
+        db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == uid).delete(synchronize_session=False)
+        db.commit()
+        _check("reconcile.check is clean once the orphan rows are removed", reconcile.check(db) == 0)
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     print("--- Phase 2 Crystal Ledger tests ---")
     test_opening_balance_row()
     test_full_money_path_conservation()
     test_free_tier_time_trial_conquerable()
-    test_reconciliation_check_passes()  # must run LAST (checks all users created above)
+    test_reconciliation_check_passes()  # checks all users created above
+    test_orphan_ledger_rows_are_reported()
     print()
     if _FAILURES:
         print(f"{len(_FAILURES)} check(s) FAILED: {_FAILURES}")

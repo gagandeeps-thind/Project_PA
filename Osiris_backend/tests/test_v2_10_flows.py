@@ -74,6 +74,8 @@ def _cleanup() -> None:
             db.query(models.ProofConsumed).filter(models.ProofConsumed.user_id.in_(user_ids)).delete(synchronize_session=False)
             db.query(models.Domain).filter(models.Domain.owner_id.in_(user_ids)).delete(synchronize_session=False)
             growth_api.delete_growth_data(db, user_ids)
+            # Ledger rows must go too: SQLite reuses freed user ids, so orphans would be inherited.
+            db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id.in_(user_ids)).delete(synchronize_session=False)
             db.query(models.User).filter(models.User.id.in_(user_ids)).delete(synchronize_session=False)
         db.query(models.Admin).filter(models.Admin.email.like(f"{SMOKE_EMAIL_PREFIX}%{SMOKE_DOMAIN}")).delete(synchronize_session=False)
         db.commit()

@@ -11,12 +11,24 @@ setting the repo up for autonomous agent work (2026-10-12).
 
 ## Tasks
 
-- [ ] backend: diagnose the crystal ledger reconciliation failure
+- [x] backend: diagnose the crystal ledger reconciliation failure
   - `python scripts/reconcile_ledger.py --check` fails on the dev DB (seen: `challenger.09270021@example.com` ledger 200 vs wallet 100;
     `growth_g3_test_seeker@example.com` ledger 100 vs wallet 0). The count changed while the test suites ran.
   - Determine whether a code path writes `mana_crystals` without `services.ledger.apply_crystal_delta`, or whether test cleanup deletes users/ledger rows partially.
   - Acceptance: a written root cause in the commit body, plus a failing-then-passing regression test in the owning suite.
     After running all 13 CI suites, `reconcile_ledger.py --check` exits 0 for every user the suites create.
+
+- [ ] [human] data: clean the pre-existing ledger orphans out of the local dev DB
+  - Root cause fixed in `fix/ledger-orphan-rows`, but rows written before the fix remain in `fitness_mvp.db`
+    (orphans for missing users 14, 21, 22, 23; user 6 inherited row 68 from a deleted account).
+  - Acceptance: delete those rows (or recreate the dev DB with `alembic upgrade head`); `reconcile_ledger.py --check` exits 0.
+
+- [ ] backend: route `DELETE /api/v1/users/{id}` through `growth_safety.erase_player`
+  - Today it hard-deletes the users row and its crystal ledger rows (financial records must be anonymised and kept,
+    PRD-009) while leaving runs, route points, courses, challenges and attempts behind. SQLite then reuses the id,
+    so a new account can inherit another person's GPS history.
+  - Acceptance: the endpoint anonymises via `erase_player` and keeps the tombstone row and ledger;
+    the GDPR suite asserts route points are gone and the ledger still reconciles.
 
 - [ ] backend: resolve the OpenAPI contract drift
   - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.

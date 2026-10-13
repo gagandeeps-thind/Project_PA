@@ -12,8 +12,9 @@ Two modes:
 
   Check (CI gate):
       python scripts/reconcile_ledger.py --check
-    Assert sum(CrystalLedger.delta) == mana_crystals for EVERY user. Prints each
-    discrepancy and exits non-zero if any user is out of balance. Does NOT mutate.
+    Assert sum(CrystalLedger.delta) == mana_crystals for EVERY user, and that no ledger
+    rows belong to a user id that no longer exists. Prints each problem and exits non-zero
+    if any is found. Does NOT mutate.
 
 Run from the Osiris_backend directory (so `import database/models` resolves). Honors the
 same OSIRIS_DATABASE_URL / SQLite URL the app uses.
@@ -70,10 +71,18 @@ def backfill(db) -> int:
 
 
 def check(db) -> int:
-    """Return the number of users whose ledger sum != mana_crystals (0 == healthy)."""
+    """Return the number of problems found (0 == healthy): users whose ledger sum !=
+    mana_crystals, plus user ids that have ledger rows but no users row.
+
+    Orphaned rows matter even though no wallet reads them: SQLite reuses a freed user id, so
+    the next account created inherits the orphaned history and fails reconciliation for no
+    reason of its own. Production keeps erased users as tombstones, so any orphan means a
+    hard delete skipped the ledger."""
     sums = _ledger_sum_by_user(db)
     discrepancies = 0
+    user_ids = set()
     for user in db.query(models.User).all():
+        user_ids.add(user.id)
         ledger_total = sums.get(user.id, 0)
         wallet = user.mana_crystals or 0
         if ledger_total != wallet:
@@ -82,6 +91,9 @@ def check(db) -> int:
                 f"  DISCREPANCY user {user.id} ({user.email}): "
                 f"ledger sum={ledger_total} but mana_crystals={wallet}"
             )
+    for uid in sorted(set(sums) - user_ids):
+        discrepancies += 1
+        print(f"  ORPHAN ledger rows for missing user {uid}: sum={sums[uid]}")
     return discrepancies
 
 
@@ -102,7 +114,7 @@ def main() -> int:
             bad = check(db)
             total = db.query(models.User).count()
             if bad:
-                print(f"FAIL: {bad}/{total} user(s) out of balance.")
+                print(f"FAIL: {bad} ledger problem(s) found across {total} user(s).")
                 return 1
             print(f"OK: all {total} user(s) reconcile (sum(deltas) == mana_crystals).")
             return 0
