@@ -126,6 +126,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
         return;
       }
 
+      await ref.read(runQueueProvider).bindUser(profile.id);
       state = profile;
     } catch (_) {
       // Silent fail — user will just see the login screen.
@@ -158,6 +159,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
 
     // Fetch full profile
     final profileData = await _api.getUserProfile(userId);
+    await ref.read(runQueueProvider).bindUser(userId);
     state = UserProfile.fromJson(profileData);
   }
 
@@ -196,6 +198,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
     _api.setToken(token);
     await _storage.write(key: 'auth_token', value: token);
     await _storage.write(key: 'user_id', value: userId.toString());
+    await ref.read(runQueueProvider).bindUser(userId);
     state = UserProfile.fromJson(await _api.getUserProfile(userId));
   }
 
@@ -209,6 +212,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
   // ── Logout ───────────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    await ref.read(runQueueProvider).bindUser(null);
     await _clearCredentials();
     state = null;
   }

@@ -9,6 +9,8 @@ import '../api/api_client.dart';
 /// never loses route points (PRD-003).
 class ActiveRun {
   final int runId;
+  /// The account that recorded the run. Null only for runs saved by older app versions.
+  final int? userId;
   final DateTime startedAt;
   final int? challengeId;
   int nextSequence;
@@ -17,6 +19,7 @@ class ActiveRun {
 
   ActiveRun({
     required this.runId,
+    this.userId,
     required this.startedAt,
     this.challengeId,
     this.nextSequence = 0,
@@ -26,8 +29,14 @@ class ActiveRun {
 
   int get uploaded => nextSequence - pending.length;
 
+  /// Runs left open this long were almost certainly abandoned (app killed, phone died).
+  static const staleAfter = Duration(hours: 12);
+
+  bool get isStale => DateTime.now().toUtc().difference(startedAt) > staleAfter;
+
   Map<String, dynamic> toJson() => {
         'run_id': runId,
+        'user_id': userId,
         'started_at': startedAt.toIso8601String(),
         'challenge_id': challengeId,
         'next_sequence': nextSequence,
@@ -37,6 +46,7 @@ class ActiveRun {
 
   factory ActiveRun.fromJson(Map<String, dynamic> j) => ActiveRun(
         runId: j['run_id'] as int,
+        userId: j['user_id'] as int?,
         startedAt: DateTime.parse(j['started_at'] as String),
         challengeId: j['challenge_id'] as int?,
         nextSequence: j['next_sequence'] as int? ?? 0,
@@ -74,8 +84,16 @@ class RunUploadQueue {
 
   ActiveRun? get active => _run;
 
-  Future<void> begin(int runId, DateTime startedAt, {int? challengeId}) async {
-    _run = ActiveRun(runId: runId, startedAt: startedAt, challengeId: challengeId);
+  /// Call whenever the signed-in account changes (sign in, sign up, session restore, sign
+  /// out with null). A saved run that belongs to anyone else is discarded, so one person's
+  /// unsent GPS points are never shown to, or uploaded by, the next person on this phone.
+  Future<void> bindUser(int? userId) async {
+    final run = _run;
+    if (run != null && (userId == null || run.userId != userId)) await clear();
+  }
+
+  Future<void> begin(int runId, DateTime startedAt, {required int userId, int? challengeId}) async {
+    _run = ActiveRun(runId: runId, userId: userId, startedAt: startedAt, challengeId: challengeId);
     await _save();
   }
 

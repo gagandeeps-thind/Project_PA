@@ -60,9 +60,60 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (_challengeId != null) unawaited(_loadCourse());
     if (active != null) {
       _startClock();
-      _snack('Recovered your unfinished run. Keep going or tap FINISH.', OsirisTheme.secondary);
+      if (active.isStale) {
+        unawaited(_promptStaleRun());
+      } else {
+        _snack('Recovered your unfinished run. Keep going or tap FINISH.', OsirisTheme.secondary);
+      }
     }
     await _initLocation();
+  }
+
+  /// A run left open for many hours was almost certainly abandoned; ask instead of resuming.
+  Future<void> _promptStaleRun() async {
+    final finish = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: OsirisTheme.surface,
+        title: const Text('Unfinished run found'),
+        content: const Text('A run you started a while ago was never finished. '
+            'Submit what was recorded, or discard it and start fresh?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('DISCARD')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('SUBMIT IT')),
+        ],
+      ),
+    );
+    if (finish == true) {
+      await _finishRun();
+    } else {
+      await _discard();
+    }
+  }
+
+  Future<void> _confirmDiscard() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: OsirisTheme.surface,
+        title: const Text('Discard this run?'),
+        content: const Text('The recorded route is deleted from this phone and the run will not count.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('KEEP RUNNING')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('DISCARD')),
+        ],
+      ),
+    );
+    if (yes == true) await _discard();
+  }
+
+  Future<void> _discard() async {
+    await ref.read(runQueueProvider).clear();
+    _clock?.cancel();
+    if (!mounted) return;
+    setState(() => _tracePath.clear());
+    _snack('Run discarded.', OsirisTheme.secondary);
   }
 
   Future<void> _loadCourse() async {
@@ -144,7 +195,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final created = await api.createRun(activityType: 'run', deviceStartedAt: now.toIso8601String());
       final runId = created['id'] as int;
       await api.startRun(runId, now.toIso8601String());
-      await ref.read(runQueueProvider).begin(runId, now, challengeId: _challengeId);
+      await ref.read(runQueueProvider).begin(runId, now,
+          userId: ref.read(authProvider)!.id, challengeId: _challengeId);
       _tracePath
         ..clear()
         ..add(_currentPos!);
@@ -371,7 +423,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final paceSecPerKm = run != null && run.distanceM > 50 ? elapsed.inSeconds / (run.distanceM / 1000) : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(_challengeId == null ? 'RUN' : 'CHALLENGE RUN')),
+      appBar: AppBar(
+        title: Text(_challengeId == null ? 'RUN' : 'CHALLENGE RUN'),
+        actions: [
+          if (run != null)
+            IconButton(
+              tooltip: 'Discard run',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _busy ? null : _confirmDiscard,
+            ),
+        ],
+      ),
       body: _loadingLocation
           ? const Center(child: CircularProgressIndicator())
           : Stack(
