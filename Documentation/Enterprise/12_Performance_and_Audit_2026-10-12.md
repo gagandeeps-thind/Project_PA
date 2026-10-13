@@ -70,6 +70,7 @@ requires PostgreSQL before SIT, and the load test should be re-run there.
 | 11 | Reliability | Locked screen stopped GPS, so real runs were rejected. | Fixed: location foreground service while recording |
 | 12 | Copy | "you are an runner". | Fixed |
 | 13 | Tooling | 640 mypy errors (legacy SQLAlchemy `Column` typing). | Fixed: typed models, 0 errors |
+| 14 | Security | `scripts/seed_admin.py` caps admin passwords at 12 characters ("matches the in-app cap"). NIST SP 800-63B recommends allowing at least 64; admin accounts need the strongest passwords and MFA (not built). | Open: needs a decision on the admin auth policy |
 
 Route inventory: every route without an auth dependency was reviewed. The remaining ones are intentional
 (health, rules, opt-in public pages, sign-up/login, crystal pack list, Stripe webhook with signature check,
