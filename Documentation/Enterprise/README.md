@@ -21,6 +21,7 @@ This directory is the maintained startup-level source of truth for Osiris. Obsol
 | [09 Architecture Decision Records](09_Architecture_Decision_Records.md) | Decisions that prevent drift and re-litigation |
 | [10 First Release Status](10_First_Release_Status.md) | R0–R2 verified running and challenge pilot: delivered scope and residual risks |
 | [11 Growth Release Status](11_Growth_Release_Status.md) | Daily quests, sharing, referrals, clubs, rankings, seasons, and trust controls |
+| [12 Performance Test and Audit 2026-10-12](12_Performance_and_Audit_2026-10-12.md) | Device E2E results, API latency under load, release-build metrics, audit findings and fixes |
 
 ## Product north star
 
