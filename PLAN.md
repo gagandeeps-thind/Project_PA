@@ -138,6 +138,10 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
     `NSCameraUsageDescription` and 15.5 deployment target; widget test drives the screen with a fake pose stream.
 - [ ] [human] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
   `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
+- [ ] [human] product: reconcile launch principle 1 in `Documentation/Enterprise/README.md` ("push-ups, squats, pose
+  estimation ... are later product increments") with the camera exercise feature now built on request.
+  - Acceptance: either the principle is updated, or the Bodyweight entry is gated behind a build flag for the first release.
+- [x] audit: exercise performance test and audit (report 13); rate limit on set uploads added.
 - [ ] [human] device QA: run the exercise screen on a physical Android phone and an iPhone (this build environment has
   no KVM, no Android SDK access and no macOS, so no emulator or simulator run was possible), and tune thresholds
   with real recordings if needed (bump `RULES_VERSION` when thresholds change).
