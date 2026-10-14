@@ -128,7 +128,7 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
     `Osiris_customer/assets/exercise_catalog.json` (drift fails `tests/test_exercise_sessions.py`); implausible tempo,
     rate, totals, replayed timing, rules-version mismatch and device-rejected sets earn 0 XP; uploads are idempotent per
     `client_session_id`; per-exercise and total daily XP caps; export and erasure include the rows; metrics counters.
-- [ ] customer: on-device rep engine (pure Dart) with genuineness checks
+- [x] customer: on-device rep engine (pure Dart) with genuineness checks
   - Acceptance: synthetic landmark sequences prove genuine reps count; half reps, too-fast reps, broken form,
     occluded joints, tracking glitches, machine-regular replays and static poses do not; per-frame cost benchmarked.
 - [ ] customer: local SQLite store (catalog cache, sessions, reps) and an upload queue
