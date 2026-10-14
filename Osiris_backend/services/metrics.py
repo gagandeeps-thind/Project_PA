@@ -23,6 +23,8 @@ _latency_sum: dict[tuple[str, str], float] = defaultdict(float)
 _latency_total: dict[tuple[str, str], int] = defaultdict(int)
 _run_outcomes: dict[str, int] = defaultdict(int)                       # status -> count
 _run_reasons: dict[str, int] = defaultdict(int)                        # reason code -> count
+_exercise_outcomes: dict[tuple[str, str], int] = defaultdict(int)      # (exercise, status) -> count
+_exercise_reasons: dict[str, int] = defaultdict(int)                   # reason code -> count
 
 
 def observe_request(method: str, route: str, status: int, seconds: float) -> None:
@@ -42,6 +44,13 @@ def observe_run_verification(status: str, reason_codes: list[str]) -> None:
         _run_outcomes[status] += 1
         for code in reason_codes:
             _run_reasons[code] += 1
+
+
+def observe_exercise_verification(exercise: str, status: str, reason_codes: list[str]) -> None:
+    with _lock:
+        _exercise_outcomes[(exercise, status)] += 1
+        for code in reason_codes:
+            _exercise_reasons[code] += 1
 
 
 def _label(value: str) -> str:
@@ -79,11 +88,22 @@ def render() -> str:
         out.append("# TYPE osiris_run_rejection_reasons_total counter")
         for code, n in sorted(_run_reasons.items()):
             out.append(f'osiris_run_rejection_reasons_total{{reason="{_label(code)}"}} {n}')
+
+        out.append("# HELP osiris_exercise_verifications_total Exercise sets by exercise and server status.")
+        out.append("# TYPE osiris_exercise_verifications_total counter")
+        for (exercise, status), n in sorted(_exercise_outcomes.items()):
+            out.append(f'osiris_exercise_verifications_total{{exercise="{_label(exercise)}",status="{_label(status)}"}} {n}')
+
+        out.append("# HELP osiris_exercise_flag_reasons_total Reason codes on flagged or rejected exercise sets.")
+        out.append("# TYPE osiris_exercise_flag_reasons_total counter")
+        for code, n in sorted(_exercise_reasons.items()):
+            out.append(f'osiris_exercise_flag_reasons_total{{reason="{_label(code)}"}} {n}')
     return "\n".join(out) + "\n"
 
 
 def reset() -> None:
     """Test hook: clear every series."""
     with _lock:
-        for store in (_requests, _latency_counts, _latency_sum, _latency_total, _run_outcomes, _run_reasons):
+        for store in (_requests, _latency_counts, _latency_sum, _latency_total, _run_outcomes, _run_reasons,
+                      _exercise_outcomes, _exercise_reasons):
             store.clear()

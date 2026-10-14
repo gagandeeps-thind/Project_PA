@@ -822,3 +822,37 @@ class UserBlock(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
     __table_args__ = (UniqueConstraint("blocker_id", "blocked_id", name="uq_user_blocks_pair"),)
+
+
+# --- Camera-verified exercises ----------------------------------------------------------
+
+class ExerciseSession(Base):
+    """Summary of one camera-verified exercise set (push-ups, squats, plank, ...).
+
+    Pose estimation runs on the phone; video and landmarks never reach the server. The row
+    keeps the device's summary and the server's re-check (`services.exercises.evaluate`).
+    `client_session_id` is the device's id for the set, so a retried upload is idempotent.
+    """
+    __tablename__ = "exercise_sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    client_session_id: Mapped[str] = mapped_column(String, nullable=False)
+    exercise_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    rules_version: Mapped[str] = mapped_column(String, nullable=False)
+    device_started_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    duration_s: Mapped[float] = mapped_column(Float, nullable=False)
+    reps_attempted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reps_valid: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    hold_s: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    form_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    client_verdict: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, index=True)   # verified | review | rejected
+    reason_codes_json: Mapped[str] = mapped_column(String, nullable=False, default="[]")
+    metrics_json: Mapped[str] = mapped_column(String, nullable=False, default="{}")
+    xp_awarded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    local_date: Mapped[str] = mapped_column(String, nullable=False)           # YYYY-MM-DD in the player's offset
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_session_id", name="uq_exercise_sessions_user_client"),
+    )

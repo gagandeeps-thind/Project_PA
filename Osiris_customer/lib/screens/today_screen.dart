@@ -266,6 +266,7 @@ class _NavGrid extends StatelessWidget {
       (Icons.flag_outlined, 'Challenges', '/challenges'),
       (Icons.groups_outlined, 'Clubs', '/communities'),
       (Icons.leaderboard_outlined, 'Rankings', '/rankings'),
+      (Icons.fitness_center, 'Bodyweight', '/exercise'),
       (Icons.route_outlined, 'My courses', '/courses'),
       (Icons.emoji_events_outlined, 'Progress', '/dashboard'),
       (Icons.person_add_alt, 'Invite', '/settings'),

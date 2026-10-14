@@ -414,6 +414,24 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  // ── Camera-verified exercises ───────────────────────────────────────
+
+  Future<Map<String, dynamic>> getExerciseCatalog() async {
+    final response = await _dio.get('/api/v2/exercises');
+    return response.data as Map<String, dynamic>;
+  }
+
+  /// Upload one set's summary. Idempotent per `client_session_id` (a retry returns 200).
+  Future<Map<String, dynamic>> submitExerciseSession(Map<String, dynamic> body) async {
+    final response = await _dio.post('/api/v2/exercise-sessions', data: body);
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getExerciseHistory({int limit = 20}) async {
+    final response = await _dio.get('/api/v2/me/exercise-sessions', queryParameters: {'limit': limit});
+    return response.data as Map<String, dynamic>;
+  }
+
   // ── Domains (legacy) ─────────────────────────────────────────────────
 
   /// Submit a new domain polygon. Automatically adds device_timestamp.
