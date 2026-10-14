@@ -108,7 +108,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build runtime image from a clean checkout
-        run: docker build -t osiris-backend:ci Osiris_backend
+        run: docker build -t osiris-backend:ci .
 
       - name: Boot the container and hit /healthz (zero manual steps)
         run: |
