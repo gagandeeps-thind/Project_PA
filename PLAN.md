@@ -118,6 +118,15 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Session restore opened the exercise SQLite DB on every launch to drop other accounts' rows (~200 ms). The owner
     is now remembered in preferences; the DB opens only when the signed-in account changes.
 
+- [ ] [human] product: should a zero-rep exercise set be uploaded? (report 14)
+  - Today it uploads a summary that earns nothing and counts against the 30/min upload limit.
+  - Acceptance: decision recorded; if "no", the app keeps it local and the result sheet says so.
+
+- [ ] [human] size: ML Kit pose model bundled vs delivered by Google Play services (report 14)
+  - Universal APK went 53 → 99.7 MB (arm64 download 43.7 MB). The Play-services model shrinks the app but downloads on
+    first use and needs a dependency change (lockfile).
+  - Acceptance: decision recorded; if switched, first-use download handled in the exercise screen.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
