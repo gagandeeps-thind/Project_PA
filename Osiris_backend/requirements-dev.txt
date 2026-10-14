@@ -1,0 +1,10 @@
+# Osiris backend — dev / CI tooling (NOT installed into the runtime image).
+# Install with:  pip install -r requirements.lock.txt -r requirements-dev.txt
+-r requirements.lock.txt
+
+# Test client (TestClient is built on httpx; already in the lock, restated for clarity)
+httpx==0.28.1
+
+# Lint + type-check (versions float within a minor; CI pins the runner image)
+ruff==0.9.6
+mypy==1.15.0

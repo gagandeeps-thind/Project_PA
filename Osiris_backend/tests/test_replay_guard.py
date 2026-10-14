@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Webhook fail-closed boot check requires an explicit dev/test env.
+os.environ.setdefault("OSIRIS_ENV", "test")
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -93,7 +96,7 @@ def test_replay_attack_guard():
         }
         
         # 1. First submission should succeed (200 OK)
-        resp1 = client.post("/api/v1/domains", json=payload)
+        client.post("/api/v1/domains", json=payload)
         # Note: the heuristic ml_referee might reject our fake accelerometer trace
         # with a 400 Bad Request depending on its internal math. But if the replay
         # guard works, the SECOND request must be 409 regardless, or if the first

@@ -92,6 +92,9 @@ class OsirisTheme {
       ),
 
       // Snackbar
+      // Material 3 paints the unfilled part of a bar in a bright tint, so 0% looked full.
+      progressIndicatorTheme: const ProgressIndicatorThemeData(linearTrackColor: Colors.white12),
+
       snackBarTheme: const SnackBarThemeData(
         backgroundColor: surface,
         contentTextStyle: TextStyle(color: onSurface),

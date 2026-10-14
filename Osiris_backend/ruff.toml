@@ -1,0 +1,20 @@
+# Phase 0 lint config. Conservative on a legacy monolith: keep the bug-catching pyflakes
+# (F) rules as a hard gate; ignore two pervasive stylistic rules that would otherwise paint
+# the baseline red without catching real defects.
+target-version = "py313"
+line-length = 120
+
+[lint]
+# Keep the bug-catching pyflakes (F) rules plus structural E rules as a hard gate.
+# Whitespace (W) and formatting are left to a future `ruff format` pass so the Phase 0
+# baseline doesn't churn the legacy tree.
+select = ["E", "F"]
+ignore = [
+    "E402",  # module-import-not-at-top: the app does deliberate lazy/ordered imports
+    "E701",  # multiple-statements-on-one-line: stylistic, pervasive in the existing code
+    "E501",  # line-too-long: legacy long lines; not worth reflowing at baseline
+]
+
+[lint.per-file-ignores]
+# Migrations and seed scripts are generated/operational; don't hold them to app rules.
+"alembic/versions/*" = ["E", "F", "W"]

@@ -19,9 +19,11 @@ ENV/
 
 # --- Local databases (Osiris MVP uses SQLite) ---
 # fitness_mvp.db holds per-machine dev state — never commit. Pilot data backups
-# live outside the repo (see Documentation/Imp_and_US.md once the runbook is written).
+# live outside the repo (see Documentation/Enterprise/08_Operations_and_Incident_Runbook.md).
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
@@ -31,21 +33,21 @@ ENV/
 .env.*.local
 
 # --- Flutter / Dart ---
-Osiris_frontend/.dart_tool/
-Osiris_frontend/.flutter-plugins
-Osiris_frontend/.flutter-plugins-dependencies
-Osiris_frontend/build/
-Osiris_frontend/.idea/
-Osiris_frontend/ios/Pods/
-Osiris_frontend/ios/.symlinks/
-Osiris_frontend/android/.gradle/
-Osiris_frontend/android/local.properties
+Osiris_customer/.dart_tool/
+Osiris_customer/.flutter-plugins
+Osiris_customer/.flutter-plugins-dependencies
+Osiris_customer/build/
+Osiris_customer/.idea/
+Osiris_merchant/.dart_tool/
+Osiris_merchant/.flutter-plugins
+Osiris_merchant/.flutter-plugins-dependencies
+Osiris_merchant/build/
+Osiris_merchant/.idea/
 
-# --- React (Vite) merchant portal ---
-Osiris_merchant_web/node_modules/
-Osiris_merchant_web/dist/
-Osiris_merchant_web/.vite/
-Osiris_merchant_web/coverage/
+# --- React Admin Web ---
+Osiris_admin_web/node_modules/
+Osiris_admin_web/dist/
+Osiris_admin_web/.vite/
 
 # --- Editor / OS ---
 .vscode/

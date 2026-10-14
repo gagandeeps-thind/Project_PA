@@ -316,7 +316,7 @@ class _ActivationBannerState extends ConsumerState<_ActivationBanner> {
               label: Text(_isLoading ? 'Processing…' : 'PAY PILOT FEE'),
             ),
           ),
-          if (_paymentId != null) ...[
+          if (_paymentId != null && const bool.fromEnvironment('ALLOW_SIMULATE', defaultValue: false)) ...[
             const SizedBox(height: 12),
             Row(
               children: [

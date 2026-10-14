@@ -6,6 +6,9 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import MerchantsPage from "./pages/MerchantsPage";
 import BountiesPage from "./pages/BountiesPage";
+import TrustPage from "./pages/TrustPage";
+import GrowthPage from "./pages/GrowthPage";
+import CommunityPage from "./pages/CommunityPage";
 import Sidebar, { type PageKey } from "./components/Sidebar";
 import type { AdminUser } from "./api/types";
 
@@ -51,6 +54,12 @@ function App() {
     switch (page) {
       case "dashboard":
         return <DashboardPage />;
+      case "growth":
+        return <GrowthPage />;
+      case "community":
+        return <CommunityPage />;
+      case "trust":
+        return <TrustPage />;
       case "merchants":
         return <MerchantsPage />;
       case "bounties":

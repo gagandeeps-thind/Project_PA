@@ -8,12 +8,21 @@ import type {
   PlatformRevenue,
   Bounty,
   CreateBountyPayload,
+  ReviewQueueItem,
+  AdminChallenge,
+  AdminUserStatus,
+  AuditEvent,
+  Funnel,
+  AdminCommunity,
+  AdminReport,
+  SeasonOut,
 } from "./types";
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: BASE_URL,
+  timeout: 15000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -34,6 +43,7 @@ export async function loginAdmin(
   const { data } = await api.post<AdminLoginResponse>("/api/v1/auth/login", {
     email,
     password,
+    device_timestamp: new Date().toISOString(),
   });
 
   // MUST reject non-admin roles
@@ -85,4 +95,133 @@ export async function createBounty(
 ): Promise<Bounty> {
   const { data } = await api.post<Bounty>("/api/v1/bounties", payload);
   return data;
+}
+
+/* ── Trust console (R2, /api/v2/admin) ───────────────────── */
+
+/** Pull the human message out of a v2 `{detail: {code, message}}` error. */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object" && "message" in detail) {
+      return String((detail as { message: unknown }).message);
+    }
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
+export async function getReviewQueue(): Promise<ReviewQueueItem[]> {
+  const { data } = await api.get<ReviewQueueItem[]>("/api/v2/admin/review-queue");
+  return data;
+}
+
+export async function reviewAttempt(
+  attemptId: number,
+  decision: "accept" | "reject",
+  note: string
+): Promise<void> {
+  await api.post(`/api/v2/admin/attempts/${attemptId}/review`, { decision, note });
+}
+
+export async function getAdminChallenges(status?: string): Promise<AdminChallenge[]> {
+  const { data } = await api.get<AdminChallenge[]>("/api/v2/admin/challenges", {
+    params: status ? { status } : {},
+  });
+  return data;
+}
+
+export async function setChallengeStatus(
+  challengeId: number,
+  action: "suspend" | "resume" | "void",
+  reason: string
+): Promise<AdminChallenge> {
+  const { data } = await api.post<AdminChallenge>(
+    `/api/v2/admin/challenges/${challengeId}/status`,
+    { action, reason }
+  );
+  return data;
+}
+
+export async function suspendCourse(courseId: number, reason: string): Promise<void> {
+  await api.post(`/api/v2/admin/courses/${courseId}/suspend`, { reason });
+}
+
+export async function suspendUser(userId: number, reason: string): Promise<AdminUserStatus> {
+  const { data } = await api.post<AdminUserStatus>(`/api/v2/admin/users/${userId}/suspend`, { reason });
+  return data;
+}
+
+export async function unsuspendUser(userId: number): Promise<AdminUserStatus> {
+  const { data } = await api.post<AdminUserStatus>(`/api/v2/admin/users/${userId}/unsuspend`);
+  return data;
+}
+
+export async function getAuditEvents(filters: {
+  entity_type?: string;
+  entity_id?: number;
+  action?: string;
+}): Promise<AuditEvent[]> {
+  const params: Record<string, string | number> = { limit: 200 };
+  if (filters.entity_type) params.entity_type = filters.entity_type;
+  if (filters.entity_id !== undefined) params.entity_id = filters.entity_id;
+  if (filters.action) params.action = filters.action;
+  const { data } = await api.get<AuditEvent[]>("/api/v2/admin/audit-events", { params });
+  return data;
+}
+
+/* ── Growth release: funnel, communities, seasons, reports ─── */
+export async function getFunnel(days: number): Promise<Funnel> {
+  const { data } = await api.get<Funnel>("/api/v2/admin/funnel", { params: { days } });
+  return data;
+}
+
+export async function getAdminCommunities(): Promise<AdminCommunity[]> {
+  const { data } = await api.get<AdminCommunity[]>("/api/v2/admin/communities");
+  return data;
+}
+
+export async function setCommunityStatus(
+  communityId: number,
+  change: { verified?: boolean; status?: "active" | "suspended" },
+  reason: string
+): Promise<AdminCommunity> {
+  const { data } = await api.post<AdminCommunity>(`/api/v2/admin/communities/${communityId}/status`, {
+    ...change,
+    reason,
+  });
+  return data;
+}
+
+export async function createSeason(season: {
+  name: string;
+  city: string;
+  description?: string;
+  starts_at: string;
+  ends_at: string;
+}): Promise<SeasonOut> {
+  const { data } = await api.post<SeasonOut>("/api/v2/admin/seasons", season);
+  return data;
+}
+
+export async function getReports(status: string): Promise<AdminReport[]> {
+  const { data } = await api.get<AdminReport[]>("/api/v2/admin/reports", { params: { status } });
+  return data;
+}
+
+export async function resolveReport(
+  reportId: number,
+  status: "actioned" | "dismissed",
+  note: string
+): Promise<{ resolved: number }> {
+  const { data } = await api.post<{ resolved: number }>(`/api/v2/admin/reports/${reportId}/resolve`, {
+    status,
+    note,
+    all_for_target: true,
+  });
+  return data;
+}
+
+export async function resetDisplayName(userId: number, reason: string): Promise<void> {
+  await api.post(`/api/v2/admin/users/${userId}/reset-display-name`, { reason });
 }

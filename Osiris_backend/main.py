@@ -5,12 +5,20 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
+import functools
 import json
 import logging
 import os
 import secrets
 import hashlib
 import hmac
+
+# Load a local .env (gitignored) into os.environ before anything reads config. In real
+# deployments env vars are set by the platform/CI and this is a no-op; locally it's how
+# OSIRIS_* / STRIPE_* secrets get in without exporting them by hand. Existing real env vars
+# win (override=False) so the shell/CI always takes precedence over a stray .env.
+from dotenv import load_dotenv
+load_dotenv(override=False)
 
 logger = logging.getLogger(__name__)
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
@@ -31,6 +39,11 @@ import database
 import models
 import spatial_utils
 import ml_referee
+import run_verifier
+from services import ledger, stripe_gateway
+from services import challenges as challenge_rules
+from services import metrics
+from services import player_safety
 
 # Bootstrap convenience: creates any missing tables on first run. Alembic is the schema
 # source-of-truth going forward (see `alembic/` + `alembic.ini`). For new dev DBs, run
@@ -56,22 +69,180 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(process_daily_decay, 'interval', hours=24)
     # v2.11 telemetry retention: nightly cleanup of raw sample blobs older than TTL.
     scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)
+    scheduler.add_job(process_challenge_settlement, 'interval', hours=1)
+    scheduler.add_job(process_route_point_ttl, 'interval', hours=24)
     scheduler.start()
     try:
         yield
     finally:
         scheduler.shutdown()
 
+# --- Phase 0: structured JSON logging skeleton ---------------------------------
+# Emits one JSON line per request (request id, user id, route, method, status, latency).
+# Opt-in via OSIRIS_LOG_JSON=1 so local dev keeps human-readable logs by default; CI and
+# any container set the env var. This is a *skeleton* — fields can grow; format stays JSON.
+import time as _time
+import contextvars
+
+_request_id_ctx: "contextvars.ContextVar[str]" = contextvars.ContextVar("request_id", default="-")
+
+
+class _JsonLogFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+            "request_id": _request_id_ctx.get(),
+        }
+        # Structured extras attached via logger.info(..., extra={"ctx": {...}})
+        ctx = getattr(record, "ctx", None)
+        if isinstance(ctx, dict):
+            payload.update(ctx)
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=str)
+
+
+def _configure_logging() -> None:
+    level = os.environ.get("OSIRIS_LOG_LEVEL", "INFO").upper()
+    root = logging.getLogger()
+    root.setLevel(level)
+    handler = logging.StreamHandler()
+    if os.environ.get("OSIRIS_LOG_JSON", "").lower() in ("1", "true", "yes"):
+        handler.setFormatter(_JsonLogFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    # Replace existing handlers so we don't double-log under uvicorn.
+    root.handlers = [handler]
+    # Quiet chatty third-party loggers so they don't drown the access log.
+    for noisy in ("alembic", "apscheduler", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_configure_logging()
+
 # Initialize the FastAPI application
 app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
 
+# Security baseline: explicit CORS allowlist. `allow_origins=["*"]` with
+# `allow_credentials=True` is invalid (browsers refuse credentialed requests to a wildcard
+# origin) and signals "any site may call us with the user's session." Origins come from
+# OSIRIS_CORS_ORIGINS (comma-separated) with a localhost dev default for the Vite admin web.
+# Native mobile apps (customer/merchant) are not subject to browser CORS, so they need no entry.
+_default_cors = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+_cors_origins = [
+    o.strip() for o in os.environ.get("OSIRIS_CORS_ORIGINS", _default_cors).split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Phase 0: per-request structured access log + request id -------------------
+@app.middleware("http")
+async def _access_log_middleware(request: Request, call_next):
+    req_id = request.headers.get("X-Request-ID") or secrets.token_hex(8)
+    token = _request_id_ctx.set(req_id)
+    start = _time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = req_id
+        return response
+    finally:
+        elapsed = _time.perf_counter() - start
+        latency_ms = round(elapsed * 1000, 2)
+        # Label by route template, never the raw path, so series count stays bounded and no
+        # ids or query strings reach the metrics store. Unmatched paths (404s) share one label.
+        matched = request.scope.get("route")
+        metrics.observe_request(request.method, getattr(matched, "path", None) or "unmatched", status_code, elapsed)
+        # user id is best-effort: auth dependencies may set request.state.user_id.
+        user_id = getattr(request.state, "user_id", None)
+        logger.info(
+            "request",
+            extra={"ctx": {
+                "method": request.method,
+                "route": request.url.path,
+                "status": status_code,
+                "latency_ms": latency_ms,
+                "user_id": user_id,
+            }},
+        )
+        _request_id_ctx.reset(token)
+
+
+# --- Phase 0: liveness/readiness probe ----------------------------------------
+# include_in_schema=False keeps it out of the client OpenAPI contract (ops-only route).
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics(request: Request):
+    """Prometheus scrape endpoint. Requires `Authorization: Bearer $OSIRIS_METRICS_TOKEN`.
+    Without a configured token it is served only in dev/test and is a 404 elsewhere, so a
+    deploy never exposes traffic patterns by accident."""
+    from fastapi.responses import PlainTextResponse
+
+    expected = os.environ.get("OSIRIS_METRICS_TOKEN")
+    if expected:
+        supplied = request.headers.get("Authorization", "")
+        if not hmac.compare_digest(supplied, f"Bearer {expected}"):
+            raise HTTPException(status_code=401, detail="Invalid metrics token")
+    elif not _IS_DEV_ENV:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    """Readiness probe: DB reachable + migrations current.
+
+    Returns 200 only when a trivial query succeeds AND the DB's stamped Alembic
+    revision matches the latest local migration head. 503 otherwise."""
+    from sqlalchemy import text
+
+    checks: dict = {"db": "down", "migrations": "unknown"}
+    try:
+        with database.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            checks["db"] = "ok"
+            db_rev = None
+            try:
+                db_rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            except Exception:
+                db_rev = None
+        head_rev = _alembic_head_revision()
+        if db_rev is not None and head_rev is not None:
+            checks["migrations"] = "current" if db_rev == head_rev else f"behind ({db_rev} != {head_rev})"
+            checks["db_revision"] = db_rev
+            checks["head_revision"] = head_rev
+    except Exception as exc:  # pragma: no cover - exercised via probe, not unit test
+        logger.warning("healthz check failed", extra={"ctx": {"error": str(exc)}})
+
+    healthy = checks["db"] == "ok" and checks["migrations"] in ("current", "unknown")
+    if not healthy:
+        raise HTTPException(status_code=503, detail=checks)
+    return {"status": "ok", **checks}
+
+
+@functools.lru_cache(maxsize=1)
+def _alembic_head_revision() -> Optional[str]:
+    """Latest revision id from the local alembic/versions scripts, or None if unavailable.
+
+    Cached: the migration scripts shipped with this process cannot change while it runs, and
+    parsing every script on each probe made /healthz the slowest endpoint under load."""
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini"))
+        return ScriptDirectory.from_config(cfg).get_current_head()
+    except Exception:
+        return None
 
 # --- v2.10: JWT secret loaded from env var with a clearly-flagged dev fallback ---
 # Set OSIRIS_JWT_SECRET in any non-dev environment. Deployment must use a 32+ byte secret
@@ -101,8 +272,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    issued = datetime.now(timezone.utc)
+    expire = issued + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # iat lets the v2 API refuse tokens issued before a "sign out everywhere" (G4).
+    to_encode.update({"exp": expire, "iat": int(issued.timestamp())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -113,7 +286,7 @@ def get_current_user_token(token: str = Depends(oauth2_scheme)):
         user_id_str: str = payload.get("sub")
         if role is None or user_id_str is None:
             raise HTTPException(status_code=401, detail="Could not validate credentials")
-        return {"id": int(user_id_str), "role": role}
+        return {"id": int(user_id_str), "role": role, "iat": payload.get("iat")}
     except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
@@ -141,14 +314,28 @@ def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
 # Production safety: when OSIRIS_ENV=production, the secret is required at boot. Without it
 # the webhook endpoint would accept any payload — indistinguishable from a forged-webhook
 # attacker activating an arbitrary merchant. Mirrors the JWT secret pattern above.
+# Security baseline: FAIL CLOSED. The webhook secret is REQUIRED unless OSIRIS_ENV is an
+# *explicit* dev/test value. A forgotten or unknown OSIRIS_ENV is treated as production and
+# must refuse to boot — the old behavior (fail open whenever the secret was unset, only
+# fail-fast when OSIRIS_ENV was *explicitly* "production") meant a deploy that forgot the env
+# var served a wide-open, forgeable payment webhook. Inverted here.
+_DEV_ENVS = {"dev", "development", "test", "testing", "local"}
+_IS_DEV_ENV = os.environ.get("OSIRIS_ENV", "").lower() in _DEV_ENVS
 _WEBHOOK_SECRET = os.environ.get("OSIRIS_WEBHOOK_SECRET")
-if not _WEBHOOK_SECRET and os.environ.get("OSIRIS_ENV", "").lower() == "production":
+if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
     raise RuntimeError(
-        "OSIRIS_WEBHOOK_SECRET is required when OSIRIS_ENV=production. "
-        "Without it the payment webhook accepts any payload. "
-        "Generate one with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
+        "OSIRIS_WEBHOOK_SECRET is required unless OSIRIS_ENV is one of "
+        f"{sorted(_DEV_ENVS)}. An unset or unknown OSIRIS_ENV is treated as production: "
+        "the app refuses to boot rather than serve an unauthenticated, forgeable payment "
+        "webhook. For local development set OSIRIS_ENV=dev. "
+        "Generate a secret with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
         "and configure the same value on the payment provider's webhook settings."
     )
+
+# Stripe fail-closed boot check. Called here, AFTER the webhook-secret
+# check above, so that when multiple secrets are missing the OSIRIS_WEBHOOK_SECRET error
+# surfaces first (stripe_gateway is import-side-effect-free by design).
+stripe_gateway.assert_boot_config()
 
 async def verify_webhook_signature(request: Request) -> bytes:
     """Reads the raw body once, validates the X-Provider-Signature HMAC, and returns the
@@ -175,7 +362,7 @@ def get_current_admin_or_merchant(token_data: dict = Depends(get_current_user_to
 
 # A simple root endpoint to verify the server is running
 @app.get("/")
-async def root():
+def root():
     return {
         "message": "Verified Fitness Reward System API is running",
         "docs": "/docs"
@@ -183,8 +370,58 @@ async def root():
 
 
 @app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
+def favicon():
     return {}
+
+# --- Rate limiting -----------------------------------------------------------------------
+# Dependency-free, in-memory sliding-window limiter keyed on client IP + scope. Sufficient for
+# the single-VM pilot; at horizontal scale this must move to a shared store (Redis) because the
+# buckets are per-process. Disabled in dev/test (OSIRIS_ENV dev/test) so the suites and local
+# work aren't throttled — it protects the real deployment, where OSIRIS_ENV is prod-like.
+import threading as _threading
+
+_rate_buckets: "dict[str, list[float]]" = {}
+_rate_lock = _threading.Lock()
+
+
+def _rate_limit(max_requests: int, window_s: int, scope: str):
+    """Returns a FastAPI dependency that raises 429 when an IP exceeds `max_requests` in
+    `window_s` seconds for the given `scope`."""
+    def _dep(request: Request) -> None:
+        if _IS_DEV_ENV:
+            return  # no throttling in dev/test
+        ip = request.client.host if request.client else "unknown"
+        key = f"{scope}:{ip}"
+        now = _time.monotonic()
+        cutoff = now - window_s
+        with _rate_lock:
+            bucket = _rate_buckets.setdefault(key, [])
+            # Drop timestamps outside the window.
+            i = 0
+            for ts in bucket:
+                if ts >= cutoff:
+                    break
+                i += 1
+            if i:
+                del bucket[:i]
+            if len(bucket) >= max_requests:
+                raise HTTPException(status_code=429, detail="Too many requests. Slow down.")
+            bucket.append(now)
+    return _dep
+
+
+# Prod defaults; tuned for the Bedford pilot. Auth + payment + proof endpoints are the
+# brute-force / spam / CPU-burn (triple-bcrypt) targets named in the audit.
+_rl_login = _rate_limit(10, 60, "login")
+_rl_onboard = _rate_limit(5, 60, "onboard")
+_rl_verify = _rate_limit(30, 60, "verify")
+_rl_webhook = _rate_limit(60, 60, "webhook")
+# Security §2: route upload, challenge join/submit, and publish are abuse targets too.
+_rl_route = _rate_limit(120, 60, "route")
+_rl_challenge = _rate_limit(30, 60, "challenge")
+# Public analytics ingestion accepts unauthenticated writes; cap it per IP.
+_rl_events = _rate_limit(60, 60, "events")
+
 
 # --- Security ---
 def _now_naive_utc() -> datetime:
@@ -331,7 +568,7 @@ class VerificationResult(BaseModel):
 class UserProfile(BaseModel):
     id: int
     email: EmailStr
-    bmi: float
+    bmi: Optional[float] = None  # v2 registrations collect no body measurements
     avatar_class: str
     xp: int
     rank: str
@@ -348,6 +585,66 @@ class UserProfile(BaseModel):
     class Config:
         # Tells Pydantic to read data even if it's not a standard Python dictionary (i.e., read from SQLAlchemy DB objects)
         from_attributes = True
+
+
+# --- First-release running loop ------------------------------------------------
+
+class RunSessionCreate(BaseModel):
+    activity_type: str = Field(default="run", pattern="^(run|jog)$")
+    device_started_at: datetime
+
+
+class RunSessionStart(BaseModel):
+    device_started_at: datetime
+
+
+class RoutePointInput(BaseModel):
+    sequence: int = Field(..., ge=0)
+    t_ms: int = Field(..., ge=0)
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+    accuracy_m: Optional[float] = Field(default=None, ge=0, le=10000)
+    speed_mps: Optional[float] = Field(default=None, ge=0, le=100)
+    altitude_m: Optional[float] = Field(default=None, ge=-1000, le=10000)
+
+
+class RoutePointBatch(BaseModel):
+    points: List[RoutePointInput] = Field(..., min_length=1, max_length=500)
+
+
+class RunSessionFinish(BaseModel):
+    device_finished_at: datetime
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
+
+
+class RunSessionSummary(BaseModel):
+    id: int
+    activity_type: str
+    status: str
+    verification_status: Optional[str] = None
+    point_count: int
+    distance_m: float
+    duration_seconds: float
+    route_hash: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    xp_awarded: int = 0
+    message: str
+
+
+def _run_summary(session: models.RunSession, *, xp_awarded: int = 0, message: str = "Run session") -> RunSessionSummary:
+    return RunSessionSummary(
+        id=session.id,
+        activity_type=session.activity_type,
+        status=session.status,
+        verification_status=session.verification_status,
+        point_count=session.point_count or 0,
+        distance_m=round(session.distance_m or 0.0, 2),
+        duration_seconds=round(session.duration_seconds or 0.0, 2),
+        route_hash=session.route_hash,
+        rejection_reason=session.rejection_reason,
+        xp_awarded=xp_awarded,
+        message=message,
+    )
 
 # The JSON shape we expect when a user submits a completed territory run
 class DomainCreate(BaseModel):
@@ -467,13 +764,56 @@ class MerchantProfile(BaseModel):
         from_attributes = True
 
 class PaymentIntentResponse(BaseModel):
-    """Returned when a merchant initiates payment. In Phase 2 with a real provider this would
-    include a client_secret for Stripe Elements; in MVP it's a stub UUID."""
+    """Returned when a merchant initiates the pilot-fee payment. `client_secret` is what the
+    Flutter Stripe SDK uses to confirm the card on-device; `publishable_key` lets the client
+    init the SDK from the server's config so the pk isn't pinned in two places."""
     merchant_id: int
     pilot_fee_cents: int
-    provider_payment_id: str
+    provider_payment_id: str         # Stripe PaymentIntent id (pi_...)
     payment_status: str
+    client_secret: Optional[str] = None
+    publishable_key: Optional[str] = None
     next_action: str
+
+
+# --- Phase 3: player crystal top-up (one-way real-money purchase) ---
+#
+# Server-authoritative crystal packs. The client picks a `pack_id`; the SERVER decides the
+# price and the crystal grant. The client never sends an amount — that's the whole point, it
+# stops a tampered client buying 1,000,000 crystals for $0.01.
+#
+# NOTE: this purchase path is intentionally isolated behind server-authoritative packs,
+# payment-provider confirmation, and ledgered fulfillment.
+CRYSTAL_PACKS: dict[str, dict] = {
+    "starter":    {"crystals": 500,  "amount_cents": 499,  "label": "Starter Pouch"},
+    "adventurer": {"crystals": 1200, "amount_cents": 999,  "label": "Adventurer's Cache"},
+    "champion":   {"crystals": 2600, "amount_cents": 1999, "label": "Champion's Hoard"},
+}
+CRYSTAL_PURCHASE_CURRENCY = "usd"
+
+
+class CrystalPackInfo(BaseModel):
+    pack_id: str
+    label: str
+    crystals: int
+    amount_cents: int
+    currency: str
+
+
+class CrystalPurchaseIntentRequest(BaseModel):
+    pack_id: str  # must be a key of CRYSTAL_PACKS; price is looked up server-side
+
+
+class CrystalPurchaseIntentResponse(BaseModel):
+    purchase_id: int
+    pack_id: str
+    crystal_amount: int
+    amount_cents: int
+    currency: str
+    payment_intent_id: str           # Stripe PaymentIntent id (pi_...)
+    client_secret: str
+    publishable_key: Optional[str] = None
+    status: str
 
 class PaymentWebhookRequest(BaseModel):
     """Payload from the payment provider when a payment terminal-state is reached.
@@ -622,7 +962,7 @@ def get_rank(xp: int, last_activity_date: Optional[datetime] = None) -> str:
         if days_inactive > 30:
             # Harsh punishment for 30+ days of inactivity
             return "F - The Dishonored"
-            
+
     if xp < 500: return "D - Beginner"
     if xp < 1000: return "C - Intermediate"
     if xp < 2500: return "B - Advanced"
@@ -792,31 +1132,44 @@ def get_party_role(user: models.User) -> tuple[str, str]:
     leading = max(stats, key=lambda s: s[1])
     return leading[2], leading[0]
 
+def _check_email_unique(db: Session, email: str, exclude_table: Optional[str] = None) -> None:
+    """Verify an email is not already registered in ANY auth table
+    (User, Merchant, Admin) so accounts don't silently shadow each other in auth_login."""
+    if exclude_table != "user":
+        if db.query(models.User).filter(models.User.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered as a player account.")
+    if exclude_table != "merchant":
+        if db.query(models.Merchant).filter(models.Merchant.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered as a merchant account.")
+    if exclude_table != "admin":
+        if db.query(models.Admin).filter(models.Admin.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered as an admin account.")
+
 # --- Endpoints ---
 
 @app.post("/api/v1/onboard", response_model=UserProfile)
-async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
+def onboard_user(user: UserCreate, db: Session = Depends(get_db), _rl: None = Depends(_rl_onboard)):
     """API Endpoint to register a new user, calculate their stats, and assign an avatar."""
-    
-    # 0. Check if user already exists
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
 
-    # 1. Calculate BMI (Weight / Height^2) 
+    # 0. Check if user email already exists across any table
+    _check_email_unique(db, user.email)
+
+    # 1. Calculate BMI (Weight / Height^2)
     # (Pydantic 'gt=0' prevents division by zero, but adding a fallback safety check is good practice)
     if user.height_m <= 0:
         raise HTTPException(status_code=400, detail="Height must be greater than zero.")
     bmi = round(user.weight_kg / (user.height_m ** 2), 2)
-    
+
     # 2. Determine Avatar Class based on Path, not BMI
     avatar_class = get_avatar_class(user.preferred_path)
-    
+
     # 3. Create the Database "Warehouse Worker" Model
     # Securely hash the user's password using bcrypt
     hashed_pwd = get_password_hash(user.password)
-    
+
     device_ts = _to_naive_utc(user.device_timestamp)
+    # mana_crystals starts at 0 here; the opening grant is applied below via the ledger
+    # service so the invariant sum(CrystalLedger.delta) == mana_crystals holds from row one.
     new_user = models.User(
         email=user.email,
         hashed_password=hashed_pwd,
@@ -827,20 +1180,27 @@ async def onboard_user(user: UserCreate, db: Session = Depends(get_db)):
         title=get_title(0.0),
         cumulative_area=0.0,
         last_activity_date=device_ts,
-        streak=0
+        streak=0,
+        mana_crystals=0,
     )
-    
-    # 4. Save to Database and commit the transaction
+
+    # 4. Save to Database. Flush first to mint the user id, then write the opening-balance
+    # ledger row (the ONLY path that sets the starting wallet), and commit atomically.
     db.add(new_user)
+    db.flush()  # populates new_user.id without committing
+    ledger.apply_crystal_delta(
+        db, new_user, models.OPENING_CRYSTAL_BALANCE, "opening_balance",
+        note="New player opening grant",
+    )
     db.commit()
     db.refresh(new_user) # Retrieves the newly generated 'id' from the database
-    
+
     # 5. Return the saved data
     # (FastAPI automatically converts the SQLAlchemy model into the Pydantic UserProfile JSON)
     return new_user
 
 @app.post("/api/v1/login", response_model=UserProfile)
-async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+def login_user(credentials: UserLogin, db: Session = Depends(get_db), _rl: None = Depends(_rl_login)):
     """Player-only login. Kept for backward compatibility; new clients should use the
     role-aware `/api/v1/auth/login` endpoint and switch UI based on the returned `role`."""
     user = db.query(models.User).filter(models.User.email == credentials.email).first()
@@ -860,7 +1220,7 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/auth/login", response_model=AuthLoginResponse)
-async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db)):
+def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl: None = Depends(_rl_login)):
     try:
         device_ts = _to_naive_utc(credentials.device_timestamp)
 
@@ -917,7 +1277,7 @@ async def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/v1/users/{user_id}", response_model=UserProfile)
-async def get_user_profile(
+def get_user_profile(
     user_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -937,17 +1297,1238 @@ async def get_user_profile(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
-async def get_nearby_domains(
+
+@app.delete("/api/v1/users/{user_id}")
+def delete_user_account(
+    user_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """GDPR Right to Erasure (§3.4). Same erasure as `POST /api/v2/me/erase`: personal data is
+    deleted and the users row stays as an anonymous tombstone, so the crystal ledger is kept
+    (financial records are anonymised, not destroyed — PRD-009) and the id is never reused."""
+    caller_id = token_data["id"]
+    role = token_data["role"]
+    if role == "player" and caller_id != user_id:
+        raise HTTPException(status_code=403, detail="Players can only delete their own account")
+    if role not in ("player", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Legacy v1 personal data that erase_player does not cover: exact territory polygons,
+    # issued coupon codes, and proof hashes.
+    db.query(models.BountyCompletion).filter(models.BountyCompletion.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.ProofConsumed).filter(models.ProofConsumed.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Domain).filter(models.Domain.owner_id == user_id).delete(synchronize_session=False)
+    growth_api.growth_safety.erase_player(db, user, role, caller_id)
+    db.commit()
+    return {"status": "deleted", "user_id": user_id, "message": "Account and personal data erased."}
+
+
+@app.get("/api/v1/users/{user_id}/export")
+def export_user_data(
+    user_id: int,
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+):
+    """GDPR Data Portability (§3.4): returns user profile and activity summary."""
+    caller_id = token_data["id"]
+    role = token_data["role"]
+    if role == "player" and caller_id != user_id:
+        raise HTTPException(status_code=403, detail="Players can only export their own account data")
+    if role not in ("player", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    activities_count = db.query(models.ActivityLog).filter(models.ActivityLog.user_id == user_id).count()
+    completions_count = db.query(models.BountyCompletion).filter(models.BountyCompletion.user_id == user_id).count()
+    domains_count = db.query(models.Domain).filter(models.Domain.owner_id == user_id).count()
+    telemetry_count = db.query(models.TelemetrySession).filter(models.TelemetrySession.user_id == user_id).count()
+
+    return {
+        "user_profile": {
+            "id": user.id,
+            "email": user.email,
+            "bmi": user.bmi,
+            "avatar_class": user.avatar_class,
+            "rank": user.rank,
+            "title": user.title,
+            "cumulative_area": user.cumulative_area,
+            "xp": user.xp,
+            "streak": user.streak,
+            "mana_crystals": user.mana_crystals,
+            "last_activity_date": user.last_activity_date.isoformat() if user.last_activity_date else None,
+        },
+        "summary": {
+            "activities_recorded": activities_count,
+            "bounties_completed": completions_count,
+            "domains_owned": domains_count,
+            "telemetry_sessions": telemetry_count,
+        },
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# --- First-release API v2: verified running -----------------------------------
+
+def _api_error(status_code: int, code: str, message: str) -> HTTPException:
+    """v2 structured error: `detail` is {code, message} so clients can branch on `code`."""
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def get_active_player(
+    token_data: dict = Depends(get_current_player),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Player auth plus the PRD-010 suspension check. Every v2 player endpoint uses this, so
+    an admin suspension takes effect on the player's next request without revoking tokens."""
+    user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    if user.suspended_at is not None:
+        raise _api_error(403, "ACCOUNT_SUSPENDED", "This account is suspended. Contact support.")
+    if user.tokens_valid_after is not None:
+        issued_at = token_data.get("iat") or 0
+        if issued_at < int(user.tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()):
+            raise _api_error(401, "SESSION_REVOKED", "This session was signed out. Please sign in again.")
+    return token_data
+
+
+def _audit(
+    db: Session, *, actor_type: str, actor_id: Optional[int], action: str,
+    entity_type: str, entity_id: Optional[int], details: Optional[dict] = None,
+) -> None:
+    """Append an AuditEvent in the caller's transaction. Never pass coordinates here."""
+    db.add(models.AuditEvent(
+        actor_type=actor_type, actor_id=actor_id, action=action,
+        entity_type=entity_type, entity_id=entity_id,
+        details_json=json.dumps(details or {}, default=str, sort_keys=True),
+    ))
+
+
+def _award_badge(db: Session, user_id: int, badge_code: str) -> bool:
+    """Idempotently grant a badge. Returns True only when newly awarded."""
+    exists = db.query(models.UserBadge).filter(
+        models.UserBadge.user_id == user_id, models.UserBadge.badge_code == badge_code,
+    ).first()
+    if exists:
+        return False
+    db.add(models.UserBadge(user_id=user_id, badge_code=badge_code))
+    return True
+
+
+def _adjust_xp(user: models.User, delta: int) -> None:
+    user.xp = max(0, (user.xp or 0) + delta)
+    user.rank = get_rank(user.xp, user.last_activity_date)
+
+
+def _get_player_run(db: Session, run_id: int, player_id: int) -> models.RunSession:
+    session = db.query(models.RunSession).filter(models.RunSession.id == run_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Run session not found")
+    if session.user_id != player_id:
+        raise HTTPException(status_code=403, detail="Run session belongs to another player")
+    return session
+
+
+@app.post("/api/v2/runs", response_model=RunSessionSummary, status_code=201)
+def create_run_session(
+    req: RunSessionCreate,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Create a run shell. The route is not accepted until it is finished and verified."""
+    if player_safety.needs_location_consent(db, token_data["id"]):
+        raise _api_error(403, "LOCATION_CONSENT_REQUIRED",
+                         "Allow Osiris to use your location during runs before you start one")
+    session = models.RunSession(
+        user_id=token_data["id"],
+        activity_type=req.activity_type.lower(),
+        status="created",
+        device_started_at=_to_naive_utc(req.device_started_at),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return _run_summary(session, message="Run session created")
+
+
+@app.post("/api/v2/runs/{run_id}/start", response_model=RunSessionSummary)
+def start_run_session(
+    run_id: int,
+    req: RunSessionStart,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    if session.status == "active":
+        return _run_summary(session, message="Run session already active")
+    if session.status != "created":
+        raise HTTPException(status_code=409, detail=f"Run session cannot start from status={session.status}")
+    session.status = "active"
+    session.started_at = _now_naive_utc()
+    session.device_started_at = _to_naive_utc(req.device_started_at)
+    session.updated_at = _now_naive_utc()
+    db.commit()
+    db.refresh(session)
+    return _run_summary(session, message="Run session started")
+
+
+@app.post("/api/v2/runs/{run_id}/points", response_model=RunSessionSummary)
+def append_run_points(
+    run_id: int,
+    req: RoutePointBatch,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_route),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    if session.status != "active":
+        raise HTTPException(status_code=409, detail="Route points can only be appended to an active run")
+    existing_last = (
+        db.query(models.RoutePoint)
+        .filter(models.RoutePoint.run_session_id == run_id)
+        .order_by(models.RoutePoint.sequence.desc())
+        .first()
+    )
+    expected = (existing_last.sequence + 1) if existing_last else 0
+    sequences = [point.sequence for point in req.points]
+    if sequences != list(range(expected, expected + len(sequences))):
+        raise HTTPException(status_code=409, detail=f"Route sequence must start at {expected} and be contiguous")
+    for point in req.points:
+        db.add(models.RoutePoint(
+            run_session_id=run_id,
+            sequence=point.sequence,
+            t_ms=point.t_ms,
+            lat=point.lat,
+            lng=point.lng,
+            accuracy_m=point.accuracy_m,
+            speed_mps=point.speed_mps,
+            altitude_m=point.altitude_m,
+        ))
+    session.point_count = (session.point_count or 0) + len(req.points)
+    session.updated_at = _now_naive_utc()
+    db.commit()
+    db.refresh(session)
+    return _run_summary(session, message=f"Accepted {len(req.points)} route points")
+
+
+@app.post("/api/v2/runs/{run_id}/finish", response_model=RunSessionSummary)
+def finish_run_session(
+    run_id: int,
+    req: RunSessionFinish,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    if session.status in ("submitted", "verifying", "closed"):
+        if session.finish_idempotency_key == req.idempotency_key:
+            return _run_summary(session, message="Run finish already processed")
+        raise HTTPException(status_code=409, detail="Run session has already been finished")
+    if session.status != "active":
+        raise HTTPException(status_code=409, detail=f"Run session cannot finish from status={session.status}")
+
+    points = (
+        db.query(models.RoutePoint)
+        .filter(models.RoutePoint.run_session_id == run_id)
+        .order_by(models.RoutePoint.sequence.asc())
+        .all()
+    )
+    if not points:
+        raise HTTPException(status_code=400, detail="A run must contain route points before it can finish")
+
+    session.status = "verifying"
+    session.device_finished_at = _to_naive_utc(req.device_finished_at)
+    session.finished_at = _now_naive_utc()
+    session.finish_idempotency_key = req.idempotency_key
+    session.updated_at = _now_naive_utc()
+    db.flush()
+
+    result = run_verifier.verify_route([
+        {
+            "sequence": point.sequence,
+            "t_ms": point.t_ms,
+            "lat": point.lat,
+            "lng": point.lng,
+            "accuracy_m": point.accuracy_m,
+            "speed_mps": point.speed_mps,
+            "altitude_m": point.altitude_m,
+        }
+        for point in points
+    ])
+    metrics.observe_run_verification(result.status, result.reason_codes)
+    session.status = "closed"
+    session.verification_status = result.status
+    session.route_hash = result.route_hash
+    session.distance_m = float(result.metrics["distance_m"])
+    session.duration_seconds = float(result.metrics["duration_seconds"])
+    session.rejection_reason = ",".join(result.reason_codes) if result.reason_codes else None
+    decision = models.VerificationDecision(
+        run_session_id=session.id,
+        rules_version=run_verifier.RULES_VERSION,
+        status=result.status,
+        reason_codes_json=json.dumps(result.reason_codes),
+        metrics_json=json.dumps(result.metrics),
+    )
+    db.add(decision)
+
+    xp_awarded = 0
+    if result.status == "accepted":
+        user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
+        if user:
+            xp_awarded = max(10, int(float(result.metrics["distance_m"]) // 100))
+            user.xp += xp_awarded
+            user.last_activity_date = session.finished_at
+            user.rank = get_rank(user.xp, user.last_activity_date)
+            record_activity(
+                db, user, "run", max(1, int(float(result.metrics["distance_m"]) // 100)),
+                session.finished_at, "run_session", related_id=session.id,
+                verified=True, confidence=1.0,
+            )
+            _award_badge(db, user.id, "FIRST_VERIFIED_RUN")
+            # Growth G1: daily quest / weekly goal rewards and funnel milestones.
+            xp_awarded += growth_api.on_run_accepted(db, user, session)["quest_xp"]
+    _audit(
+        db, actor_type="player", actor_id=token_data["id"], action="run.verified",
+        entity_type="run_session", entity_id=session.id,
+        details={"status": result.status, "reason_codes": result.reason_codes,
+                 "rules_version": run_verifier.RULES_VERSION},
+    )
+    db.commit()
+    db.refresh(session)
+    message = "Run verified and accepted" if result.status == "accepted" else "Run rejected by verification rules"
+    return _run_summary(session, xp_awarded=xp_awarded, message=message)
+
+
+@app.get("/api/v2/runs/{run_id}", response_model=RunSessionSummary)
+def get_run_session(
+    run_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    session = _get_player_run(db, run_id, token_data["id"])
+    return _run_summary(session, message="Run session status")
+
+
+# --- R2 API v2: courses and challenges (PRD-005..008, ADR-004/005) -------------------
+
+class CourseCreate(BaseModel):
+    run_id: int
+    name: str = Field(..., min_length=3, max_length=60)
+
+
+class CourseSummary(BaseModel):
+    """Owner view of a course. Includes the private route; never returned to other players."""
+    id: int
+    name: str
+    status: str
+    version: int
+    rules_version: str
+    distance_m: float
+    benchmark_seconds: float
+    is_loop: bool
+    public_lat: float
+    public_lng: float
+    route: List[List[float]]
+    open_challenge_id: Optional[int] = None
+    created_at: datetime
+
+
+class ChallengeCreate(BaseModel):
+    course_id: int
+    title: str = Field(..., min_length=3, max_length=80)
+    window_hours: int = Field(..., ge=challenge_rules.MIN_WINDOW_HOURS, le=challenge_rules.MAX_WINDOW_HOURS)
+    safety_notes: Optional[str] = Field(default=None, max_length=500)
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
+
+
+class AttemptSummary(BaseModel):
+    id: int
+    challenge_id: int
+    status: str
+    outcome: Optional[str] = None
+    run_id: Optional[int] = None
+    elapsed_seconds: Optional[float] = None
+    target_seconds: float
+    course_coverage: Optional[float] = None
+    reason_codes: List[str]
+    xp_awarded: int
+    terms_hash: str
+    joined_at: datetime
+    decided_at: Optional[datetime] = None
+
+
+class ChallengePublic(BaseModel):
+    """Privacy-safe challenge view (ADR-004): a generalized marker, the immutable terms, and
+    aggregate participation. No owner identity, no route, no challenger identities."""
+    id: int
+    title: str
+    status: str
+    rules_version: str
+    terms_hash: str
+    course_distance_m: float
+    target_seconds: float
+    entry_crystals: int
+    reward_policy: str
+    win_xp: int
+    participation_xp: int
+    eligibility: str
+    privacy_mode: str
+    safety_notes: Optional[str] = None
+    opens_at: datetime
+    closes_at: datetime
+    marker_lat: float
+    marker_lng: float
+    distance_km: Optional[float] = None
+    attempt_count: int
+    is_mine: bool
+    my_attempt: Optional[AttemptSummary] = None
+
+
+class ChallengeCourseRoute(BaseModel):
+    challenge_id: int
+    course_distance_m: float
+    start_radius_m: float
+    route: List[List[float]]
+
+
+class AttemptSubmit(BaseModel):
+    run_id: int
+
+
+class BadgeOut(BaseModel):
+    code: str
+    label: str
+    awarded_at: datetime
+
+
+class ProgressionResponse(BaseModel):
+    xp: int
+    performance_rank: str
+    rank_ladder_version: str
+    next_rank_xp: Optional[int] = None
+    verified_runs: int
+    courses: int
+    challenges_won: int
+    defenses: int
+    badges: List[BadgeOut]
+
+
+def _run_points(db: Session, run_id: int) -> "list[tuple[float, float, int]]":
+    rows = (
+        db.query(models.RoutePoint)
+        .filter(models.RoutePoint.run_session_id == run_id)
+        .order_by(models.RoutePoint.sequence.asc())
+        .all()
+    )
+    return [(r.lat, r.lng, r.t_ms) for r in rows]
+
+
+def _course_route(course: models.Course) -> "list[tuple[float, float]]":
+    return [(p[0], p[1]) for p in json.loads(course.route_json)]
+
+
+def _course_summary(db: Session, course: models.Course) -> CourseSummary:
+    open_ch = db.query(models.Challenge).filter(
+        models.Challenge.course_id == course.id, models.Challenge.status == "open",
+    ).first()
+    return CourseSummary(
+        id=course.id, name=course.name, status=course.status, version=course.version,
+        rules_version=course.rules_version, distance_m=round(course.distance_m, 2),
+        benchmark_seconds=round(course.benchmark_seconds, 2), is_loop=bool(course.is_loop),
+        public_lat=course.public_lat, public_lng=course.public_lng,
+        route=[list(p) for p in _course_route(course)],
+        open_challenge_id=open_ch.id if open_ch else None, created_at=course.created_at,
+    )
+
+
+def _attempt_summary(attempt: models.ChallengeAttempt, challenge: models.Challenge) -> AttemptSummary:
+    return AttemptSummary(
+        id=attempt.id, challenge_id=attempt.challenge_id, status=attempt.status,
+        outcome=attempt.outcome, run_id=attempt.run_session_id,
+        elapsed_seconds=attempt.elapsed_seconds, target_seconds=challenge.target_seconds,
+        course_coverage=attempt.course_coverage,
+        reason_codes=json.loads(attempt.reason_codes_json or "[]"),
+        xp_awarded=attempt.xp_awarded or 0, terms_hash=attempt.terms_hash,
+        joined_at=attempt.joined_at, decided_at=attempt.decided_at,
+    )
+
+
+def _refresh_challenge_status(db: Session, ch: models.Challenge, now: Optional[datetime] = None) -> bool:
+    """Advance open -> closed -> settled by the clock. Returns True if anything changed; the
+    caller commits. Settlement waits out the submission grace period and any pending review."""
+    now = now or _now_naive_utc()
+    changed = False
+    if ch.status == "open" and now >= ch.closes_at:
+        ch.status = "closed"
+        _audit(db, actor_type="system", actor_id=None, action="challenge.closed",
+               entity_type="challenge", entity_id=ch.id)
+        changed = True
+    grace = timedelta(hours=challenge_rules.SUBMISSION_GRACE_HOURS)
+    if ch.status == "closed" and now >= ch.closes_at + grace:
+        attempts = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id == ch.id).all()
+        if not any(a.status == "review_required" for a in attempts):
+            ch.status = "settled"
+            ch.settled_at = now
+            _audit(db, actor_type="system", actor_id=None, action="challenge.settled",
+                   entity_type="challenge", entity_id=ch.id,
+                   details={"attempts": len(attempts),
+                            "wins": sum(1 for a in attempts if a.outcome == "won")})
+            changed = True
+    return changed
+
+
+def _challenge_public(
+    db: Session, ch: models.Challenge, course: models.Course, viewer_id: int,
+    distance_km: Optional[float] = None,
+) -> ChallengePublic:
+    attempt_count = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id,
+        models.ChallengeAttempt.run_session_id.isnot(None),
+    ).count()
+    mine = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == viewer_id,
+    ).first()
+    return ChallengePublic(
+        id=ch.id, title=ch.title, status=ch.status, rules_version=ch.rules_version,
+        terms_hash=ch.terms_hash, course_distance_m=round(course.distance_m, 2),
+        target_seconds=round(ch.target_seconds, 2), entry_crystals=ch.entry_crystals,
+        reward_policy=ch.reward_policy, win_xp=ch.win_xp, participation_xp=ch.participation_xp,
+        eligibility=ch.eligibility, privacy_mode=ch.privacy_mode, safety_notes=ch.safety_notes,
+        opens_at=ch.opens_at, closes_at=ch.closes_at,
+        marker_lat=course.public_lat, marker_lng=course.public_lng,
+        distance_km=distance_km, attempt_count=attempt_count,
+        is_mine=ch.creator_id == viewer_id,
+        my_attempt=_attempt_summary(mine, ch) if mine else None,
+    )
+
+
+def _apply_attempt_outcome(db: Session, attempt: models.ChallengeAttempt, ch: models.Challenge) -> None:
+    """Award the non-cash rewards for a decided attempt (ADR-005: XP and badges only)."""
+    challenger = db.query(models.User).filter(models.User.id == attempt.user_id).first()
+    defender = db.query(models.User).filter(models.User.id == ch.creator_id).first()
+    if attempt.outcome == "won":
+        attempt.xp_awarded = ch.win_xp
+        _award_badge(db, attempt.user_id, "FIRST_CHALLENGE_WIN")
+    else:
+        attempt.xp_awarded = ch.participation_xp
+        if defender is not None:
+            attempt.defender_xp_awarded = challenge_rules.DEFENSE_XP
+            _adjust_xp(defender, challenge_rules.DEFENSE_XP)
+            _award_badge(db, defender.id, "FIRST_DEFENSE")
+    if challenger is not None:
+        _adjust_xp(challenger, attempt.xp_awarded)
+    attempt.decided_at = _now_naive_utc()
+    growth_api.emit_event(db, "challenge_completed", user_id=attempt.user_id,
+                          properties={"challenge_id": ch.id, "outcome": attempt.outcome})
+
+
+def _get_challenge(db: Session, challenge_id: int) -> models.Challenge:
+    ch = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if ch is None:
+        raise _api_error(404, "CHALLENGE_NOT_FOUND", "Challenge not found")
+    return ch
+
+
+@app.post("/api/v2/courses", response_model=CourseSummary, status_code=201)
+def register_course(
+    req: CourseCreate,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Turn one accepted run into a course (PRD-005). Idempotent per run: registering the
+    same run again returns the existing course. The first and last stretch of the run are
+    trimmed off as a privacy zone before anything is stored."""
+    player_id = token_data["id"]
+    run = _get_player_run(db, req.run_id, player_id)
+    if run.status != "closed" or run.verification_status != "accepted":
+        raise _api_error(409, "RUN_NOT_ACCEPTED", "Only a verified, accepted run can become a course")
+    existing = db.query(models.Course).filter(models.Course.source_run_session_id == run.id).first()
+    if existing:
+        return _course_summary(db, existing)
+
+    trimmed = challenge_rules.trim_route(_run_points(db, run.id))
+    reasons = challenge_rules.course_rejection_reasons(trimmed.distance_m)
+    if not trimmed.route or trimmed.elapsed_seconds <= 0:
+        reasons = reasons or ["COURSE_TOO_SHORT"]
+    if reasons:
+        raise _api_error(422, reasons[0], "Course must be between 0.4 km and 42.2 km after privacy trimming")
+
+    active = db.query(models.Course).filter(
+        models.Course.owner_id == player_id, models.Course.status == "active",
+    ).count()
+    if active >= challenge_rules.MAX_ACTIVE_COURSES_PER_USER:
+        raise _api_error(409, "COURSE_LIMIT_REACHED", "You have reached the active course limit")
+
+    route = challenge_rules.simplify_route(trimmed.route)
+    start, finish = route[0], route[-1]
+    # Coarse bounding pre-filter (~110 m) before the exact duplicate test.
+    nearby = db.query(models.Course).filter(
+        models.Course.status == "active",
+        models.Course.start_lat.between(start[0] - 0.001, start[0] + 0.001),
+    ).all()
+    for other in nearby:
+        if challenge_rules.is_duplicate_course(
+            start, finish, trimmed.distance_m,
+            (other.start_lat, other.start_lng), (other.finish_lat, other.finish_lng), other.distance_m,
+        ):
+            if other.owner_id == player_id:
+                raise _api_error(409, "DUPLICATE_COURSE", "You already registered this course")
+            raise _api_error(409, "COURSE_OVERLAP", "This course already exists; challenge it instead")
+
+    marker = challenge_rules.public_marker(route)
+    route_json = json.dumps([list(p) for p in route], separators=(",", ":"))
+    course = models.Course(
+        owner_id=player_id, source_run_session_id=run.id, version=1,
+        rules_version=challenge_rules.COURSE_RULES_VERSION, name=req.name.strip(), status="active",
+        distance_m=round(trimmed.distance_m, 2), benchmark_seconds=round(trimmed.elapsed_seconds, 2),
+        is_loop=challenge_rules.distance_m(start, finish) <= challenge_rules.LOOP_THRESHOLD_M,
+        start_lat=start[0], start_lng=start[1], finish_lat=finish[0], finish_lng=finish[1],
+        route_json=route_json, route_hash=hashlib.sha256(route_json.encode("utf-8")).hexdigest(),
+        public_lat=marker[0], public_lng=marker[1],
+    )
+    db.add(course)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(models.Course).filter(models.Course.source_run_session_id == run.id).first()
+        if existing:
+            return _course_summary(db, existing)
+        raise
+    _award_badge(db, player_id, "FIRST_COURSE")
+    _audit(db, actor_type="player", actor_id=player_id, action="course.registered",
+           entity_type="course", entity_id=course.id,
+           details={"run_id": run.id, "distance_m": course.distance_m,
+                    "rules_version": course.rules_version})
+    db.commit()
+    db.refresh(course)
+    return _course_summary(db, course)
+
+
+@app.get("/api/v2/courses", response_model=List[CourseSummary])
+def list_my_courses(
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    courses = (
+        db.query(models.Course)
+        .filter(models.Course.owner_id == token_data["id"])
+        .order_by(models.Course.created_at.desc())
+        .all()
+    )
+    return [_course_summary(db, c) for c in courses]
+
+
+@app.post("/api/v2/challenges", response_model=ChallengePublic, status_code=201)
+def publish_challenge(
+    req: ChallengeCreate,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_challenge),
+):
+    """Publish an asynchronous challenge with immutable terms (PRD-006). The target is the
+    owner's verified benchmark on the course; no crystals are staked (ADR-005)."""
+    player_id = token_data["id"]
+    prior = db.query(models.Challenge).filter(
+        models.Challenge.publish_idempotency_key == req.idempotency_key,
+    ).first()
+    if prior is not None:
+        if prior.creator_id != player_id:
+            raise _api_error(409, "IDEMPOTENCY_KEY_REUSED", "Idempotency key already used")
+        course = db.query(models.Course).filter(models.Course.id == prior.course_id).first()
+        return _challenge_public(db, prior, course, player_id)
+
+    course = db.query(models.Course).filter(models.Course.id == req.course_id).first()
+    if course is None:
+        raise _api_error(404, "COURSE_NOT_FOUND", "Course not found")
+    if course.owner_id != player_id:
+        raise _api_error(403, "NOT_COURSE_OWNER", "Only the course owner can publish a challenge on it")
+    if course.status != "active":
+        raise _api_error(409, "COURSE_NOT_ACTIVE", "This course is not active")
+
+    now = _now_naive_utc()
+    open_on_course = db.query(models.Challenge).filter(
+        models.Challenge.course_id == course.id, models.Challenge.status == "open",
+    ).all()
+    for ch in open_on_course:
+        _refresh_challenge_status(db, ch, now)
+    if any(ch.status == "open" for ch in open_on_course):
+        db.commit()
+        raise _api_error(409, "CHALLENGE_ALREADY_OPEN", "This course already has an open challenge")
+
+    opens_at = now.replace(microsecond=0)
+    closes_at = opens_at + timedelta(hours=req.window_hours)
+    safety = req.safety_notes.strip() if req.safety_notes else None
+    win_xp = challenge_rules.win_xp_for(course.distance_m)
+    terms = challenge_rules.build_terms(
+        course_id=course.id, course_version=course.version, target_seconds=course.benchmark_seconds,
+        win_xp=win_xp, safety_notes=safety, opens_at=opens_at, closes_at=closes_at,
+    )
+    ch = models.Challenge(
+        course_id=course.id, creator_id=player_id, title=req.title.strip(), status="open",
+        rules_version=terms["rules_version"], course_version=course.version,
+        target_seconds=terms["target_seconds"], entry_crystals=terms["entry_crystals"],
+        reward_policy=terms["reward_policy"], win_xp=win_xp,
+        participation_xp=terms["participation_xp"], eligibility=terms["eligibility"],
+        privacy_mode=terms["privacy_mode"], safety_notes=safety,
+        opens_at=opens_at, closes_at=closes_at, terms_hash=challenge_rules.terms_hash(terms),
+        publish_idempotency_key=req.idempotency_key,
+    )
+    db.add(ch)
+    db.flush()
+    _award_badge(db, player_id, "FIRST_CHALLENGE_PUBLISHED")
+    _audit(db, actor_type="player", actor_id=player_id, action="challenge.published",
+           entity_type="challenge", entity_id=ch.id,
+           details={"course_id": course.id, "terms_hash": ch.terms_hash, "window_hours": req.window_hours})
+    db.commit()
+    db.refresh(ch)
+    return _challenge_public(db, ch, course, player_id)
+
+
+@app.get("/api/v2/challenges/nearby", response_model=List[ChallengePublic])
+def nearby_challenges(
     lat: float,
     lng: float,
     radius_km: float = 5.0,
     db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Open challenges near a point, as generalized markers only (ADR-004). Distance is
+    measured to the snapped marker and rounded, so it cannot be used to triangulate a
+    route."""
+    import math as _math
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise _api_error(422, "INVALID_LOCATION", "lat/lng out of range")
+    radius_km = min(max(radius_km, 0.5), 50.0)
+    dlat = radius_km / 111.0
+    dlng = radius_km / (111.0 * max(0.01, _math.cos(_math.radians(lat))))
+    rows = (
+        db.query(models.Challenge, models.Course)
+        .join(models.Course, models.Course.id == models.Challenge.course_id)
+        .filter(
+            models.Challenge.status == "open",
+            models.Course.status == "active",
+            models.Course.public_lat.between(lat - dlat, lat + dlat),
+            models.Course.public_lng.between(lng - dlng, lng + dlng),
+        )
+        .all()
+    )
+    now = _now_naive_utc()
+    changed = False
+    out: List[ChallengePublic] = []
+    hidden = player_safety.blocked_user_ids(db, token_data["id"])
+    for ch, course in rows:
+        changed |= _refresh_challenge_status(db, ch, now)
+        if ch.status != "open" or ch.creator_id in hidden:
+            continue
+        dist = spatial_utils.haversine_distance(lat, lng, course.public_lat, course.public_lng)
+        if dist > radius_km:
+            continue
+        out.append(_challenge_public(db, ch, course, token_data["id"], distance_km=round(dist, 1)))
+    if changed:
+        db.commit()
+    out.sort(key=lambda c: c.distance_km or 0.0)
+    return out[:100]
+
+
+@app.get("/api/v2/challenges/{challenge_id}", response_model=ChallengePublic)
+def get_challenge(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    ch = _get_challenge(db, challenge_id)
+    if _refresh_challenge_status(db, ch):
+        db.commit()
+    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
+    return _challenge_public(db, ch, course, token_data["id"])
+
+
+@app.get("/api/v2/challenges/{challenge_id}/course", response_model=ChallengeCourseRoute)
+def get_challenge_course(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """The exact course route, released only to the creator and to players who joined."""
+    ch = _get_challenge(db, challenge_id)
+    player_id = token_data["id"]
+    if ch.creator_id != player_id:
+        joined = db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+        ).first()
+        if joined is None:
+            raise _api_error(403, "JOIN_REQUIRED", "Join the challenge to see the course route")
+    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
+    return ChallengeCourseRoute(
+        challenge_id=ch.id, course_distance_m=round(course.distance_m, 2),
+        start_radius_m=challenge_rules.ATTEMPT_ENDPOINT_RADIUS_M,
+        route=[list(p) for p in _course_route(course)],
+    )
+
+
+@app.post("/api/v2/challenges/{challenge_id}/join", response_model=AttemptSummary)
+def join_challenge(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_challenge),
+):
+    """Join while the challenge is open (PRD-007). Idempotent: joining twice returns the same
+    attempt. The attempt snapshots the terms hash it agreed to."""
+    player_id = token_data["id"]
+    ch = _get_challenge(db, challenge_id)
+    if _refresh_challenge_status(db, ch):
+        db.commit()
+    existing = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+    ).first()
+    if existing:
+        return _attempt_summary(existing, ch)
+    if ch.status != "open":
+        raise _api_error(409, "CHALLENGE_NOT_OPEN", f"Challenge is {ch.status}")
+    if ch.creator_id == player_id:
+        raise _api_error(409, "OWN_CHALLENGE", "You cannot join your own challenge")
+    if player_safety.is_blocked_between(db, player_id, ch.creator_id):
+        raise _api_error(403, "BLOCKED", "You can't join this challenge")
+    verified_runs = db.query(models.RunSession).filter(
+        models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
+    ).count()
+    if verified_runs < 1:
+        raise _api_error(403, "NOT_ELIGIBLE", "Complete one verified run before joining challenges")
+    attempt = models.ChallengeAttempt(
+        challenge_id=ch.id, user_id=player_id, status="joined", terms_hash=ch.terms_hash,
+    )
+    db.add(attempt)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+        ).first()
+        return _attempt_summary(existing, ch)
+    _audit(db, actor_type="player", actor_id=player_id, action="challenge.joined",
+           entity_type="challenge_attempt", entity_id=attempt.id,
+           details={"challenge_id": ch.id, "terms_hash": ch.terms_hash})
+    growth_api.emit_event(db, "challenge_joined", user_id=player_id, properties={"challenge_id": ch.id})
+    db.commit()
+    db.refresh(attempt)
+    return _attempt_summary(attempt, ch)
+
+
+@app.post("/api/v2/challenges/{challenge_id}/attempts", response_model=AttemptSummary)
+def submit_attempt(
+    challenge_id: int,
+    req: AttemptSubmit,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_challenge),
+):
+    """Link a finished run to the player's attempt and decide it from the stored route
+    evidence. Idempotent for the same run; a rejected attempt may be retried with a new run
+    while the challenge accepts submissions."""
+    player_id = token_data["id"]
+    ch = _get_challenge(db, challenge_id)
+    if _refresh_challenge_status(db, ch):
+        db.commit()
+    attempt = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == player_id,
+    ).first()
+    if attempt is None:
+        raise _api_error(409, "NOT_JOINED", "Join the challenge before submitting a run")
+    if attempt.run_session_id == req.run_id and attempt.status != "joined":
+        return _attempt_summary(attempt, ch)
+    if attempt.status not in ("joined", "rejected"):
+        raise _api_error(409, "ATTEMPT_ALREADY_DECIDED", "This attempt has already been submitted")
+    if ch.status not in ("open", "closed"):
+        raise _api_error(409, "CHALLENGE_NOT_OPEN", f"Challenge is {ch.status}")
+    if attempt.terms_hash != ch.terms_hash:
+        raise _api_error(409, "TERMS_CHANGED", "Challenge terms differ from the terms you joined")
+
+    run = _get_player_run(db, req.run_id, player_id)
+    if run.status != "closed":
+        raise _api_error(409, "RUN_NOT_FINISHED", "Finish the run before submitting it")
+    if run.created_at < attempt.joined_at:
+        raise _api_error(409, "RUN_BEFORE_JOIN", "Only runs started after joining count")
+    if run.finished_at is None or run.finished_at > ch.closes_at:
+        raise _api_error(409, "RUN_AFTER_CLOSE", "The run finished after the challenge closed")
+    used = db.query(models.ChallengeAttempt).filter(
+        models.ChallengeAttempt.run_session_id == run.id, models.ChallengeAttempt.id != attempt.id,
+    ).first()
+    if used is not None:
+        raise _api_error(409, "RUN_ALREADY_USED", "This run is already linked to another attempt")
+
+    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
+    wall_clock = None
+    if run.started_at and run.finished_at:
+        wall_clock = (run.finished_at - run.started_at).total_seconds()
+    ev = challenge_rules.evaluate_attempt(
+        course_route=_course_route(course), course_distance=course.distance_m,
+        target_seconds=ch.target_seconds, run_verification_status=run.verification_status,
+        run_points=_run_points(db, run.id), run_duration=run.duration_seconds or 0.0,
+        run_wall_clock_seconds=wall_clock,
+    )
+    attempt.run_session_id = run.id
+    attempt.status = ev.status
+    attempt.outcome = ev.outcome
+    attempt.elapsed_seconds = ev.elapsed_seconds
+    attempt.course_coverage = ev.coverage
+    attempt.reason_codes_json = json.dumps(ev.reason_codes)
+    attempt.submitted_at = _now_naive_utc()
+    if ev.status == "accepted":
+        _apply_attempt_outcome(db, attempt, ch)
+    elif ev.status == "rejected":
+        attempt.decided_at = attempt.submitted_at
+    _audit(db, actor_type="player", actor_id=player_id, action="challenge.attempt_submitted",
+           entity_type="challenge_attempt", entity_id=attempt.id,
+           details={"challenge_id": ch.id, "run_id": run.id, "status": ev.status,
+                    "outcome": ev.outcome, "reason_codes": ev.reason_codes,
+                    "elapsed_seconds": ev.elapsed_seconds, "rules_version": ch.rules_version})
+    db.commit()
+    db.refresh(attempt)
+    return _attempt_summary(attempt, ch)
+
+
+@app.get("/api/v2/me/progression", response_model=ProgressionResponse)
+def my_progression(
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Transparent progression: XP, versioned performance rank, badges, and the counts
+    behind them."""
+    player_id = token_data["id"]
+    user = db.query(models.User).filter(models.User.id == player_id).first()
+    xp = user.xp or 0
+    badges = (
+        db.query(models.UserBadge)
+        .filter(models.UserBadge.user_id == player_id)
+        .order_by(models.UserBadge.awarded_at.asc())
+        .all()
+    )
+    defenses = (
+        db.query(models.ChallengeAttempt)
+        .join(models.Challenge, models.Challenge.id == models.ChallengeAttempt.challenge_id)
+        .filter(models.Challenge.creator_id == player_id, models.ChallengeAttempt.outcome == "lost")
+        .count()
+    )
+    return ProgressionResponse(
+        xp=xp,
+        performance_rank=challenge_rules.performance_rank(xp),
+        rank_ladder_version=challenge_rules.RANK_LADDER_VERSION,
+        next_rank_xp=challenge_rules.next_rank_threshold(xp),
+        verified_runs=db.query(models.RunSession).filter(
+            models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
+        ).count(),
+        courses=db.query(models.Course).filter(models.Course.owner_id == player_id).count(),
+        challenges_won=db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome == "won",
+        ).count(),
+        defenses=defenses,
+        badges=[
+            BadgeOut(code=b.badge_code, label=challenge_rules.BADGES.get(b.badge_code, b.badge_code),
+                     awarded_at=b.awarded_at)
+            for b in badges
+        ],
+    )
+
+
+# --- R2 admin trust console API (PRD-010) ----------------------------------------------
+
+class AdminReason(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class AdminChallengeAction(BaseModel):
+    action: str = Field(..., pattern="^(suspend|resume|void)$")
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class AdminReviewDecision(BaseModel):
+    decision: str = Field(..., pattern="^(accept|reject)$")
+    note: str = Field(..., min_length=3, max_length=500)
+
+
+class ReviewQueueItem(BaseModel):
+    attempt_id: int
+    challenge_id: int
+    challenge_title: str
+    user_id: int
+    run_id: Optional[int] = None
+    elapsed_seconds: Optional[float] = None
+    target_seconds: float
+    course_coverage: Optional[float] = None
+    submitted_at: Optional[datetime] = None
+
+
+class AdminChallengeItem(BaseModel):
+    id: int
+    title: str
+    status: str
+    status_reason: Optional[str] = None
+    creator_id: int
+    course_id: int
+    attempt_count: int
+    closes_at: datetime
+    created_at: datetime
+
+
+class AdminCourseStatus(BaseModel):
+    id: int
+    status: str
+    suspended_challenges: int
+
+
+class AdminUserStatus(BaseModel):
+    user_id: int
+    email: str
+    suspended: bool
+    suspension_reason: Optional[str] = None
+
+
+class AuditEventOut(BaseModel):
+    id: int
+    actor_type: str
+    actor_id: Optional[int] = None
+    action: str
+    entity_type: str
+    entity_id: Optional[int] = None
+    details: dict
+    created_at: datetime
+
+
+def _admin_challenge_item(db: Session, ch: models.Challenge) -> AdminChallengeItem:
+    return AdminChallengeItem(
+        id=ch.id, title=ch.title, status=ch.status, status_reason=ch.status_reason,
+        creator_id=ch.creator_id, course_id=ch.course_id,
+        attempt_count=db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id == ch.id).count(),
+        closes_at=ch.closes_at, created_at=ch.created_at,
+    )
+
+
+@app.get("/api/v2/admin/review-queue", response_model=List[ReviewQueueItem])
+def admin_review_queue(
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    rows = (
+        db.query(models.ChallengeAttempt, models.Challenge)
+        .join(models.Challenge, models.Challenge.id == models.ChallengeAttempt.challenge_id)
+        .filter(models.ChallengeAttempt.status == "review_required")
+        .order_by(models.ChallengeAttempt.submitted_at.asc())
+        .all()
+    )
+    return [
+        ReviewQueueItem(
+            attempt_id=a.id, challenge_id=ch.id, challenge_title=ch.title, user_id=a.user_id,
+            run_id=a.run_session_id, elapsed_seconds=a.elapsed_seconds,
+            target_seconds=ch.target_seconds, course_coverage=a.course_coverage,
+            submitted_at=a.submitted_at,
+        )
+        for a, ch in rows
+    ]
+
+
+@app.post("/api/v2/admin/attempts/{attempt_id}/review", response_model=AttemptSummary)
+def admin_review_attempt(
+    attempt_id: int,
+    req: AdminReviewDecision,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    attempt = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.id == attempt_id).first()
+    if attempt is None:
+        raise _api_error(404, "ATTEMPT_NOT_FOUND", "Attempt not found")
+    if attempt.status != "review_required":
+        raise _api_error(409, "NOT_IN_REVIEW", f"Attempt is {attempt.status}")
+    ch = _get_challenge(db, attempt.challenge_id)
+    attempt.reviewed_by_admin_id = token_data["id"]
+    attempt.review_note = req.note
+    if req.decision == "accept":
+        attempt.status = "accepted"
+        attempt.outcome = "won" if (attempt.elapsed_seconds or 0) < ch.target_seconds else "lost"
+        attempt.reason_codes_json = "[]"
+        if ch.status != "voided":
+            _apply_attempt_outcome(db, attempt, ch)
+    else:
+        attempt.status = "rejected"
+        attempt.reason_codes_json = json.dumps(["REVIEW_REJECTED"])
+        attempt.decided_at = _now_naive_utc()
+    _audit(db, actor_type="admin", actor_id=token_data["id"], action="attempt.reviewed",
+           entity_type="challenge_attempt", entity_id=attempt.id,
+           details={"decision": req.decision, "note": req.note, "outcome": attempt.outcome})
+    _refresh_challenge_status(db, ch)
+    db.commit()
+    db.refresh(attempt)
+    return _attempt_summary(attempt, ch)
+
+
+@app.get("/api/v2/admin/challenges", response_model=List[AdminChallengeItem])
+def admin_list_challenges(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    q = db.query(models.Challenge)
+    if status:
+        q = q.filter(models.Challenge.status == status)
+    return [_admin_challenge_item(db, ch) for ch in q.order_by(models.Challenge.created_at.desc()).limit(200).all()]
+
+
+@app.post("/api/v2/admin/challenges/{challenge_id}/status", response_model=AdminChallengeItem)
+def admin_challenge_status(
+    challenge_id: int,
+    req: AdminChallengeAction,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    """Suspend, resume, or void a challenge without database edits (PRD-010). Voiding
+    reverses every XP award the challenge produced and marks all attempts voided."""
+    ch = _get_challenge(db, challenge_id)
+    if req.action == "suspend":
+        if ch.status not in ("open", "closed"):
+            raise _api_error(409, "INVALID_TRANSITION", f"Cannot suspend a {ch.status} challenge")
+        ch.status = "suspended"
+    elif req.action == "resume":
+        if ch.status != "suspended":
+            raise _api_error(409, "INVALID_TRANSITION", f"Cannot resume a {ch.status} challenge")
+        ch.status = "open"
+        _refresh_challenge_status(db, ch)
+    else:
+        if ch.status == "voided":
+            raise _api_error(409, "INVALID_TRANSITION", "Challenge is already voided")
+        attempts = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id == ch.id).all()
+        defender = db.query(models.User).filter(models.User.id == ch.creator_id).first()
+        for a in attempts:
+            if a.xp_awarded:
+                challenger = db.query(models.User).filter(models.User.id == a.user_id).first()
+                if challenger is not None:
+                    _adjust_xp(challenger, -a.xp_awarded)
+            if a.defender_xp_awarded and defender is not None:
+                _adjust_xp(defender, -a.defender_xp_awarded)
+            a.outcome = "voided"
+            a.decided_at = a.decided_at or _now_naive_utc()
+        ch.status = "voided"
+    ch.status_reason = req.reason
+    _audit(db, actor_type="admin", actor_id=token_data["id"], action=f"challenge.{req.action}",
+           entity_type="challenge", entity_id=ch.id, details={"reason": req.reason, "status": ch.status})
+    db.commit()
+    db.refresh(ch)
+    return _admin_challenge_item(db, ch)
+
+
+@app.post("/api/v2/admin/courses/{course_id}/suspend", response_model=AdminCourseStatus)
+def admin_suspend_course(
+    course_id: int,
+    req: AdminReason,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    """Take a course off the map (e.g. unsafe or sensitive location) and suspend its live
+    challenges."""
+    course = db.query(models.Course).filter(models.Course.id == course_id).first()
+    if course is None:
+        raise _api_error(404, "COURSE_NOT_FOUND", "Course not found")
+    course.status = "suspended"
+    live = db.query(models.Challenge).filter(
+        models.Challenge.course_id == course.id, models.Challenge.status.in_(("open", "closed")),
+    ).all()
+    for ch in live:
+        ch.status = "suspended"
+        ch.status_reason = f"Course suspended: {req.reason}"
+    _audit(db, actor_type="admin", actor_id=token_data["id"], action="course.suspend",
+           entity_type="course", entity_id=course.id,
+           details={"reason": req.reason, "suspended_challenges": [c.id for c in live]})
+    db.commit()
+    return AdminCourseStatus(id=course.id, status=course.status, suspended_challenges=len(live))
+
+
+def _set_user_suspension(db: Session, user_id: int, admin_id: int, reason: Optional[str]) -> AdminUserStatus:
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        raise _api_error(404, "USER_NOT_FOUND", "User not found")
+    user.suspended_at = _now_naive_utc() if reason else None
+    user.suspension_reason = reason
+    _audit(db, actor_type="admin", actor_id=admin_id,
+           action="user.suspend" if reason else "user.unsuspend",
+           entity_type="user", entity_id=user.id, details={"reason": reason})
+    db.commit()
+    return AdminUserStatus(user_id=user.id, email=user.email, suspended=reason is not None,
+                           suspension_reason=reason)
+
+
+@app.post("/api/v2/admin/users/{user_id}/suspend", response_model=AdminUserStatus)
+def admin_suspend_user(
+    user_id: int,
+    req: AdminReason,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    return _set_user_suspension(db, user_id, token_data["id"], req.reason)
+
+
+@app.post("/api/v2/admin/users/{user_id}/unsuspend", response_model=AdminUserStatus)
+def admin_unsuspend_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    return _set_user_suspension(db, user_id, token_data["id"], None)
+
+
+@app.get("/api/v2/admin/audit-events", response_model=List[AuditEventOut])
+def admin_audit_events(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_current_admin),
+):
+    q = db.query(models.AuditEvent)
+    if entity_type:
+        q = q.filter(models.AuditEvent.entity_type == entity_type)
+    if entity_id is not None:
+        q = q.filter(models.AuditEvent.entity_id == entity_id)
+    if action:
+        q = q.filter(models.AuditEvent.action == action)
+    rows = q.order_by(models.AuditEvent.id.desc()).limit(min(max(limit, 1), 500)).all()
+    return [
+        AuditEventOut(
+            id=r.id, actor_type=r.actor_type, actor_id=r.actor_id, action=r.action,
+            entity_type=r.entity_type, entity_id=r.entity_id,
+            details=json.loads(r.details_json or "{}"), created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+@app.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
+def get_nearby_domains(
+    lat: float,
+    lng: float,
+    radius_km: float = 5.0,
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
 ):
     """Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),
-    sorted nearest-first. Public game state — no auth required (any player can see who owns
-    what land, the same way a Strava heatmap is public). MVP uses an in-memory haversine
-    sweep; PostGIS `ST_DWithin` will replace this in Phase 2."""
+    sorted nearest-first.
+
+    This endpoint is AUTHENTICATED (a player JWT is required). Previously it
+    was public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any
+    lat/lng to any unauthenticated caller — a stalking + economic-recon primitive. Requiring
+    auth closes the unauthenticated leak. NOTE (residual risk, see register): the response
+    still exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an
+    opaque handle + centroid-only for non-owners is a follow-up that changes the client
+    contract and is deferred for a product decision. MVP uses an in-memory haversine sweep;
+    PostGIS `ST_DWithin` replaces this in Phase 4."""
     candidates = db.query(models.Domain).all()
     out: List[DomainSummary] = []
     for d in candidates:
@@ -984,9 +2565,9 @@ async def get_nearby_domains(
 
 
 @app.post("/api/v1/domains", response_model=DomainResponse)
-async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Processes a completed Domain Trace, validates anti-cheat, and claims the territory."""
-    
+
     if token_data["id"] != domain_req.owner_id:
         raise HTTPException(status_code=403, detail="Not authorized to act as this user")
 
@@ -1030,7 +2611,7 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
 
     # 4. Save Domain to the Database
     geom_json = json.dumps([{"lat": c.lat, "lng": c.lng} for c in domain_req.coordinates])
-    
+
     new_domain = models.Domain(
         owner_id=user.id,
         geometry_json=geom_json,
@@ -1038,7 +2619,7 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
         defense_score=domain_req.defense_score,
         defense_type=domain_req.defense_type
     )
-    
+
     # 4.5 Siege Logic: Check if this new domain swallows any existing domains
     all_domains = db.query(models.Domain).filter(models.Domain.owner_id != user.id).all()
     sieges_created = 0
@@ -1098,11 +2679,11 @@ async def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db),
     )
 
 @app.post("/api/v1/domains/{domain_id}/vault", response_model=VaultLockResponse)
-async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Lock (or top up) an Ownership Fee on a domain. Crystals are deducted from the owner's
     wallet and added to the domain's Vault. Vault balance doubles as the required Challenger
     Match amount. Topping up is allowed; unlocking (lowering) is deferred to Phase 2."""
-    
+
     if token_data["id"] != req.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to act as this user")
 
@@ -1126,7 +2707,11 @@ async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depend
     if user.mana_crystals < delta:
         raise HTTPException(status_code=402, detail="Insufficient Mana Crystals.")
 
-    user.mana_crystals -= delta
+    ledger.apply_crystal_delta(
+        db, user, -delta, "vault_lock",
+        related_domain_id=domain.id,
+        note=f"Vault lock to {req.amount} on domain {domain.id}",
+    )
     domain.vault_balance = req.amount
     db.commit()
     db.refresh(domain)
@@ -1142,7 +2727,7 @@ async def lock_vault(domain_id: int, req: VaultLockRequest, db: Session = Depend
 
 
 @app.post("/api/v1/sieges/{siege_id}/resolve", response_model=SiegeResolveResponse)
-async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Resolve a pending siege. Challenger submits their Defense Feat score.
     WIN: defender's polygon erased, pot (defender vault + challenger match) paid 80/20 to
          challenger/system.
@@ -1218,7 +2803,15 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     defender_score = siege.defender_score_snapshot or 0
     is_time_trial = target_defense_type in ("run", "walk", "sprint")
     if is_time_trial:
-        challenger_won = req.challenger_score <= defender_score and req.challenger_score > 0
+        # Time trials are won by a LOWER time. A free-tier domain has no baseline
+        # (defender_score == 0): there is no real time to beat, so any positive challenger
+        # time wins (§3.1 fix — previously `score <= 0 and score > 0` was always False,
+        # making free-tier time-trial domains unconquerable). Paid/seeded tiers keep the
+        # genuine "beat the baseline" comparison.
+        if defender_score == 0:
+            challenger_won = req.challenger_score > 0
+        else:
+            challenger_won = 0 < req.challenger_score <= defender_score
     else:
         challenger_won = req.challenger_score > defender_score
 
@@ -1229,11 +2822,22 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     if challenger_won:
         # Debit only the out-of-pocket; the discount portion was subsidized by the system.
         if required_match > 0:
-            challenger.mana_crystals -= out_of_pocket
+            # NB: target_domain is db.delete()'d below on the win path, so we deliberately
+            # do NOT set related_domain_id here (it would dangle); the id lives in the note.
+            if out_of_pocket > 0:
+                ledger.apply_crystal_delta(
+                    db, challenger, -out_of_pocket, "siege_out_of_pocket",
+                    related_siege_id=siege.id,
+                    note=f"Match staked on siege {siege.id} win (domain {target_domain.id})",
+                )
             pot = required_match * 2  # treat as full match vs defender vault
             winner_share = int(pot * (1 - WAR_TAX_PCT))  # 80%
             war_tax_revenue = pot - winner_share          # 20% to platform
-            challenger.mana_crystals += winner_share
+            ledger.apply_crystal_delta(
+                db, challenger, winner_share, "siege_win_payout",
+                related_siege_id=siege.id,
+                note=f"80% pot payout on siege {siege.id} win (domain {target_domain.id})",
+            )
             crystals_awarded = winner_share
             target_domain.vault_balance = 0
             # Ledger: record platform's War Tax cut.
@@ -1270,7 +2874,12 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
     else:
         # LOSS: challenger forfeits their match, split 50/30/20.
         if required_match > 0:
-            challenger.mana_crystals -= out_of_pocket
+            if out_of_pocket > 0:
+                ledger.apply_crystal_delta(
+                    db, challenger, -out_of_pocket, "siege_forfeit",
+                    related_siege_id=siege.id, related_domain_id=target_domain.id,
+                    note=f"Forfeited match on siege {siege.id} loss",
+                )
             defender_cut = int(required_match * LOSS_DEFENDER_PCT)
             system_keep = int(required_match * LOSS_SYSTEM_PCT)         # 30% — platform revenue
             future_discount_cut = int(required_match * LOSS_DISCOUNT_PCT)
@@ -1335,11 +2944,11 @@ async def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = D
 
 
 @app.get("/api/v1/users/{user_id}/party-role", response_model=PartyRoleResponse)
-async def get_user_party_role(
+def get_user_party_role(
     user_id: int,
     window_days: Optional[int] = None,
     db: Session = Depends(get_db),
-    token_data: dict = Depends(get_current_player),
+    token_data: dict = Depends(get_active_player),
 ):
     if token_data["id"] != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to view this user's role")
@@ -1477,27 +3086,29 @@ def _enforce_proof_gps_in_polygon(
     polygon: list,
     context: str,
 ) -> None:
-    """Co-location guard: if the proof carries GPS samples, their centroid must fall
-    inside `polygon`. Without this, a verified workout from one city can be attached to
-    a Domain in another — the ML referee only checks rhythm, not location.
+    """Co-location guard: if the proof carries GPS samples, at least 80% of samples must fall
+    inside `polygon`. Without this, a single fake sample or centroid trick could bypass location.
 
     Permissive on purpose: an empty GPS channel is treated as 'no check' so legacy clients
-    that don't ship GPS yet still work. Once the frontend reliably samples GPS during all
-    activities, swap this to require samples for outdoor activity_types.
+    that don't ship GPS yet still work.
 
     `polygon` is a list of {lat, lng} dicts (the JSON shape stored in Domain.geometry_json).
     Raises 400 with a referee-style flag on mismatch."""
     if proof is None or not proof.gps or not polygon:
         return
+    inside_count = sum(
+        1 for s in proof.gps if spatial_utils.point_in_polygon(s.lng, s.lat, polygon)
+    )
+    ratio = inside_count / len(proof.gps)
+    if ratio >= 0.8 or (len(proof.gps) == 1 and inside_count == 1):
+        return
     avg_lat = sum(s.lat for s in proof.gps) / len(proof.gps)
     avg_lng = sum(s.lng for s in proof.gps) / len(proof.gps)
-    if spatial_utils.point_in_polygon(avg_lng, avg_lat, polygon):
-        return
     raise HTTPException(
         status_code=400,
         detail=(
-            f"ML Referee rejected proof ({context}): GPS centroid "
-            f"({avg_lat:.6f}, {avg_lng:.6f}) outside expected polygon."
+            f"ML Referee rejected proof ({context}): only {ratio*100:.1f}% of GPS samples "
+            f"(centroid {avg_lat:.6f}, {avg_lng:.6f}) fall inside expected polygon (80% required)."
         ),
     )
 
@@ -1509,27 +3120,32 @@ def _enforce_proof_gps_in_geofence(
     radius_m: float,
     context: str,
 ) -> None:
-    """Geofence variant of the co-location guard for circular bounty zones. Same
-    permissive contract: empty GPS channel skips the check."""
+    """Geofence variant of the co-location guard for circular bounty zones. Requires at least 80%
+    of samples to fall within the geofence radius + 20m GPS margin."""
     if proof is None or not proof.gps or radius_m <= 0:
+        return
+    allowed_radius_m = radius_m + 20.0
+    inside_count = sum(
+        1 for s in proof.gps
+        if spatial_utils.haversine_distance(s.lat, s.lng, center_lat, center_lng) * 1000.0 <= allowed_radius_m
+    )
+    ratio = inside_count / len(proof.gps)
+    if ratio >= 0.8 or (len(proof.gps) == 1 and inside_count == 1):
         return
     avg_lat = sum(s.lat for s in proof.gps) / len(proof.gps)
     avg_lng = sum(s.lng for s in proof.gps) / len(proof.gps)
     dist_km = spatial_utils.haversine_distance(avg_lat, avg_lng, center_lat, center_lng)
-    if dist_km * 1000.0 <= radius_m:
-        return
     raise HTTPException(
         status_code=400,
         detail=(
-            f"ML Referee rejected proof ({context}): GPS centroid "
-            f"({avg_lat:.6f}, {avg_lng:.6f}) is {dist_km*1000:.0f}m from geofence "
-            f"center (radius {radius_m:.0f}m)."
+            f"ML Referee rejected proof ({context}): only {ratio*100:.1f}% of GPS samples "
+            f"are within {allowed_radius_m:.0f}m geofence (centroid is {dist_km*1000:.0f}m away)."
         ),
     )
 
 
 @app.post("/api/v1/activities/verify", response_model=VerificationResult)
-async def verify_activity_endpoint(proof: ActivityProof):
+def verify_activity_endpoint(proof: ActivityProof, _rl: None = Depends(_rl_verify)):
     """Stateless preview of the ML Referee. The frontend can call this to confirm a workout
     will pass before submitting the real action (claim, siege, bounty). No DB writes.
     Note: the co-location check is NOT applied here — that requires the target polygon /
@@ -1546,7 +3162,7 @@ class PlatformRevenueSummary(BaseModel):
 
 
 @app.get("/api/v1/platform/revenue", response_model=PlatformRevenueSummary)
-async def get_platform_revenue(db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin)):
+def get_platform_revenue(db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin)):
     """Aggregates the PlatformRevenue ledger so admins can audit total platform earnings and
     the breakdown by source. Read-only; safe to expose internally during MVP. Production will
     gate this behind an admin role."""
@@ -1561,13 +3177,12 @@ async def get_platform_revenue(db: Session = Depends(get_db), token_data: dict =
 # --- Epic 1: Bounty Board Endpoints ---
 
 @app.post("/api/v1/merchants/register", response_model=MerchantResponse)
-async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
+def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
     """Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.
     Newly-registered merchants start `is_active=False` / `payment_status='payment_pending'`;
     they must complete the pilot-fee flow (or be activated by an admin) before they can
     create merchant_chest bounties."""
-    if db.query(models.Merchant).filter(models.Merchant.email == merchant.email).first():
-        raise HTTPException(status_code=400, detail="Merchant email already registered")
+    _check_email_unique(db, merchant.email)
     new = models.Merchant(
         name=merchant.name,
         email=merchant.email,
@@ -1583,7 +3198,7 @@ async def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_
 # --- v2.9: Merchant payment + activation endpoints ---
 
 @app.get("/api/v1/merchants/{merchant_id}", response_model=MerchantProfile)
-async def get_merchant_profile(
+def get_merchant_profile(
     merchant_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -1605,7 +3220,7 @@ async def get_merchant_profile(
 
 
 @app.get("/api/v1/merchants/{merchant_id}/bounties", response_model=List[MerchantBountyAnalytics])
-async def get_merchant_bounties(
+def get_merchant_bounties(
     merchant_id: int,
     token_data: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
@@ -1660,15 +3275,15 @@ async def get_merchant_bounties(
 
 
 @app.post("/api/v1/merchants/{merchant_id}/payments/intent", response_model=PaymentIntentResponse)
-async def create_payment_intent(
+def create_payment_intent(
     merchant_id: int,
     token_data: dict = Depends(get_current_merchant),
     db: Session = Depends(get_db),
 ):
-    """Initiate the pilot-fee payment. In production this calls the payment provider (e.g.,
-    Stripe) and returns a client_secret for the front-end to redirect to a payment form.
-    For MVP we stub a unique provider_payment_id and leave payment_status='payment_pending'
-    until the webhook fires."""
+    """Initiate the pilot-fee payment via Stripe. Creates a Stripe PaymentIntent for the
+    merchant's `pilot_fee_cents` and returns its `client_secret` so the Flutter Stripe SDK can
+    confirm the card on-device. Activation does NOT happen here — it happens when Stripe POSTs
+    `payment_intent.succeeded` to /payments/stripe/webhook."""
     if token_data["id"] != merchant_id:
         raise HTTPException(status_code=403, detail="Merchants can only pay their own pilot fee")
 
@@ -1678,29 +3293,37 @@ async def create_payment_intent(
     if merchant.is_active:
         raise HTTPException(status_code=400, detail="Merchant is already active; nothing to pay")
 
-    # Stub provider integration. Replace with provider SDK in Phase 2.
-    provider_payment_id = f"mvp_intent_{secrets.token_urlsafe(12)}"
-    merchant.payment_provider_id = provider_payment_id
+    try:
+        intent = stripe_gateway.create_payment_intent(
+            amount_cents=merchant.pilot_fee_cents,
+            currency=CRYSTAL_PURCHASE_CURRENCY,
+            description=f"Osiris merchant pilot fee — merchant {merchant.id}",
+            metadata={"kind": "merchant_pilot_fee", "merchant_id": str(merchant.id)},
+            idempotency_key=f"merchant_pilot_fee:{merchant.id}",
+        )
+    except stripe_gateway.StripeNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    merchant.payment_provider_id = intent.id
     merchant.payment_status = "payment_pending"
     db.commit()
 
     return PaymentIntentResponse(
         merchant_id=merchant.id,
         pilot_fee_cents=merchant.pilot_fee_cents,
-        provider_payment_id=provider_payment_id,
+        provider_payment_id=intent.id,
         payment_status=merchant.payment_status,
-        next_action=(
-            "MVP stub: simulate the provider by POSTing a webhook to "
-            "/api/v1/payments/webhook with the same provider_payment_id and "
-            "payment_status='payment_successful'."
-        ),
+        client_secret=intent.client_secret,
+        publishable_key=stripe_gateway.STRIPE_PUBLISHABLE_KEY,
+        next_action="Confirm the PaymentIntent client_secret with the Stripe SDK in the app.",
     )
 
 
 @app.post("/api/v1/payments/webhook", response_model=PaymentWebhookResponse)
-async def payment_webhook(
+def payment_webhook(
     body: bytes = Depends(verify_webhook_signature),
     db: Session = Depends(get_db),
+    _rl: None = Depends(_rl_webhook),
 ):
     """Endpoint the payment provider POSTs to when a payment reaches a terminal state.
     NOT JWT-gated — providers don't carry our JWTs. Signature verification (`X-Provider-
@@ -1824,10 +3447,286 @@ async def payment_webhook(
     )
 
 
+# --- Phase 3: Stripe-native webhook + shared terminal-state processors ---
+#
+# Stripe event type -> our internal payment_status vocabulary. Only these are acted on; any
+# other event type is acknowledged with 200 and ignored so Stripe stops retrying it.
+_STRIPE_EVENT_TO_STATUS = {
+    "payment_intent.succeeded": "payment_successful",
+    "payment_intent.payment_failed": "payment_declined",
+    "payment_intent.processing": "payment_pending",
+}
+
+
+def _apply_merchant_pilot_fee(
+    db: Session, *, merchant, payment_status: str, provider_payment_id: str,
+    amount_cents: int, occurred_at: datetime,
+) -> str:
+    """Apply a terminal payment status to a merchant pilot fee. Same activation rule as the
+    generic webhook: only 'payment_successful' flips is_active and records revenue (once, on
+    the activating transition). Does NOT commit — the caller owns the transaction."""
+    merchant.payment_status = payment_status
+    merchant.payment_provider_id = provider_payment_id
+    if payment_status == "payment_successful":
+        already_active = bool(merchant.is_active)
+        merchant.is_active = True
+        merchant.last_payment_at = occurred_at
+        if not already_active and amount_cents > 0:
+            db.add(models.PlatformRevenue(
+                source="merchant_pilot_fee",
+                amount=amount_cents,
+                user_id=None,
+                note=f"Merchant {merchant.id} pilot fee via {provider_payment_id}",
+            ))
+        return "Merchant activated. Pilot fee recorded."
+    return f"Status updated to {payment_status}; merchant remains inactive."
+
+
+def _fulfill_crystal_purchase(
+    db: Session, *, purchase, payment_status: str, amount_cents: int, occurred_at: datetime,
+) -> str:
+    """Apply a terminal payment status to a player crystal purchase.
+
+    RED LINE — no double-mint: on success we credit crystals through the ledger EXACTLY ONCE.
+    The guard is `purchase.status`: a row already 'succeeded' is a no-op, so a replayed/duplicate
+    Stripe event can never credit twice. Does NOT commit — the caller owns the transaction."""
+    if payment_status == "payment_successful":
+        if purchase.status == "succeeded":
+            return "Crystal purchase already fulfilled (no-op)."
+        user = db.query(models.User).filter(models.User.id == purchase.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Purchasing user not found")
+        entry = ledger.apply_crystal_delta(
+            db, user, purchase.crystal_amount, "crystal_purchase",
+            note=f"Stripe top-up {purchase.stripe_payment_intent_id} ({purchase.pack_id})",
+        )
+        db.flush()  # assign entry.id so the purchase can link to its ledger row
+        purchase.status = "succeeded"
+        purchase.crystal_ledger_id = entry.id
+        purchase.fulfilled_at = occurred_at
+        if amount_cents > 0:
+            db.add(models.PlatformRevenue(
+                source="crystal_purchase",
+                amount=amount_cents,
+                user_id=purchase.user_id,
+                note=f"User {purchase.user_id} crystal top-up {purchase.stripe_payment_intent_id}",
+            ))
+        return f"Credited {purchase.crystal_amount} crystals to user {purchase.user_id}."
+    if payment_status == "payment_declined":
+        if purchase.status != "succeeded":
+            purchase.status = "failed"
+        return "Crystal purchase marked failed."
+    return f"Crystal purchase status updated to {payment_status}."
+
+
+@app.post("/api/v1/payments/stripe/webhook", response_model=PaymentWebhookResponse)
+async def stripe_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    _rl: None = Depends(_rl_webhook),
+):
+    """Stripe-native webhook. Verifies the `Stripe-Signature` header against the RAW body with
+    `stripe.Webhook.construct_event`, then routes `payment_intent.*` events by their metadata
+    `kind` to the merchant-pilot-fee or crystal-purchase processor.
+
+    Event-level idempotency: PaymentWebhookEvent keyed on the Stripe `event.id` (unique index)
+    makes retried deliveries no-ops. Purchase-level idempotency (no double-mint) is enforced
+    separately by `_fulfill_crystal_purchase`."""
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    try:
+        event = stripe_gateway.construct_event(payload, sig_header)
+    except stripe_gateway.StripeNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    except Exception:
+        # stripe.error.SignatureVerificationError (and any other verification failure).
+        raise HTTPException(status_code=401, detail="Invalid Stripe signature")
+
+    event_id = event["id"]
+    event_type = event["type"]
+
+    payment_status = _STRIPE_EVENT_TO_STATUS.get(event_type)
+    if payment_status is None:
+        return PaymentWebhookResponse(
+            merchant_id=0, payment_status="ignored", is_active=False,
+            message=f"Event type {event_type} acknowledged; no action taken.",
+        )
+
+    # Event-level dedup: if we've seen this Stripe event.id, replay nothing.
+    prior = (
+        db.query(models.PaymentWebhookEvent)
+        .filter(models.PaymentWebhookEvent.provider_event_id == event_id)
+        .first()
+    )
+    if prior:
+        return PaymentWebhookResponse(
+            merchant_id=prior.merchant_id or 0,
+            payment_status=prior.payment_status or payment_status,
+            is_active=False,
+            message=f"Duplicate event {event_id} ignored (already processed).",
+        )
+
+    intent = event["data"]["object"]
+    pi_id = intent["id"]
+    amount_cents = intent.get("amount") or 0
+    metadata = intent.get("metadata") or {}
+    kind = metadata.get("kind")
+    occurred_at = _now_naive_utc()
+
+    merchant_id_for_event: Optional[int] = None
+    user_id_for_event: Optional[int] = None
+
+    if kind == "merchant_pilot_fee":
+        merchant = (
+            db.query(models.Merchant)
+            .filter(models.Merchant.id == int(metadata["merchant_id"]))
+            .first()
+        )
+        if not merchant:
+            raise HTTPException(status_code=404, detail="Merchant not found")
+        merchant_id_for_event = merchant.id
+        message = _apply_merchant_pilot_fee(
+            db, merchant=merchant, payment_status=payment_status,
+            provider_payment_id=pi_id, amount_cents=amount_cents, occurred_at=occurred_at,
+        )
+        resp_merchant_id, resp_status, resp_active = (
+            merchant.id, merchant.payment_status, bool(merchant.is_active),
+        )
+    elif kind == "crystal_purchase":
+        purchase = (
+            db.query(models.CrystalPurchase)
+            .filter(models.CrystalPurchase.stripe_payment_intent_id == pi_id)
+            .first()
+        )
+        if not purchase:
+            raise HTTPException(status_code=404, detail="Crystal purchase not found")
+        user_id_for_event = purchase.user_id
+        message = _fulfill_crystal_purchase(
+            db, purchase=purchase, payment_status=payment_status,
+            amount_cents=amount_cents, occurred_at=occurred_at,
+        )
+        resp_merchant_id, resp_status, resp_active = (
+            0, purchase.status, purchase.status == "succeeded",
+        )
+    else:
+        return PaymentWebhookResponse(
+            merchant_id=0, payment_status="ignored", is_active=False,
+            message=f"Event {event_id} metadata.kind={kind!r} is unknown; ignored.",
+        )
+
+    # Record the event AFTER side effects, same transaction. The unique index on
+    # provider_event_id turns a concurrent duplicate delivery into an IntegrityError at commit.
+    db.add(models.PaymentWebhookEvent(
+        provider_event_id=event_id,
+        merchant_id=merchant_id_for_event,
+        user_id=user_id_for_event,
+        event_type=event_type,
+        payment_status=payment_status,
+        provider_payment_id=pi_id,
+        amount_cents=amount_cents,
+        received_at=_now_naive_utc(),
+    ))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return PaymentWebhookResponse(
+            merchant_id=merchant_id_for_event or 0,
+            payment_status=payment_status,
+            is_active=False,
+            message=f"Duplicate event {event_id} raced — earlier delivery won.",
+        )
+
+    return PaymentWebhookResponse(
+        merchant_id=resp_merchant_id, payment_status=resp_status,
+        is_active=resp_active, message=message,
+    )
+
+
+# --- Phase 3: player crystal top-up (one-way purchase) endpoints ---
+
+@app.get("/api/v1/payments/crystals/packs", response_model=List[CrystalPackInfo])
+def list_crystal_packs():
+    """Buyable crystal packs with server-authoritative pricing. The client renders these and
+    sends back only a `pack_id`; it never sets a price."""
+    return [
+        CrystalPackInfo(
+            pack_id=pid, label=p["label"], crystals=p["crystals"],
+            amount_cents=p["amount_cents"], currency=CRYSTAL_PURCHASE_CURRENCY,
+        )
+        for pid, p in CRYSTAL_PACKS.items()
+    ]
+
+
+@app.post("/api/v1/payments/crystals/intent", response_model=CrystalPurchaseIntentResponse)
+def create_crystal_purchase_intent(
+    req: CrystalPurchaseIntentRequest,
+    token_data: dict = Depends(get_active_player),
+    db: Session = Depends(get_db),
+):
+    """Start a real-money crystal top-up. The price and crystal grant come from CRYSTAL_PACKS
+    on the server — the client only chooses a `pack_id`. Creates a Stripe PaymentIntent and a
+    'pending' CrystalPurchase; crystals are credited later by the webhook on success."""
+    pack = CRYSTAL_PACKS.get(req.pack_id)
+    if not pack:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown pack_id {req.pack_id!r}. Valid packs: {sorted(CRYSTAL_PACKS)}",
+        )
+
+    user_id = token_data["id"]
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        intent = stripe_gateway.create_payment_intent(
+            amount_cents=pack["amount_cents"],
+            currency=CRYSTAL_PURCHASE_CURRENCY,
+            description=f"Osiris crystal top-up — {pack['label']} for user {user_id}",
+            metadata={
+                "kind": "crystal_purchase",
+                "user_id": str(user_id),
+                "pack_id": req.pack_id,
+                "crystal_amount": str(pack["crystals"]),
+            },
+        )
+    except stripe_gateway.StripeNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    purchase = models.CrystalPurchase(
+        user_id=user_id,
+        pack_id=req.pack_id,
+        crystal_amount=pack["crystals"],
+        amount_cents=pack["amount_cents"],
+        currency=CRYSTAL_PURCHASE_CURRENCY,
+        stripe_payment_intent_id=intent.id,
+        status="pending",
+    )
+    db.add(purchase)
+    db.commit()
+    db.refresh(purchase)
+
+    return CrystalPurchaseIntentResponse(
+        purchase_id=purchase.id,
+        pack_id=req.pack_id,
+        crystal_amount=pack["crystals"],
+        amount_cents=pack["amount_cents"],
+        currency=CRYSTAL_PURCHASE_CURRENCY,
+        payment_intent_id=intent.id,
+        client_secret=intent.client_secret,
+        publishable_key=stripe_gateway.STRIPE_PUBLISHABLE_KEY,
+        status=purchase.status,
+    )
+
+
 # --- v2.9: Admin merchant management (manual fallback for refunds / disputes / demos) ---
 
 @app.get("/api/v1/admin/merchants", response_model=List[AdminMerchantListItem])
-async def admin_list_merchants(
+def admin_list_merchants(
     status: Optional[str] = None,           # 'pending' | 'active' | 'declined' | 'all' (default 'all')
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1847,7 +3746,7 @@ async def admin_list_merchants(
 
 
 @app.post("/api/v1/admin/merchants/{merchant_id}/activate", response_model=AdminMerchantToggleResponse)
-async def admin_activate_merchant(
+def admin_activate_merchant(
     merchant_id: int,
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1880,7 +3779,7 @@ async def admin_activate_merchant(
 
 
 @app.post("/api/v1/admin/merchants/{merchant_id}/deactivate", response_model=AdminMerchantToggleResponse)
-async def admin_deactivate_merchant(
+def admin_deactivate_merchant(
     merchant_id: int,
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -1901,7 +3800,7 @@ async def admin_deactivate_merchant(
 
 
 @app.post("/api/v1/bounties", response_model=BountySummary)
-async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
+def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
     """Seed a bounty. Admins can create both 'daily' (system-issued) and 'merchant_chest'
     (any merchant). Merchants can only create 'merchant_chest' bounties keyed to their own
     merchant_id. Geofence radius is in metres; distance to caller is filled with 0 since
@@ -1973,7 +3872,7 @@ async def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), tok
 
 
 @app.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
-async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
     nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
     `ST_DWithin` in Phase 2."""
@@ -2014,7 +3913,7 @@ async def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db
 
 
 @app.post("/api/v1/bounties/{bounty_id}/complete", response_model=BountyCompleteResponse)
-async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_current_player)):
+def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     if token_data["id"] != req.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to complete bounty for this user")
     """Validates proximity + score, awards XP/crystals, increments the matching attribute stat,
@@ -2076,7 +3975,12 @@ async def complete_bounty(bounty_id: int, req: BountyCompleteRequest, db: Sessio
     # Award rewards
     device_ts = _to_naive_utc(req.device_timestamp)
     user.xp += bounty.xp_reward
-    user.mana_crystals += bounty.crystal_reward
+    if bounty.crystal_reward:
+        ledger.apply_crystal_delta(
+            db, user, bounty.crystal_reward, "bounty_reward",
+            related_bounty_id=bounty.id,
+            note=f"Reward for bounty {bounty.id}",
+        )
     user.last_activity_date = device_ts
     user.rank = get_rank(user.xp, user.last_activity_date)
     activity_score = req.score or bounty.target_score
@@ -2184,7 +4088,7 @@ def _load_coupon_for_merchant(
 
 
 @app.get("/api/v1/coupons/{code}", response_model=CouponLookupResponse)
-async def lookup_coupon(
+def lookup_coupon(
     code: str,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_user_token),
@@ -2207,7 +4111,7 @@ async def lookup_coupon(
 
 
 @app.post("/api/v1/coupons/{code}/redeem", response_model=CouponRedeemResponse)
-async def redeem_coupon(
+def redeem_coupon(
     code: str,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_user_token),
@@ -2308,5 +4212,66 @@ def process_telemetry_ttl():
     finally:
         db.close()
 
+
+# Raw GPS samples are personal location history (Security plan §2: keep raw telemetry only as
+# long as needed). They must outlive the longest challenge window (720 h) plus its submission
+# grace, because a run can be linked to an attempt until the challenge closes; 45 days does.
+ROUTE_POINT_RETENTION_DAYS = int(os.environ.get("OSIRIS_ROUTE_POINT_TTL_DAYS", "45"))
+
+
+def process_route_point_ttl() -> int:
+    """Nightly job: delete raw RoutePoint rows of closed runs that finished before the
+    retention window. The RunSession summary (distance, duration, verification status, route
+    hash) and its VerificationDecision stay, as do courses, which keep their own trimmed
+    route. Runs whose challenge attempt awaits human review keep their evidence until it is
+    decided. Returns the number of points deleted; 0 or a negative TTL disables the job."""
+    if ROUTE_POINT_RETENTION_DAYS <= 0:
+        return 0
+    cutoff = _now_naive_utc() - timedelta(days=ROUTE_POINT_RETENTION_DAYS)
+    db = database.SessionLocal()
+    try:
+        under_review = db.query(models.ChallengeAttempt.run_session_id).filter(
+            models.ChallengeAttempt.status == "review_required",
+            models.ChallengeAttempt.run_session_id.isnot(None),
+        )
+        expired_runs = db.query(models.RunSession.id).filter(
+            models.RunSession.status == "closed",
+            models.RunSession.finished_at < cutoff,
+            models.RunSession.id.notin_(under_review),
+        )
+        deleted = (
+            db.query(models.RoutePoint)
+            .filter(models.RoutePoint.run_session_id.in_(expired_runs))
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        if deleted:
+            logger.info("route-point-ttl", extra={"ctx": {"deleted": deleted, "retention_days": ROUTE_POINT_RETENTION_DAYS}})
+        return deleted
+    finally:
+        db.close()
+
+
+def process_challenge_settlement():
+    """R2 hourly job — closes challenges past their window and settles them once the
+    submission grace period has passed and no attempt awaits review. Reads also advance
+    status lazily; this job makes sure untouched challenges settle too."""
+    db = database.SessionLocal()
+    try:
+        now = _now_naive_utc()
+        live = db.query(models.Challenge).filter(models.Challenge.status.in_(("open", "closed"))).all()
+        changed = False
+        for ch in live:
+            changed |= _refresh_challenge_status(db, ch, now)
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
 # Scheduler + lifespan handler are now defined near the top of the module so FastAPI() can
 # accept lifespan= at construction time. See the @asynccontextmanager above.
+
+
+# Growth release routers. Imported last because they import shared dependencies from this
+# module; each registers its own router on `app` when its import completes.
+import growth_api  # noqa: E402,F401

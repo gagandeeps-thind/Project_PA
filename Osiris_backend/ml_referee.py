@@ -14,7 +14,7 @@ Confidence threshold = 0.85 (per GDD Epic 2.2). Anything below that returns
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict
+from typing import List, Dict
 import math
 
 
