@@ -176,6 +176,21 @@ def test_plank_hold() -> None:
     print("PASS plank hold")
 
 
+def test_submission_is_rate_limited() -> None:
+    headers = _register("ratelimit")
+    main._rate_buckets.clear()
+    dev_env = main._IS_DEV_ENV
+    main._IS_DEV_ENV = False          # limits are off in dev/test; exercise the prod path
+    try:
+        codes = [client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=3)).status_code
+                 for _ in range(35)]
+    finally:
+        main._IS_DEV_ENV = dev_env
+        main._rate_buckets.clear()
+    assert codes[:30] == [201] * 30 and 429 in codes[30:], codes
+    print("PASS submission is rate limited")
+
+
 def test_history_export_erase_and_metrics() -> None:
     headers = _register("history")
     client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=8))
@@ -211,6 +226,7 @@ if __name__ == "__main__":
         test_bad_input_is_422()
         test_daily_caps_per_exercise_and_total()
         test_plank_hold()
+        test_submission_is_rate_limited()
         test_history_export_erase_and_metrics()
     finally:
         cleanup()

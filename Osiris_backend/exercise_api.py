@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 import models
 from growth_api import get_or_create_profile
-from main import _api_error, _now_naive_utc, app, get_active_player, get_db, get_rank
+from main import _api_error, _now_naive_utc, _rate_limit, app, get_active_player, get_db, get_rank
 from services import exercises as exercise_rules
 from services import metrics
 from services import quests as quest_rules
@@ -29,6 +29,10 @@ router = APIRouter()
 
 MAX_REPS = 2_000
 MAX_LIST_LIMIT = 100
+
+# A set takes seconds to perform; 30 uploads a minute still lets a phone drain an offline
+# backlog quickly (the queue keeps a 429'd set and retries it) while capping row spam.
+_rl_exercise = _rate_limit(30, 60, "exercise")
 
 
 class ExerciseSessionIn(BaseModel):
@@ -93,6 +97,7 @@ def list_exercises(_token: dict = Depends(get_active_player)):
 @router.post("/api/v2/exercise-sessions", response_model=ExerciseSessionOut, status_code=201)
 def submit_exercise_session(
     req: ExerciseSessionIn, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player),
+    _rl: None = Depends(_rl_exercise),
 ):
     """Store a device-verified set and grant capped XP if the server re-check agrees.
     Idempotent per `client_session_id`: a retry returns the stored result with 200."""
