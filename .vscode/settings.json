@@ -2,5 +2,7 @@
     "editor.fontSize": 12,
     "editor.minimap.sectionHeaderFontSize": 5,
     "screencastMode.fontSize": 20,
-    "chat.fontSize": 10
+    "chat.fontSize": 10,
+    "claudeCode.useTerminal": true,
+    "claudeCode.useCtrlEnterToSend": false
 }
