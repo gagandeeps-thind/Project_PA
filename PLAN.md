@@ -114,6 +114,10 @@ setting the repo up for autonomous agent work (2026-10-12).
   - On-device NOAA solar position from the current fix (no network, location stays on the phone); below civil
     twilight (-6°) START asks first, with advice; the player can still start.
 
+- [x] customer: restore cold start after the exercise feature (release build, 2026-10-14)
+  - Session restore opened the exercise SQLite DB on every launch to drop other accounts' rows (~200 ms). The owner
+    is now remembered in preferences; the DB opens only when the signed-in account changes.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.

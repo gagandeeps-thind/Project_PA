@@ -233,7 +233,9 @@ class AuthNotifier extends Notifier<UserProfile?> {
 
   /// Exercise history on this phone belongs to one account at a time, like the run queue.
   void _bindExerciseData(int? userId) {
-    unawaited(ref.read(exerciseStoreProvider.future).then((s) => s.forgetOtherUsers(userId)).catchError((_) {}));
+    unawaited(bindExerciseOwner(ref.read(sharedPreferencesProvider), userId,
+            () => ref.read(exerciseStoreProvider.future))
+        .catchError((_) {}));
   }
 
   Future<void> _clearCredentials() async {
@@ -244,6 +246,23 @@ class AuthNotifier extends Notifier<UserProfile?> {
 }
 
 // ── Camera-verified exercises ──────────────────────────────────────────
+
+const _exerciseOwnerKey = 'osiris.exercise_owner.v1';
+
+/// Removes other accounts' exercise data from this phone when the signed-in account changes.
+/// The owner is remembered in preferences so the common case (the same account at every
+/// launch) does not open the database at all; opening it on every session restore added
+/// about 200 ms to cold start.
+Future<void> bindExerciseOwner(SharedPreferences prefs, int? userId, Future<ExerciseStore> Function() open) async {
+  if (userId != null && prefs.getInt(_exerciseOwnerKey) == userId) return;
+  final store = await open();
+  await store.forgetOtherUsers(userId);
+  if (userId == null) {
+    await prefs.remove(_exerciseOwnerKey);
+  } else {
+    await prefs.setInt(_exerciseOwnerKey, userId);
+  }
+}
 
 /// On-device SQLite store: catalog cache, sets and rep timings.
 final exerciseStoreProvider = FutureProvider<ExerciseStore>((ref) async {
