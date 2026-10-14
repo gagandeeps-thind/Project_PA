@@ -110,6 +110,10 @@ setting the repo up for autonomous agent work (2026-10-12).
     checks Android tap-target size, labelled tap targets and WCAG AA contrast.
   - Found and fixed: home footer contrast 3.62 (< 4.5), unlabelled copy-invite, sign-up back and bounty refresh buttons.
 
+- [x] customer: low-light warning before a run (Security plan §3: lighting warnings from available context)
+  - On-device NOAA solar position from the current fix (no network, location stays on the phone); below civil
+    twilight (-6°) START asks first, with advice; the player can still start.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
