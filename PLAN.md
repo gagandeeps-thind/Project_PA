@@ -131,7 +131,7 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [x] customer: on-device rep engine (pure Dart) with genuineness checks
   - Acceptance: synthetic landmark sequences prove genuine reps count; half reps, too-fast reps, broken form,
     occluded joints, tracking glitches, machine-regular replays and static poses do not; per-frame cost benchmarked.
-- [ ] customer: local SQLite store (catalog cache, sessions, reps) and an upload queue
+- [x] customer: local SQLite store (catalog cache, sessions, reps) and an upload queue
   - Acceptance: sets survive restarts, upload once the network returns, never duplicate XP; tested with sqflite ffi.
 - [ ] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
   - Acceptance: frames are dropped while inference is busy (no queue build-up); Android CAMERA permission, iOS
