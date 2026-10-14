@@ -2274,6 +2274,205 @@
         "title": "EventIn",
         "type": "object"
       },
+      "ExerciseHistoryOut": {
+        "properties": {
+          "daily_xp_cap": {
+            "title": "Daily Xp Cap",
+            "type": "integer"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/ExerciseSessionOut"
+            },
+            "title": "Sessions",
+            "type": "array"
+          },
+          "today_xp": {
+            "title": "Today Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "today_xp",
+          "daily_xp_cap",
+          "sessions"
+        ],
+        "title": "ExerciseHistoryOut",
+        "type": "object"
+      },
+      "ExerciseSessionIn": {
+        "properties": {
+          "client_session_id": {
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Client Session Id",
+            "type": "string"
+          },
+          "client_verdict": {
+            "enum": [
+              "verified",
+              "review",
+              "rejected"
+            ],
+            "title": "Client Verdict",
+            "type": "string"
+          },
+          "duration_s": {
+            "maximum": 1800.0,
+            "minimum": 0.0,
+            "title": "Duration S",
+            "type": "number"
+          },
+          "exercise_key": {
+            "maxLength": 32,
+            "title": "Exercise Key",
+            "type": "string"
+          },
+          "form_score": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Form Score",
+            "type": "number"
+          },
+          "hold_s": {
+            "default": 0.0,
+            "maximum": 1800.0,
+            "minimum": 0.0,
+            "title": "Hold S",
+            "type": "number"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "rep_durations_s": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2000,
+            "title": "Rep Durations S",
+            "type": "array"
+          },
+          "reps_attempted": {
+            "default": 0,
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Reps Attempted",
+            "type": "integer"
+          },
+          "reps_valid": {
+            "default": 0,
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Reps Valid",
+            "type": "integer"
+          },
+          "rules_version": {
+            "maxLength": 32,
+            "title": "Rules Version",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          }
+        },
+        "required": [
+          "client_session_id",
+          "exercise_key",
+          "rules_version",
+          "duration_s",
+          "client_verdict"
+        ],
+        "title": "ExerciseSessionIn",
+        "type": "object"
+      },
+      "ExerciseSessionOut": {
+        "properties": {
+          "client_session_id": {
+            "title": "Client Session Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "daily_xp_remaining": {
+            "title": "Daily Xp Remaining",
+            "type": "integer"
+          },
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "exercise_key": {
+            "title": "Exercise Key",
+            "type": "string"
+          },
+          "hold_s": {
+            "title": "Hold S",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "reps_valid": {
+            "title": "Reps Valid",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_xp": {
+            "title": "Total Xp",
+            "type": "integer"
+          },
+          "xp_awarded": {
+            "title": "Xp Awarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "client_session_id",
+          "exercise_key",
+          "status",
+          "reason_codes",
+          "reps_valid",
+          "hold_s",
+          "xp_awarded",
+          "total_xp",
+          "daily_xp_remaining",
+          "duplicate",
+          "created_at"
+        ],
+        "title": "ExerciseSessionOut",
+        "type": "object"
+      },
       "FunnelResponse": {
         "properties": {
           "challenge_completion_rate": {
@@ -8076,6 +8275,72 @@
         "summary": "Track Event"
       }
     },
+    "/api/v2/exercise-sessions": {
+      "post": {
+        "description": "Store a device-verified set and grant capped XP if the server re-check agrees.\nIdempotent per `client_session_id`: a retry returns the stored result with 200.",
+        "operationId": "submit_exercise_session_api_v2_exercise_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExerciseSessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseSessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Submit Exercise Session"
+      }
+    },
+    "/api/v2/exercises": {
+      "get": {
+        "description": "The exercise catalog and thresholds the on-device rep engine runs with.",
+        "operationId": "list_exercises_api_v2_exercises_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Exercises"
+      }
+    },
     "/api/v2/invites/{token}": {
       "get": {
         "description": "Public preview of an invite. No coordinates: the exact course is shown only to\nplayers who join, as for any challenge.",
@@ -8234,6 +8499,51 @@
           }
         ],
         "summary": "Erase My Account"
+      }
+    },
+    "/api/v2/me/exercise-sessions": {
+      "get": {
+        "operationId": "my_exercise_sessions_api_v2_me_exercise_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseHistoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Exercise Sessions"
       }
     },
     "/api/v2/me/export": {

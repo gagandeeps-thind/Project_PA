@@ -194,6 +194,7 @@ def delete_growth_data(db: Session, user_ids: list[int]) -> None:
     if not user_ids:
         return
     db.query(models.QuestAward).filter(models.QuestAward.user_id.in_(user_ids)).delete(synchronize_session=False)
+    db.query(models.ExerciseSession).filter(models.ExerciseSession.user_id.in_(user_ids)).delete(synchronize_session=False)
     db.query(models.AnalyticsEvent).filter(models.AnalyticsEvent.user_id.in_(user_ids)).delete(synchronize_session=False)
     db.query(models.PlayerProfile).filter(models.PlayerProfile.referred_by_user_id.in_(user_ids)).update(
         {models.PlayerProfile.referred_by_user_id: None}, synchronize_session=False)
@@ -765,3 +766,4 @@ app.include_router(router)
 import growth_social  # noqa: E402,F401
 import growth_communities  # noqa: E402,F401
 import growth_safety  # noqa: E402
+import exercise_api  # noqa: E402,F401

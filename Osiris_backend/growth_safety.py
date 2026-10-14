@@ -360,6 +360,8 @@ def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get
         "badges": _rows(db.query(models.UserBadge).filter(models.UserBadge.user_id == uid), ("badge_code", "awarded_at")),
         "quest_awards": _rows(db.query(models.QuestAward).filter(models.QuestAward.user_id == uid),
                               ("quest_key", "xp_awarded", "awarded_at")),
+        "exercise_sessions": _rows(db.query(models.ExerciseSession).filter(models.ExerciseSession.user_id == uid),
+                                   ("exercise_key", "status", "reps_valid", "hold_s", "xp_awarded", "created_at")),
         "share_cards": _rows(db.query(models.ShareCard).filter(models.ShareCard.user_id == uid),
                              ("token", "kind", "headline", "revoked_at", "created_at")),
         "communities": _rows(db.query(models.CommunityMember).filter(models.CommunityMember.user_id == uid),
