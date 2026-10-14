@@ -210,7 +210,7 @@ class SettingsScreen extends ConsumerWidget {
             value: p.leaderboardOptIn,
             onChanged: (v) => _update(context, ref, {'leaderboard_opt_in': v}),
             title: const Text('Show my name on leaderboards'),
-            subtitle: const Text('Off: you appear as "Private runner"'),
+            subtitle: const Text('When off, you appear as "Private runner"'),
           ),
           SwitchListTile(
             value: p.publicProfile,
@@ -228,6 +228,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: Text('Your invite code: ${r.code}'),
                 subtitle: Text('${r.rewarded} friends rewarded  •  ${r.pending} waiting for their first run'),
                 trailing: IconButton(
+                  tooltip: 'Copy invite link',
                   icon: const Icon(Icons.copy),
                   onPressed: () => ShareHelper.copy(context, ref,
                       'Join me on Osiris: daily running and walking quests. Use my code ${r.code}. ${r.url}',

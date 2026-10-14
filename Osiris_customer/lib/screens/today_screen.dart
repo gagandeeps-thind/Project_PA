@@ -104,7 +104,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 Expanded(child: Text(t.safetyNote, style: const TextStyle(color: Colors.white54, fontSize: 12))),
               ]),
               const SizedBox(height: 8),
-              Center(child: Text(t.tagline, style: const TextStyle(color: Colors.white38, fontSize: 12))),
+              Center(child: Text(t.tagline, style: const TextStyle(color: Colors.white60, fontSize: 12))),
             ],
           ),
         ),

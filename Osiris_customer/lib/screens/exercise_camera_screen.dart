@@ -308,7 +308,7 @@ class _ResultSheet extends StatelessWidget {
           Text(sync, style: const TextStyle(color: OsirisTheme.secondary)),
           if (perf != null) ...[
             const SizedBox(height: 8),
-            Text('Pose: $perf', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            Text('Pose: $perf', style: const TextStyle(color: Colors.white60, fontSize: 12)),
           ],
           const SizedBox(height: 16),
           SizedBox(

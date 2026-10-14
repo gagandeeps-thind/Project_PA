@@ -105,6 +105,11 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: one denial shows the error and OPEN SETTINGS without re-prompting; returning from settings with the
     camera allowed starts the camera. Widget test covers both; verified on emulator-5554.
 
+- [x] customer: automated accessibility audit (PRD NFR: touch targets, labels, contrast)
+  - `test/accessibility_test.dart` renders the main screens with the real theme in a full-height phone viewport and
+    checks Android tap-target size, labelled tap targets and WCAG AA contrast.
+  - Found and fixed: home footer contrast 3.62 (< 4.5), unlabelled copy-invite, sign-up back and bounty refresh buttons.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
