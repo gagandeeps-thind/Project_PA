@@ -38,18 +38,24 @@
       "Bash(flutter analyze:*)",
       "Bash(flutter test:*)",
       "Bash(flutter run:*)",
-      "Bash(flutter build apk --debug:*)"
-    ],
-    "deny": [
+      "Bash(flutter build apk --debug:*)",
+      "Edit(**/.github/workflows/**)",
+      "Write(**/.github/workflows/**)",
+      "Edit(**/Dockerfile)",
+      "Write(**/Dockerfile)",
+      "Edit(**/DEPLOY_RUNBOOK.md)",
+      "Write(**/DEPLOY_RUNBOOK.md)",
+      "Edit(**/.env*)",
+      "Write(**/.env*)",
       "Bash(git push --force:*)",
       "Bash(git push origin main:*)",
-      "Bash(git push origin master:*)",
+      "Bash(git push origin master:*)"
+    ],
+    "deny": [
       "Bash(rm -rf:*)",
       "Read(.env*)",
       "Read(**/.env*)",
       "Read(**/*secret*)",
-      "Edit(**/.env*)",
-      "Write(**/.env*)",
       "Edit(**/alembic/versions/**)",
       "Write(**/alembic/versions/**)",
       "Edit(**/alembic.ini)",
@@ -61,12 +67,6 @@
       "Write(**/package-lock.json)",
       "Edit(**/pubspec.lock)",
       "Write(**/pubspec.lock)",
-      "Edit(**/.github/workflows/**)",
-      "Write(**/.github/workflows/**)",
-      "Edit(**/Dockerfile)",
-      "Write(**/Dockerfile)",
-      "Edit(**/DEPLOY_RUNBOOK.md)",
-      "Write(**/DEPLOY_RUNBOOK.md)"
     ]
   },
   "hooks": {
