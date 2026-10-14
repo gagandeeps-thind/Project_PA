@@ -19,6 +19,7 @@ import 'screens/today_screen.dart';
 import 'screens/communities_screen.dart';
 import 'screens/rankings_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/exercise_hub_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,6 +63,7 @@ class OsirisCustomerApp extends StatelessWidget {
         '/communities': (_) => const CommunitiesScreen(),
         '/rankings': (_) => const RankingsScreen(),
         '/settings': (_) => const SettingsScreen(),
+        '/exercise': (_) => const ExerciseHubScreen(),
       },
     );
   }

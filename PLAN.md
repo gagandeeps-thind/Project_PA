@@ -133,7 +133,7 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
     occluded joints, tracking glitches, machine-regular replays and static poses do not; per-frame cost benchmarked.
 - [x] customer: local SQLite store (catalog cache, sessions, reps) and an upload queue
   - Acceptance: sets survive restarts, upload once the network returns, never duplicate XP; tested with sqflite ffi.
-- [ ] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
+- [x] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
   - Acceptance: frames are dropped while inference is busy (no queue build-up); Android CAMERA permission, iOS
     `NSCameraUsageDescription` and 15.5 deployment target; widget test drives the screen with a fake pose stream.
 - [ ] [human] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to

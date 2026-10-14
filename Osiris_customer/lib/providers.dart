@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +9,13 @@ import 'api/api_client.dart';
 import 'api/challenge_models.dart';
 import 'api/growth_models.dart';
 import 'api/models.dart';
+import 'exercise/catalog_repository.dart';
+import 'exercise/exercise_catalog.dart';
+import 'exercise/exercise_store.dart';
+import 'exercise/exercise_sync.dart';
+import 'exercise/mlkit_pose_source.dart';
+import 'exercise/pose_source.dart';
+import 'exercise/rep_engine.dart';
 import 'services/run_upload_queue.dart';
 
 // ── SharedPreferences (overridden in main) ─────────────────────────────
@@ -127,6 +137,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
       }
 
       await ref.read(runQueueProvider).bindUser(profile.id);
+      _bindExerciseData(profile.id);
       state = profile;
     } catch (_) {
       // Silent fail — user will just see the login screen.
@@ -160,6 +171,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
     // Fetch full profile
     final profileData = await _api.getUserProfile(userId);
     await ref.read(runQueueProvider).bindUser(userId);
+    _bindExerciseData(userId);
     state = UserProfile.fromJson(profileData);
   }
 
@@ -199,6 +211,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
     await _storage.write(key: 'auth_token', value: token);
     await _storage.write(key: 'user_id', value: userId.toString());
     await ref.read(runQueueProvider).bindUser(userId);
+    _bindExerciseData(userId);
     state = UserProfile.fromJson(await _api.getUserProfile(userId));
   }
 
@@ -213,8 +226,14 @@ class AuthNotifier extends Notifier<UserProfile?> {
 
   Future<void> logout() async {
     await ref.read(runQueueProvider).bindUser(null);
+    _bindExerciseData(null);
     await _clearCredentials();
     state = null;
+  }
+
+  /// Exercise history on this phone belongs to one account at a time, like the run queue.
+  void _bindExerciseData(int? userId) {
+    unawaited(ref.read(exerciseStoreProvider.future).then((s) => s.forgetOtherUsers(userId)).catchError((_) {}));
   }
 
   Future<void> _clearCredentials() async {
@@ -223,3 +242,71 @@ class AuthNotifier extends Notifier<UserProfile?> {
     await _storage.delete(key: 'user_id');
   }
 }
+
+// ── Camera-verified exercises ──────────────────────────────────────────
+
+/// On-device SQLite store: catalog cache, sets and rep timings.
+final exerciseStoreProvider = FutureProvider<ExerciseStore>((ref) async {
+  final store = await ExerciseStore.open();
+  ref.onDispose(store.close);
+  return store;
+});
+
+/// The catalog the rep engine runs with: cached server copy, else the bundled one. A server
+/// refresh runs in the background and applies from the next set on.
+final exerciseCatalogProvider = FutureProvider<ExerciseCatalog>((ref) async {
+  final repo = CatalogRepository(
+    store: await ref.watch(exerciseStoreProvider.future),
+    loadBundled: () => rootBundle.loadString('assets/exercise_catalog.json'),
+    fetch: ref.read(apiClientProvider).getExerciseCatalog,
+  );
+  final catalog = await repo.load();
+  unawaited(repo.refresh());
+  return catalog;
+});
+
+/// A fresh pose source per camera session (ML Kit on device; scripted in tests).
+final poseSourceFactoryProvider = Provider<PoseSource Function()>((ref) => () => MlKitPoseSource());
+
+final exerciseSyncProvider = FutureProvider<ExerciseSync>((ref) async {
+  final store = await ref.watch(exerciseStoreProvider.future);
+  return ExerciseSync(store, ref.read(apiClientProvider).submitExerciseSession);
+});
+
+/// What happened to a finished set: saved locally, and uploaded if the network allowed.
+class SetOutcome {
+  final bool uploaded;
+  final int xpAwarded;
+
+  const SetOutcome({required this.uploaded, required this.xpAwarded});
+}
+
+/// Saves a finished set on the phone, then tries to upload everything pending.
+final exerciseRecorderProvider = Provider<Future<SetOutcome> Function(SessionSummary, DateTime)>((ref) {
+  return (summary, startedAt) async {
+    final user = ref.read(authProvider);
+    if (user == null) return const SetOutcome(uploaded: false, xpAwarded: 0);
+    final store = await ref.read(exerciseStoreProvider.future);
+    await store.saveSession(summary, userId: user.id, startedAt: startedAt);
+    final result = await (await ref.read(exerciseSyncProvider.future)).flush(user.id);
+    ref.invalidate(exerciseHistoryProvider);
+    return SetOutcome(uploaded: !result.offline && result.uploaded > 0, xpAwarded: result.xpAwarded);
+  };
+});
+
+class ExerciseHistory {
+  final List<StoredSession> recent;
+  final Map<String, double> bests;
+
+  const ExerciseHistory(this.recent, this.bests);
+}
+
+/// Recent sets and personal bests, read from SQLite (instant, offline). Opening it also
+/// retries any uploads still pending.
+final exerciseHistoryProvider = FutureProvider.autoDispose<ExerciseHistory>((ref) async {
+  final user = ref.watch(authProvider);
+  if (user == null) return const ExerciseHistory([], {});
+  final store = await ref.watch(exerciseStoreProvider.future);
+  unawaited(ref.read(exerciseSyncProvider.future).then((s) => s.flush(user.id)).catchError((_) => const SyncResult(0, 0)));
+  return ExerciseHistory(await store.recent(user.id), await store.personalBests(user.id));
+});
