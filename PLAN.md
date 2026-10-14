@@ -98,6 +98,13 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: decision recorded; if retired, the endpoints, their tests, client screens and contract entries are
     removed in agent items.
 
+- [x] customer: camera-denied recovery on the exercise screen (emulator QA 2026-10-14)
+  - Denial left a dead end: no way to settings, and the failed camera was never cleared, so allowing the camera in
+    settings and returning still showed the error. A first fix (retry on every resume) re-asked for permission at once,
+    because the dialog itself pauses/resumes the app; caught on the emulator.
+  - Acceptance: one denial shows the error and OPEN SETTINGS without re-prompting; returning from settings with the
+    camera allowed starts the camera. Widget test covers both; verified on emulator-5554.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.

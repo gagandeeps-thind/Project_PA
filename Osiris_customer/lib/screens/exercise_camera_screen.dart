@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../exercise/exercise_catalog.dart';
@@ -48,6 +49,10 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
   DateTime? _startedAt;
   String? _cameraError;
   bool _cameraReady = false;
+  // Set when the player opens the settings app from the camera error, so returning to Osiris
+  // retries the camera. Without a reason to retry, a resume after a denial (the permission
+  // dialog itself pauses and resumes the app) would ask for permission again at once.
+  bool _retryOnResume = false;
   bool _saving = false;
 
   final _frame = ValueNotifier<PoseFrame?>(null);
@@ -77,7 +82,8 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     // permission prompt also makes the app inactive; a camera still starting is left alone.
     if ((state == AppLifecycleState.inactive || state == AppLifecycleState.paused) && _cameraReady) {
       _closeCamera();
-    } else if (state == AppLifecycleState.resumed && _source == null) {
+    } else if (state == AppLifecycleState.resumed && _source == null && (_cameraError == null || _retryOnResume)) {
+      _retryOnResume = false;
       _openCamera();
     }
   }
@@ -91,6 +97,9 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
       _cameraReady = true;
       if (mounted) setState(() => _cameraError = null);
     } on Object catch (e) {
+      // Drop the failed camera so returning from the settings app opens a fresh one;
+      // keeping it made the resume handler skip the retry and left the error on screen.
+      _closeCamera();
       if (mounted) setState(() => _cameraError = _cameraMessage(e));
     }
   }
@@ -186,7 +195,18 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
           right: 16,
           bottom: 24,
           child: _cameraError != null
-              ? Text(_cameraError!, textAlign: TextAlign.center, style: const TextStyle(color: OsirisTheme.error))
+              ? Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_cameraError!, textAlign: TextAlign.center, style: const TextStyle(color: OsirisTheme.error)),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      _retryOnResume = true;
+                      Geolocator.openAppSettings();
+                    },
+                    style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                    child: const Text('OPEN SETTINGS'),
+                  ),
+                ])
               : ElevatedButton(
                   key: const Key('exercise-action'),
                   onPressed: _saving || !ready ? null : (_recording ? _finish : _start),

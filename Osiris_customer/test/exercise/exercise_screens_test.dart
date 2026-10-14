@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osiris_customer/exercise/exercise_store.dart';
@@ -38,6 +39,12 @@ class FakePoseSource extends PoseSource {
   Widget? buildPreview() => const ColoredBox(color: Colors.black);
 
   void emitAll(Iterable<PoseFrame> frames) => frames.forEach(_controller.add);
+}
+
+/// A camera the player refused, as the camera plugin reports it.
+class DeniedPoseSource extends FakePoseSource {
+  @override
+  Future<void> start() async => throw Exception('CameraAccessDenied: User denied camera access.');
 }
 
 void main() {
@@ -128,6 +135,49 @@ void main() {
     expect(find.text('Not verified'), findsOneWidget);
     expect(find.textContaining('Body position did not match'), findsOneWidget);
     expect(find.textContaining('upload when you are online'), findsOneWidget);
+  });
+
+  testWidgets('a denied camera offers settings and retries when the player returns', (tester) async {
+    final denied = DeniedPoseSource();
+    final granted = FakePoseSource();
+    var created = 0;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        exerciseCatalogProvider.overrideWith((ref) async => catalog),
+        poseSourceFactoryProvider.overrideWithValue(() => created++ == 0 ? denied : granted),
+      ],
+      child: MaterialApp(home: ExerciseCameraScreen(spec: catalog.byKey('squat')!)),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Camera access is off'), findsOneWidget);
+    expect(find.text('OPEN SETTINGS'), findsOneWidget);
+    expect(find.text('START'), findsNothing);
+
+    // The permission dialog closing also pauses and resumes the app. That alone must not ask
+    // again (seen on the emulator: the prompt came straight back after "Don't allow").
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(granted.started, isFalse);
+    expect(find.textContaining('Camera access is off'), findsOneWidget);
+
+    // Coming back from the settings app must try the camera again, not stay on the error.
+    final settingsCalls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('flutter.baseflow.com/geolocator'),
+      (call) async {
+        settingsCalls.add(call.method);
+        return true;
+      },
+    );
+    await tester.tap(find.text('OPEN SETTINGS'));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(settingsCalls, contains('openAppSettings'));
+    expect(granted.started, isTrue);
+    expect(find.textContaining('Camera access is off'), findsNothing);
+    expect(find.text('START'), findsOneWidget);
   });
 
   testWidgets('the hub lists every exercise with bests and recent set status', (tester) async {
