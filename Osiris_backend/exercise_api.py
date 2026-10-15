@@ -276,9 +276,17 @@ def my_exercise_sessions(
 REVIEWABLE = "review"
 
 
-def _xp_if_approved(db: Session, row: models.ExerciseSession) -> int:
+def _xp_if_approved(
+    db: Session, row: models.ExerciseSession, earned_cache: Optional[dict[tuple[int, str], dict[str, int]]] = None,
+) -> int:
     base = exercise_rules.base_xp_for(row.exercise_key, row.reps_valid, row.hold_s, row.duration_s)
-    earned = _earned_today(db, row.user_id, row.local_date)
+    key = (row.user_id, row.local_date)
+    if earned_cache is None:
+        earned = _earned_today(db, *key)
+    elif key in earned_cache:
+        earned = earned_cache[key]
+    else:
+        earned = earned_cache[key] = _earned_today(db, *key)
     return exercise_rules.capped_xp(base, row.exercise_key, earned.get(row.exercise_key, 0), sum(earned.values()))
 
 
@@ -301,6 +309,8 @@ def admin_exercise_sessions(
         models.ExerciseSession.user_id, func.count(models.ExerciseSession.id)).filter(
         models.ExerciseSession.user_id.in_(user_ids), models.ExerciseSession.status != "verified",
     ).group_by(models.ExerciseSession.user_id).all()}
+    # One earnings lookup per (player, day), not per row: a queue is mostly a few players' sets.
+    earned_cache: dict[tuple[int, str], dict[str, int]] = {}
     out = []
     for r in rows:
         durations = [float(d) for d in json.loads(r.metrics_json).get("rep_durations_s", [])]
@@ -311,7 +321,7 @@ def admin_exercise_sessions(
             reps_attempted=r.reps_attempted, reps_valid=r.reps_valid, hold_s=r.hold_s, duration_s=r.duration_s,
             form_score=r.form_score, rep_durations_s=durations,
             rep_duration_cv=round(exercise_rules.duration_cv(durations), 4) if len(durations) >= 2 else None,
-            xp_if_approved=_xp_if_approved(db, r) if r.status == REVIEWABLE else 0,
+            xp_if_approved=_xp_if_approved(db, r, earned_cache) if r.status == REVIEWABLE else 0,
             player_sets=totals.get(r.user_id, 0), player_flagged_sets=flagged.get(r.user_id, 0),
             local_date=r.local_date, created_at=r.created_at,
         ))
