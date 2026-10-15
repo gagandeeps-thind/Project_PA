@@ -158,3 +158,7 @@ for review had no reviewer.
   - Acceptance: admins list `review` sets and approve (capped XP for that set's day) or reject them, once, with an
     audit event; non-admins get 401/403; admin page `ExerciseReviewPage.tsx`; the app's local history picks up
     review outcomes on refresh.
+- [x] launch test, performance and audit for phase 2 (report 14): admin console and Flutter web build driven in
+  Chromium; fixed the database-failure path and the review-queue N+1.
+- [ ] [human] tooling: adopt a browser E2E suite (Playwright) for the admin console and the Flutter web smoke test
+  described in report 14 §5, and decide where it runs (gate, CI, or on demand).

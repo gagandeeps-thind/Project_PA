@@ -23,6 +23,7 @@ This directory is the maintained startup-level source of truth for Osiris. Obsol
 | [11 Growth Release Status](11_Growth_Release_Status.md) | Daily quests, sharing, referrals, clubs, rankings, seasons, and trust controls |
 | [12 Performance Test and Audit 2026-10-12](12_Performance_and_Audit_2026-10-12.md) | Device E2E results, API latency under load, release-build metrics, audit findings and fixes |
 | [13 Camera-Verified Exercises 2026-10-14](13_Exercise_Verification_Performance_and_Audit_2026-10-14.md) | On-device pose rep counting: design, genuineness checks, performance, audit |
+| [14 Exercises Phase 2 2026-10-15](14_Exercise_Phase2_Launch_Test_and_Audit_2026-10-15.md) | ML consent, review queue, browser launch test (admin + Flutter web), performance, audit |
 
 ## Product north star
 
