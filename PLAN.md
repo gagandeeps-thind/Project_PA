@@ -154,7 +154,7 @@ for review had no reviewer.
   - Acceptance: `exercise_camera` consent kind in the append-only ledger; `GET/PUT /api/v2/me/exercise-consent`;
     uploads without consent are refused (403 `EXERCISE_CONSENT_REQUIRED`); withdrawing can delete exercise data;
     the app shows a consent screen before the camera can open and a withdraw control in Settings; tests both sides.
-- [ ] backend+admin web: review queue for flagged exercise sets
+- [x] backend+admin web: review queue for flagged exercise sets
   - Acceptance: admins list `review` sets and approve (capped XP for that set's day) or reject them, once, with an
     audit event; non-admins get 401/403; admin page `ExerciseReviewPage.tsx`; the app's local history picks up
     review outcomes on refresh.

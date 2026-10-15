@@ -309,7 +309,8 @@ final poseSourceFactoryProvider = Provider<PoseSource Function()>((ref) => () =>
 
 final exerciseSyncProvider = FutureProvider<ExerciseSync>((ref) async {
   final store = await ref.watch(exerciseStoreProvider.future);
-  return ExerciseSync(store, ref.read(apiClientProvider).submitExerciseSession);
+  final api = ref.read(apiClientProvider);
+  return ExerciseSync(store, api.submitExerciseSession, fetchHistory: () => api.getExerciseHistory(limit: 50));
 });
 
 /// What happened to a finished set: saved locally, and uploaded if the network allowed.
@@ -341,11 +342,21 @@ class ExerciseHistory {
 }
 
 /// Recent sets and personal bests, read from SQLite (instant, offline). Opening it also
-/// retries any uploads still pending.
+/// retries pending uploads and pulls review outcomes in the background; if anything changed,
+/// the history reloads once.
 final exerciseHistoryProvider = FutureProvider.autoDispose<ExerciseHistory>((ref) async {
   final user = ref.watch(authProvider);
   if (user == null) return const ExerciseHistory([], {});
   final store = await ref.watch(exerciseStoreProvider.future);
-  unawaited(ref.read(exerciseSyncProvider.future).then((s) => s.flush(user.id)).catchError((_) => const SyncResult(0, 0)));
+  unawaited(() async {
+    try {
+      final sync = await ref.read(exerciseSyncProvider.future);
+      final uploaded = (await sync.flush(user.id)).uploaded;
+      final changed = await sync.refreshOutcomes();
+      if ((uploaded > 0 || changed > 0) && ref.mounted) ref.invalidateSelf();
+    } on Object {
+      // Offline or signed out: the local history stands.
+    }
+  }());
   return ExerciseHistory(await store.recent(user.id), await store.personalBests(user.id));
 });

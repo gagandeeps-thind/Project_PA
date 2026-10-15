@@ -121,6 +121,29 @@ void main() {
     expect(reps.single['n'], 11, reason: "only user 8's 11 reps remain");
   });
 
+  test('review outcomes reach sets already uploaded, and only those', () async {
+    final a = await store.saveSession(_summary(valid: 10), userId: 7, startedAt: DateTime.utc(2026, 1, 1));
+    final b = await store.saveSession(_summary(valid: 9), userId: 7, startedAt: DateTime.utc(2026, 1, 2));
+    await ExerciseSync(store, (body) async => {'status': 'review', 'xp_awarded': 0}).flush(7);
+    final c = await store.saveSession(_summary(valid: 8), userId: 7, startedAt: DateTime.utc(2026, 1, 3));
+    final sync = ExerciseSync(store, (_) async => throw _dioError(null), fetchHistory: () async => {
+          'sessions': [
+            {'client_session_id': a, 'status': 'verified', 'xp_awarded': 10},
+            {'client_session_id': b, 'status': 'review', 'xp_awarded': 0},
+            {'client_session_id': c, 'status': 'verified', 'xp_awarded': 99},
+          ],
+        });
+    expect(await sync.refreshOutcomes(), 1, reason: 'a changed; b is unchanged; c was never uploaded');
+    final byId = {for (final s in await store.recent(7)) s.id: s};
+    expect(byId[a]!.serverStatus, 'verified');
+    expect(byId[a]!.xpAwarded, 10);
+    expect(byId[c]!.syncState, 'pending');
+    expect(byId[c]!.xpAwarded, 0);
+    expect(await store.personalBests(7), {'pushup': 10.0}, reason: 'the approved set now counts as a best');
+    final offline = ExerciseSync(store, (_) async => {}, fetchHistory: () async => throw _dioError(null));
+    expect(await offline.refreshOutcomes(), 0);
+  });
+
   test('catalog: bundled first, then the cached server copy', () async {
     final bundled = File('assets/exercise_catalog.json').readAsStringSync();
     final serverCopy = jsonDecode(bundled) as Map<String, dynamic>;

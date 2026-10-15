@@ -201,6 +201,23 @@ class ExerciseStore {
         whereArgs: [id],
       );
 
+  /// Applies later server decisions (an admin approving or rejecting a flagged set) to sets
+  /// already uploaded. Returns how many local rows changed.
+  Future<int> applyServerResults(Iterable<({String id, String status, int xp})> results) async {
+    var changed = 0;
+    await db.transaction((txn) async {
+      for (final r in results) {
+        changed += await txn.update(
+          'exercise_sessions',
+          {'server_status': r.status, 'xp_awarded': r.xp},
+          where: "id = ? AND sync_state = 'synced' AND (server_status IS NOT ? OR xp_awarded != ?)",
+          whereArgs: [r.id, r.status, r.xp],
+        );
+      }
+    });
+    return changed;
+  }
+
   /// A permanent refusal (e.g. 422) stops retries; a transient one only counts the attempt.
   Future<void> markFailed(String id, String error, {required bool permanent}) => db.rawUpdate(
         'UPDATE exercise_sessions SET attempts = attempts + 1, last_error = ?, sync_state = ? WHERE id = ?',

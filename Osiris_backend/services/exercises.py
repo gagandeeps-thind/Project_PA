@@ -229,7 +229,7 @@ def evaluate(claim: SessionClaim) -> Decision:
             reasons.append("duration_mismatch")
         if credited_hold < MIN_HOLD_S:
             reasons.append("hold_too_short")
-        base_xp = int(credited_hold // 10) * int(ex["xp_per_10s"])
+        base_xp = base_xp_for(claim.exercise_key, 0, claim.hold_s, claim.duration_s)
     else:
         durations = list(claim.rep_durations_s)
         if claim.reps_valid > claim.reps_attempted or len(durations) != claim.reps_valid:
@@ -247,7 +247,7 @@ def evaluate(claim: SessionClaim) -> Decision:
         if len(durations) >= REPLAY_MIN_REPS and duration_cv(durations) < REPLAY_MAX_DURATION_CV:
             reasons.append("replay_suspected")
         credited_reps = claim.reps_valid
-        base_xp = credited_reps * int(ex["xp_per_rep"])
+        base_xp = base_xp_for(claim.exercise_key, credited_reps, 0.0, claim.duration_s)
 
     unique = tuple(dict.fromkeys(reasons))
     if any(r in HARD_REASONS for r in unique):
@@ -259,6 +259,16 @@ def evaluate(claim: SessionClaim) -> Decision:
     if status != "verified":
         return Decision(status, unique, 0, 0.0, 0)
     return Decision(status, unique, credited_reps, credited_hold, base_xp)
+
+
+def base_xp_for(exercise_key: str, reps_valid: int, hold_s: float, duration_s: float) -> int:
+    """XP a set is worth before the daily caps: per rep, or per full 10 s of hold (a hold is
+    credited up to the exercise's maximum and never beyond the set's own duration)."""
+    ex = BY_KEY[exercise_key]
+    if ex["kind"] == "hold":
+        credited = min(hold_s, float(ex["max_hold_s"]), duration_s)
+        return int(credited // 10) * int(ex["xp_per_10s"])
+    return reps_valid * int(ex["xp_per_rep"])
 
 
 def capped_xp(base_xp: int, exercise_key: str, earned_today_exercise: int, earned_today_total: int) -> int:

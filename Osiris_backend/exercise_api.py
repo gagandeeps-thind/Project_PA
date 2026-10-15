@@ -21,7 +21,9 @@ from sqlalchemy.orm import Session
 import models
 from growth_api import get_or_create_profile
 from growth_safety import record_consent
-from main import _api_error, _audit, _now_naive_utc, _rate_limit, app, get_active_player, get_db, get_rank
+from main import (
+    _api_error, _audit, _now_naive_utc, _rate_limit, app, get_active_player, get_current_admin, get_db, get_rank,
+)
 from services import exercises as exercise_rules
 from services import metrics
 from services import player_safety
@@ -78,6 +80,40 @@ class ExerciseConsentOut(BaseModel):
     policy_version: Optional[str]
     updated_at: Optional[datetime]
     deleted_sets: int = 0
+
+
+class AdminExerciseItem(BaseModel):
+    id: int
+    user_id: int
+    display_name: str
+    exercise_key: str
+    exercise_name: str
+    status: str
+    client_verdict: str
+    reason_codes: List[str]
+    reps_attempted: int
+    reps_valid: int
+    hold_s: float
+    duration_s: float
+    form_score: float
+    rep_durations_s: List[float]
+    rep_duration_cv: Optional[float]
+    xp_if_approved: int
+    player_sets: int
+    player_flagged_sets: int
+    local_date: str
+    created_at: datetime
+
+
+class AdminExerciseReview(BaseModel):
+    decision: Literal["approve", "reject"]
+    note: str = Field(min_length=3, max_length=500)
+
+
+class AdminExerciseReviewOut(BaseModel):
+    id: int
+    status: str
+    xp_awarded: int
 
 
 class ExerciseHistoryOut(BaseModel):
@@ -232,6 +268,91 @@ def my_exercise_sessions(
         today_xp=today_total, daily_xp_cap=exercise_rules.DAILY_EXERCISE_XP_CAP,
         sessions=[_out(r, user, today_total, False) for r in rows],
     )
+
+
+
+# --- admin review queue -----------------------------------------------------------
+
+REVIEWABLE = "review"
+
+
+def _xp_if_approved(db: Session, row: models.ExerciseSession) -> int:
+    base = exercise_rules.base_xp_for(row.exercise_key, row.reps_valid, row.hold_s, row.duration_s)
+    earned = _earned_today(db, row.user_id, row.local_date)
+    return exercise_rules.capped_xp(base, row.exercise_key, earned.get(row.exercise_key, 0), sum(earned.values()))
+
+
+@router.get("/api/v2/admin/exercise-sessions", response_model=List[AdminExerciseItem])
+def admin_exercise_sessions(
+    status: str = REVIEWABLE, limit: int = 100, db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin),
+):
+    """Sets the server re-check flagged (or any status), oldest first, with the evidence a
+    reviewer needs: rep timings, reason codes and the player's flag history."""
+    rows = db.query(models.ExerciseSession).filter(models.ExerciseSession.status == status).order_by(
+        models.ExerciseSession.id.asc()).limit(max(1, min(limit, 500))).all()
+    user_ids = {r.user_id for r in rows} or {-1}
+    names: dict[int, str] = {uid: name for uid, name in db.query(
+        models.PlayerProfile.user_id, models.PlayerProfile.display_name).filter(
+        models.PlayerProfile.user_id.in_(user_ids)).all()}
+    totals: dict[int, int] = {uid: n for uid, n in db.query(
+        models.ExerciseSession.user_id, func.count(models.ExerciseSession.id)).filter(
+        models.ExerciseSession.user_id.in_(user_ids)).group_by(models.ExerciseSession.user_id).all()}
+    flagged: dict[int, int] = {uid: n for uid, n in db.query(
+        models.ExerciseSession.user_id, func.count(models.ExerciseSession.id)).filter(
+        models.ExerciseSession.user_id.in_(user_ids), models.ExerciseSession.status != "verified",
+    ).group_by(models.ExerciseSession.user_id).all()}
+    out = []
+    for r in rows:
+        durations = [float(d) for d in json.loads(r.metrics_json).get("rep_durations_s", [])]
+        out.append(AdminExerciseItem(
+            id=r.id, user_id=r.user_id, display_name=names.get(r.user_id, f"Player {r.user_id}"),
+            exercise_key=r.exercise_key, exercise_name=exercise_rules.BY_KEY[r.exercise_key]["name"],
+            status=r.status, client_verdict=r.client_verdict, reason_codes=json.loads(r.reason_codes_json),
+            reps_attempted=r.reps_attempted, reps_valid=r.reps_valid, hold_s=r.hold_s, duration_s=r.duration_s,
+            form_score=r.form_score, rep_durations_s=durations,
+            rep_duration_cv=round(exercise_rules.duration_cv(durations), 4) if len(durations) >= 2 else None,
+            xp_if_approved=_xp_if_approved(db, r) if r.status == REVIEWABLE else 0,
+            player_sets=totals.get(r.user_id, 0), player_flagged_sets=flagged.get(r.user_id, 0),
+            local_date=r.local_date, created_at=r.created_at,
+        ))
+    return out
+
+
+@router.post("/api/v2/admin/exercise-sessions/{session_id}/review", response_model=AdminExerciseReviewOut)
+def admin_review_exercise_session(
+    session_id: int, req: AdminExerciseReview, db: Session = Depends(get_db),
+    admin: dict = Depends(get_current_admin),
+):
+    """Approve (verified, capped XP for that set's day) or reject a flagged set. A set is
+    decided once: the status change is a conditional update, so two reviewers acting at the
+    same time cannot both grant XP."""
+    row = db.query(models.ExerciseSession).filter(models.ExerciseSession.id == session_id).first()
+    if row is None:
+        raise _api_error(404, "EXERCISE_SET_NOT_FOUND", "Exercise set not found")
+    if row.status != REVIEWABLE:
+        raise _api_error(409, "EXERCISE_SET_NOT_IN_REVIEW", f"This set is already {row.status}")
+    xp = _xp_if_approved(db, row) if req.decision == "approve" else 0
+    new_status = "verified" if req.decision == "approve" else "rejected"
+    metrics_data = json.loads(row.metrics_json)
+    metrics_data["review"] = {"decision": req.decision, "admin_id": admin["id"], "note": req.note,
+                              "at": _now_naive_utc().isoformat()}
+    changed = db.query(models.ExerciseSession).filter(
+        models.ExerciseSession.id == session_id, models.ExerciseSession.status == REVIEWABLE,
+    ).update({models.ExerciseSession.status: new_status, models.ExerciseSession.xp_awarded: xp,
+              models.ExerciseSession.metrics_json: json.dumps(metrics_data)}, synchronize_session=False)
+    if changed != 1:
+        db.rollback()
+        raise _api_error(409, "EXERCISE_SET_NOT_IN_REVIEW", "This set was decided by someone else")
+    if xp:
+        user = db.query(models.User).filter(models.User.id == row.user_id).one()
+        user.xp = (user.xp or 0) + xp
+        user.rank = get_rank(user.xp, user.last_activity_date)
+    _audit(db, actor_type="admin", actor_id=admin["id"], action=f"exercise.review.{req.decision}",
+           entity_type="exercise_session", entity_id=session_id,
+           details={"user_id": row.user_id, "xp_awarded": xp, "note": req.note})
+    db.commit()
+    metrics.observe_exercise_verification(row.exercise_key, f"review_{new_status}", [])
+    return AdminExerciseReviewOut(id=session_id, status=new_status, xp_awarded=xp)
 
 
 app.include_router(router)

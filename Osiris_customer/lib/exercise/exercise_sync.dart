@@ -16,9 +16,31 @@ class SyncResult {
 class ExerciseSync {
   final ExerciseStore store;
   final Future<Map<String, dynamic>> Function(Map<String, dynamic> body) submit;
+  final Future<Map<String, dynamic>> Function()? fetchHistory;
   bool _running = false;
 
-  ExerciseSync(this.store, this.submit);
+  ExerciseSync(this.store, this.submit, {this.fetchHistory});
+
+  /// Pulls the server's current status for recent sets, so a flagged set that an admin later
+  /// approved or rejected shows the outcome. Returns how many local sets changed; 0 offline.
+  Future<int> refreshOutcomes() async {
+    final fetch = fetchHistory;
+    if (fetch == null) return 0;
+    try {
+      final sessions = (await fetch())['sessions'] as List;
+      return store.applyServerResults([
+        for (final raw in sessions)
+          if (raw is Map<String, dynamic>)
+            (
+              id: raw['client_session_id'] as String,
+              status: raw['status'] as String,
+              xp: (raw['xp_awarded'] as num).toInt(),
+            ),
+      ]);
+    } on DioException {
+      return 0;
+    }
+  }
 
   Future<SyncResult> flush(int userId) async {
     if (_running) return const SyncResult(0, 0);
