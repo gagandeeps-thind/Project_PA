@@ -255,9 +255,18 @@ final exerciseStoreProvider = FutureProvider<ExerciseStore>((ref) async {
 /// The catalog the rep engine runs with: cached server copy, else the bundled one. A server
 /// refresh runs in the background and applies from the next set on.
 final exerciseCatalogProvider = FutureProvider<ExerciseCatalog>((ref) async {
+  Future<String> bundled() => rootBundle.loadString('assets/exercise_catalog.json');
+  final ExerciseStore store;
+  try {
+    store = await ref.watch(exerciseStoreProvider.future);
+  } on Object {
+    // No local database (unsupported platform, full disk, corrupt file): the exercises
+    // still list and count from the bundled catalog.
+    return ExerciseCatalog.parse(await bundled());
+  }
   final repo = CatalogRepository(
-    store: await ref.watch(exerciseStoreProvider.future),
-    loadBundled: () => rootBundle.loadString('assets/exercise_catalog.json'),
+    store: store,
+    loadBundled: bundled,
     fetch: ref.read(apiClientProvider).getExerciseCatalog,
   );
   final catalog = await repo.load();
@@ -326,11 +335,16 @@ final exerciseRecorderProvider = Provider<Future<SetOutcome> Function(SessionSum
   return (summary, startedAt) async {
     final user = ref.read(authProvider);
     if (user == null) return const SetOutcome(uploaded: false, xpAwarded: 0);
+    // A failure to save propagates: the caller tells the player the set was not kept.
     final store = await ref.read(exerciseStoreProvider.future);
     await store.saveSession(summary, userId: user.id, startedAt: startedAt);
-    final result = await (await ref.read(exerciseSyncProvider.future)).flush(user.id);
     ref.invalidate(exerciseHistoryProvider);
-    return SetOutcome(uploaded: !result.offline && result.uploaded > 0, xpAwarded: result.xpAwarded);
+    try {
+      final result = await (await ref.read(exerciseSyncProvider.future)).flush(user.id);
+      return SetOutcome(uploaded: !result.offline && result.uploaded > 0, xpAwarded: result.xpAwarded);
+    } on Object {
+      return const SetOutcome(uploaded: false, xpAwarded: 0); // saved; uploads on a later pass
+    }
   };
 });
 
@@ -347,7 +361,12 @@ class ExerciseHistory {
 final exerciseHistoryProvider = FutureProvider.autoDispose<ExerciseHistory>((ref) async {
   final user = ref.watch(authProvider);
   if (user == null) return const ExerciseHistory([], {});
-  final store = await ref.watch(exerciseStoreProvider.future);
+  final ExerciseStore store;
+  try {
+    store = await ref.watch(exerciseStoreProvider.future);
+  } on Object {
+    return const ExerciseHistory([], {});
+  }
   unawaited(() async {
     try {
       final sync = await ref.read(exerciseSyncProvider.future);

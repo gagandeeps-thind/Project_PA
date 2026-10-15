@@ -269,7 +269,7 @@ class _ResultSheet extends StatelessWidget {
     final amount = spec.isHold ? '${summary.holdS.toStringAsFixed(0)} s hold' : '${summary.repsValid} reps';
     final o = outcome;
     final sync = o == null
-        ? 'Saved on your phone. It will upload later.'
+        ? 'This set could not be saved on your phone.'
         : o.uploaded
             ? (o.xpAwarded > 0 ? '+${o.xpAwarded} XP' : 'Uploaded. No XP for this set.')
             : 'Saved on your phone. It will upload when you are online.';
