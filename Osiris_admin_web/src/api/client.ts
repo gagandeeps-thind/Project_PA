@@ -229,8 +229,10 @@ export async function resetDisplayName(userId: number, reason: string): Promise<
 }
 
 /* ── Camera-verified exercise review ─────────────────────── */
-export async function getExerciseSets(status: string): Promise<AdminExerciseSet[]> {
-  const { data } = await api.get<AdminExerciseSet[]>("/api/v2/admin/exercise-sessions", { params: { status } });
+export async function getExerciseSets(status: string, userId?: number): Promise<AdminExerciseSet[]> {
+  const params: Record<string, string | number> = { status };
+  if (userId) params.user_id = userId;
+  const { data } = await api.get<AdminExerciseSet[]>("/api/v2/admin/exercise-sessions", { params });
   return data;
 }
 

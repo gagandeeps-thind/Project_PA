@@ -7050,7 +7050,7 @@
     },
     "/api/v2/admin/exercise-sessions": {
       "get": {
-        "description": "Sets the server re-check flagged (or any status), oldest first, with the evidence a\nreviewer needs: rep timings, reason codes and the player's flag history.",
+        "description": "Sets the server re-check flagged (or any status), oldest first, with the evidence a\nreviewer needs: rep timings, reason codes and the player's flag history. `user_id`\nnarrows the queue to one player.",
         "operationId": "admin_exercise_sessions_api_v2_admin_exercise_sessions_get",
         "parameters": [
           {
@@ -7061,6 +7061,22 @@
               "default": "review",
               "title": "Status",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
             }
           },
           {

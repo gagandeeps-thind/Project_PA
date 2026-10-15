@@ -27,6 +27,7 @@ const amount = (s: AdminExerciseSet) =>
 
 export default function ExerciseReviewPage() {
   const [status, setStatus] = useState("review");
+  const [player, setPlayer] = useState("");
   const [sets, setSets] = useState<AdminExerciseSet[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -39,13 +40,13 @@ export default function ExerciseReviewPage() {
     setLoading(true);
     setError("");
     try {
-      setSets(await getExerciseSets(status));
+      setSets(await getExerciseSets(status, Number(player) || undefined));
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to load"));
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [status, player]);
 
   useEffect(() => {
     load();
@@ -90,6 +91,14 @@ export default function ExerciseReviewPage() {
             {s === "review" ? `Waiting${status === "review" && sets.length ? ` (${sets.length})` : ""}` : s}
           </button>
         ))}
+        <input
+          className="form-input"
+          style={{ maxWidth: 160, marginLeft: "auto" }}
+          placeholder="Player id"
+          inputMode="numeric"
+          value={player}
+          onChange={(e) => setPlayer(e.target.value.replace(/[^0-9]/g, ""))}
+        />
       </div>
 
       {error && <div className="error-message">{error}</div>}

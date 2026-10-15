@@ -273,8 +273,10 @@ def test_admin_review_queue() -> None:
                        json={"decision": "approve", "note": "self approve"}).status_code == 403
 
     admin = _admin()
-    queue = [q for q in client.get("/api/v2/admin/exercise-sessions", headers=admin).json() if q["id"] in ids]
-    assert len(queue) == 3, queue
+    uid = client.get("/api/v2/me/profile", headers=headers).json()["user_id"]
+    # Filter by player: the shared dev database may hold other flagged sets ahead of these.
+    queue = client.get("/api/v2/admin/exercise-sessions", params={"user_id": uid}, headers=admin).json()
+    assert [q["id"] for q in queue] == ids, queue
     item = queue[0]
     assert item["display_name"] == "Reviewed" and item["exercise_name"] == "Push-up", item
     assert "replay_suspected" in item["reason_codes"] and item["rep_duration_cv"] == 0.0, item

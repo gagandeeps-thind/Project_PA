@@ -292,12 +292,16 @@ def _xp_if_approved(
 
 @router.get("/api/v2/admin/exercise-sessions", response_model=List[AdminExerciseItem])
 def admin_exercise_sessions(
-    status: str = REVIEWABLE, limit: int = 100, db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin),
+    status: str = REVIEWABLE, user_id: Optional[int] = None, limit: int = 100,
+    db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin),
 ):
     """Sets the server re-check flagged (or any status), oldest first, with the evidence a
-    reviewer needs: rep timings, reason codes and the player's flag history."""
-    rows = db.query(models.ExerciseSession).filter(models.ExerciseSession.status == status).order_by(
-        models.ExerciseSession.id.asc()).limit(max(1, min(limit, 500))).all()
+    reviewer needs: rep timings, reason codes and the player's flag history. `user_id`
+    narrows the queue to one player."""
+    q = db.query(models.ExerciseSession).filter(models.ExerciseSession.status == status)
+    if user_id is not None:
+        q = q.filter(models.ExerciseSession.user_id == user_id)
+    rows = q.order_by(models.ExerciseSession.id.asc()).limit(max(1, min(limit, 500))).all()
     user_ids = {r.user_id for r in rows} or {-1}
     names: dict[int, str] = {uid: name for uid, name in db.query(
         models.PlayerProfile.user_id, models.PlayerProfile.display_name).filter(
