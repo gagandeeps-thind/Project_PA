@@ -265,6 +265,45 @@ final exerciseCatalogProvider = FutureProvider<ExerciseCatalog>((ref) async {
   return catalog;
 });
 
+/// Explicit, revocable consent to count exercises with the camera. The server is the
+/// source of truth (it refuses uploads without consent); the last known answer is cached per
+/// account so the gate also works offline.
+final exerciseConsentProvider =
+    AsyncNotifierProvider<ExerciseConsentNotifier, bool>(ExerciseConsentNotifier.new);
+
+class ExerciseConsentNotifier extends AsyncNotifier<bool> {
+  String _key(int userId) => 'osiris.exercise_consent.$userId';
+
+  @override
+  Future<bool> build() async {
+    final user = ref.watch(authProvider);
+    if (user == null) return false;
+    final prefs = ref.read(sharedPreferencesProvider);
+    try {
+      final granted = (await ref.read(apiClientProvider).getExerciseConsent())['granted'] as bool;
+      await prefs.setBool(_key(user.id), granted);
+      return granted;
+    } on Object {
+      return prefs.getBool(_key(user.id)) ?? false;
+    }
+  }
+
+  /// Grant or withdraw. Withdrawing with [deleteData] erases the sets on the server and on
+  /// this phone.
+  Future<void> set(bool granted, {bool deleteData = false}) async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+    final out = await ref.read(apiClientProvider).setExerciseConsent(granted, deleteData: deleteData);
+    final now = out['granted'] as bool;
+    await ref.read(sharedPreferencesProvider).setBool(_key(user.id), now);
+    if (!now && deleteData) {
+      await (await ref.read(exerciseStoreProvider.future)).deleteUserSessions(user.id);
+    }
+    state = AsyncData(now);
+    ref.invalidate(exerciseHistoryProvider);
+  }
+}
+
 /// A fresh pose source per camera session (ML Kit on device; scripted in tests).
 final poseSourceFactoryProvider = Provider<PoseSource Function()>((ref) => () => MlKitPoseSource());
 

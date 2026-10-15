@@ -2274,6 +2274,67 @@
         "title": "EventIn",
         "type": "object"
       },
+      "ExerciseConsentIn": {
+        "properties": {
+          "delete_data": {
+            "default": false,
+            "title": "Delete Data",
+            "type": "boolean"
+          },
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "granted"
+        ],
+        "title": "ExerciseConsentIn",
+        "type": "object"
+      },
+      "ExerciseConsentOut": {
+        "properties": {
+          "deleted_sets": {
+            "default": 0,
+            "title": "Deleted Sets",
+            "type": "integer"
+          },
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "granted",
+          "policy_version",
+          "updated_at"
+        ],
+        "title": "ExerciseConsentOut",
+        "type": "object"
+      },
       "ExerciseHistoryOut": {
         "properties": {
           "daily_xp_cap": {
@@ -8499,6 +8560,71 @@
           }
         ],
         "summary": "Erase My Account"
+      }
+    },
+    "/api/v2/me/exercise-consent": {
+      "get": {
+        "operationId": "get_exercise_consent_api_v2_me_exercise_consent_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Exercise Consent"
+      },
+      "put": {
+        "description": "Explicit, revocable consent to count exercises with the camera and keep the results\n(rep timings are health data). Each change is a new ledger row; withdrawal stops uploads\nand can erase the stored sets.",
+        "operationId": "set_exercise_consent_api_v2_me_exercise_consent_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExerciseConsentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Set Exercise Consent"
       }
     },
     "/api/v2/me/exercise-sessions": {

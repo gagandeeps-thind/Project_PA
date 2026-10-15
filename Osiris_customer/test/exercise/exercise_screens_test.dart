@@ -13,6 +13,22 @@ import 'package:osiris_customer/screens/exercise_hub_screen.dart';
 
 import 'pose_synth.dart';
 
+/// Consent state without a server; records every change.
+class FakeConsent extends ExerciseConsentNotifier {
+  FakeConsent(this.initial);
+  final bool initial;
+  final calls = <(bool, bool)>[];
+
+  @override
+  Future<bool> build() async => initial;
+
+  @override
+  Future<void> set(bool granted, {bool deleteData = false}) async {
+    calls.add((granted, deleteData));
+    state = AsyncData(granted);
+  }
+}
+
 /// Scripted pose stream standing in for camera + ML Kit.
 class FakePoseSource extends PoseSource {
   final _controller = StreamController<PoseFrame>.broadcast(sync: true);
@@ -169,5 +185,72 @@ void main() {
     await tester.scrollUntilVisible(find.text('Under review'), 100);
     expect(find.text('+10 XP'), findsOneWidget);
     expect(find.text('Waiting to upload'), findsOneWidget);
+  });
+
+  group('consent', () {
+    Future<FakeConsent> pumpHub(WidgetTester tester, {required bool consented}) async {
+      final consent = FakeConsent(consented);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          exerciseCatalogProvider.overrideWith((ref) async => catalog),
+          exerciseHistoryProvider.overrideWith((ref) async => const ExerciseHistory([], {})),
+          exerciseConsentProvider.overrideWith(() => consent),
+          poseSourceFactoryProvider.overrideWithValue(FakePoseSource.new),
+        ],
+        child: const MaterialApp(home: ExerciseHubScreen()),
+      ));
+      await tester.pumpAndSettle();
+      return consent;
+    }
+
+    testWidgets('the camera does not open until the player allows it', (tester) async {
+      final consent = await pumpHub(tester, consented: false);
+      await tester.tap(find.byKey(const Key('exercise-pushup')));
+      await tester.pumpAndSettle();
+      expect(find.text('Count reps with your camera?'), findsOneWidget);
+      expect(find.textContaining('never saved or uploaded'), findsOneWidget);
+      await tester.tap(find.text('NOT NOW'));
+      await tester.pumpAndSettle();
+      expect(find.text('START'), findsNothing);
+      expect(consent.calls, isEmpty);
+
+      await tester.tap(find.byKey(const Key('exercise-pushup')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('exercise-consent-allow')));
+      await tester.pumpAndSettle();
+      expect(consent.calls, [(true, false)]);
+      expect(find.text('START'), findsOneWidget, reason: 'the camera screen opens after consent');
+    });
+
+    testWidgets('with consent the camera opens directly', (tester) async {
+      await pumpHub(tester, consented: true);
+      expect(find.byKey(const Key('exercise-consent-open')), findsNothing);
+      await tester.tap(find.byKey(const Key('exercise-squat')));
+      await tester.pumpAndSettle();
+      expect(find.text('Count reps with your camera?'), findsNothing);
+      expect(find.text('START'), findsOneWidget);
+    });
+
+    testWidgets('settings: withdrawing offers to delete the sets', (tester) async {
+      final consent = FakeConsent(true);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [exerciseConsentProvider.overrideWith(() => consent)],
+        child: const MaterialApp(home: Scaffold(body: ExerciseConsentTile())),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isTrue);
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      expect(find.text('Stop counting exercises?'), findsOneWidget);
+      await tester.tap(find.text('CANCEL'));
+      await tester.pumpAndSettle();
+      expect(consent.calls, isEmpty);
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DELETE MY SETS'));
+      await tester.pumpAndSettle();
+      expect(consent.calls, [(false, true)]);
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isFalse);
+    });
   });
 }

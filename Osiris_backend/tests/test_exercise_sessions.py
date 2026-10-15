@@ -46,13 +46,17 @@ def cleanup() -> None:
         db.close()
 
 
-def _register(name):
+def _register(name, exercise_consent=True):
     r = client.post("/api/v2/auth/register", json={
         "email": f"{PREFIX}{name}@example.com", "password": PASSWORD, "display_name": name.title(),
         "goal": "fitness", "location_consent": True,
     })
     assert r.status_code == 201, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    if exercise_consent:
+        r = client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": True})
+        assert r.status_code == 200 and r.json()["granted"], r.text
+    return headers
 
 
 def _durations(n, base=1.5):
@@ -191,6 +195,50 @@ def test_submission_is_rate_limited() -> None:
     print("PASS submission is rate limited")
 
 
+def test_consent_is_explicit_and_revocable() -> None:
+    headers = _register("consent", exercise_consent=False)
+    state = client.get("/api/v2/me/exercise-consent", headers=headers).json()
+    assert state == {"granted": False, "policy_version": None, "updated_at": None, "deleted_sets": 0}, state
+    r = client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=5))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "EXERCISE_CONSENT_REQUIRED", r.text
+
+    assert client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": True}).json()["granted"]
+    # Granting twice does not add a second ledger row.
+    client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": True})
+    body = _set(reps=5)
+    assert client.post("/api/v2/exercise-sessions", headers=headers, json=body).status_code == 201
+
+    r = client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": False, "delete_data": True})
+    assert r.status_code == 200 and r.json()["granted"] is False and r.json()["deleted_sets"] == 1, r.text
+    assert client.get("/api/v2/me/exercise-sessions", headers=headers).json()["sessions"] == []
+    r = client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=5))
+    assert r.status_code == 403, "no new sets after withdrawal"
+
+    export = client.get("/api/v2/me/export", headers=headers).json()
+    ledger = [(c["kind"], c["granted"]) for c in export["consents"] if c["kind"] == "exercise_camera"]
+    assert ledger == [("exercise_camera", True), ("exercise_camera", False)], ledger
+    db = database.SessionLocal()
+    try:
+        uid = db.query(models.User.id).filter(models.User.email == f"{PREFIX}consent@example.com").one()[0]
+        actions = {a for (a,) in db.query(models.AuditEvent.action).filter(
+            models.AuditEvent.actor_type == "player", models.AuditEvent.actor_id == uid).all()}
+        assert {"consent.exercise_camera.granted", "consent.exercise_camera.withdrawn",
+                "exercise.data_deleted"} <= actions, actions
+    finally:
+        db.close()
+    print("PASS consent is explicit and revocable")
+
+
+def test_replay_after_withdrawal_returns_stored_result() -> None:
+    headers = _register("replay")
+    body = _set(reps=6)
+    first = client.post("/api/v2/exercise-sessions", headers=headers, json=body).json()
+    client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": False})
+    retry = client.post("/api/v2/exercise-sessions", headers=headers, json=body)
+    assert retry.status_code == 200 and retry.json()["id"] == first["id"] and retry.json()["duplicate"], retry.text
+    print("PASS replay after withdrawal returns the stored result")
+
+
 def test_history_export_erase_and_metrics() -> None:
     headers = _register("history")
     client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=8))
@@ -227,6 +275,8 @@ if __name__ == "__main__":
         test_daily_caps_per_exercise_and_total()
         test_plank_hold()
         test_submission_is_rate_limited()
+        test_consent_is_explicit_and_revocable()
+        test_replay_after_withdrawal_returns_stored_result()
         test_history_export_erase_and_metrics()
     finally:
         cleanup()

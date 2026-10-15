@@ -20,9 +20,11 @@ from sqlalchemy.orm import Session
 
 import models
 from growth_api import get_or_create_profile
-from main import _api_error, _now_naive_utc, _rate_limit, app, get_active_player, get_db, get_rank
+from growth_safety import record_consent
+from main import _api_error, _audit, _now_naive_utc, _rate_limit, app, get_active_player, get_db, get_rank
 from services import exercises as exercise_rules
 from services import metrics
+from services import player_safety
 from services import quests as quest_rules
 
 router = APIRouter()
@@ -65,6 +67,19 @@ class ExerciseSessionOut(BaseModel):
     created_at: datetime
 
 
+class ExerciseConsentIn(BaseModel):
+    granted: bool
+    # On withdrawal, also erase the exercise sets stored on the server. XP already earned stays.
+    delete_data: bool = False
+
+
+class ExerciseConsentOut(BaseModel):
+    granted: bool
+    policy_version: Optional[str]
+    updated_at: Optional[datetime]
+    deleted_sets: int = 0
+
+
 class ExerciseHistoryOut(BaseModel):
     today_xp: int
     daily_xp_cap: int
@@ -86,6 +101,45 @@ def _out(row: models.ExerciseSession, user: models.User, today_total: int, dupli
         daily_xp_remaining=max(0, exercise_rules.DAILY_EXERCISE_XP_CAP - today_total),
         duplicate=duplicate, created_at=row.created_at,
     )
+
+
+CONSENT_KIND = "exercise_camera"
+
+
+def _consent_out(db: Session, uid: int, deleted: int = 0) -> ExerciseConsentOut:
+    rec = player_safety.latest_consent(db, uid, CONSENT_KIND)
+    return ExerciseConsentOut(
+        granted=bool(rec and rec.granted), policy_version=rec.policy_version if rec else None,
+        updated_at=rec.created_at if rec else None, deleted_sets=deleted,
+    )
+
+
+@router.get("/api/v2/me/exercise-consent", response_model=ExerciseConsentOut)
+def get_exercise_consent(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+    return _consent_out(db, token_data["id"])
+
+
+@router.put("/api/v2/me/exercise-consent", response_model=ExerciseConsentOut)
+def set_exercise_consent(
+    req: ExerciseConsentIn, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player),
+):
+    """Explicit, revocable consent to count exercises with the camera and keep the results
+    (rep timings are health data). Each change is a new ledger row; withdrawal stops uploads
+    and can erase the stored sets."""
+    uid = token_data["id"]
+    current = player_safety.latest_consent(db, uid, CONSENT_KIND)
+    if current is None or current.granted != req.granted:
+        record_consent(db, uid, CONSENT_KIND, req.granted)
+        _audit(db, actor_type="player", actor_id=uid, entity_type="user", entity_id=uid,
+               action="consent.exercise_camera." + ("granted" if req.granted else "withdrawn"))
+    deleted = 0
+    if not req.granted and req.delete_data:
+        deleted = db.query(models.ExerciseSession).filter(models.ExerciseSession.user_id == uid).delete(
+            synchronize_session=False)
+        _audit(db, actor_type="player", actor_id=uid, entity_type="user", entity_id=uid,
+               action="exercise.data_deleted", details={"sets": deleted})
+    db.commit()
+    return _consent_out(db, uid, deleted)
 
 
 @router.get("/api/v2/exercises")
@@ -118,6 +172,11 @@ def submit_exercise_session(
     if existing is not None:
         today_total = sum(_earned_today(db, uid, existing.local_date).values())
         return JSONResponse(status_code=200, content=json.loads(_out(existing, user, today_total, True).model_dump_json()))
+    # A retry of a set stored before withdrawal is answered above; nothing new is stored without consent.
+    consent = player_safety.latest_consent(db, uid, CONSENT_KIND)
+    if consent is None or not consent.granted:
+        raise _api_error(403, "EXERCISE_CONSENT_REQUIRED",
+                         "Allow camera exercise counting in the app before uploading sets.")
 
     decision = exercise_rules.evaluate(exercise_rules.SessionClaim(
         exercise_key=req.exercise_key, rules_version=req.rules_version, duration_s=req.duration_s,

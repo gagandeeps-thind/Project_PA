@@ -145,3 +145,16 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [ ] [human] device QA: run the exercise screen on a physical Android phone and an iPhone (this build environment has
   no KVM, no Android SDK access and no macOS, so no emulator or simulator run was possible), and tune thresholds
   with real recordings if needed (bump `RULES_VERSION` when thresholds change).
+
+## Camera exercises, phase 2 (2026-10-15)
+Backlog Phase 5: "Add pose estimation behind explicit activity and ML consent." Also closes the gap that sets flagged
+for review had no reviewer.
+
+- [x] backend+customer: explicit, revocable consent for camera exercise counting
+  - Acceptance: `exercise_camera` consent kind in the append-only ledger; `GET/PUT /api/v2/me/exercise-consent`;
+    uploads without consent are refused (403 `EXERCISE_CONSENT_REQUIRED`); withdrawing can delete exercise data;
+    the app shows a consent screen before the camera can open and a withdraw control in Settings; tests both sides.
+- [ ] backend+admin web: review queue for flagged exercise sets
+  - Acceptance: admins list `review` sets and approve (capped XP for that set's day) or reject them, once, with an
+    audit event; non-admins get 401/403; admin page `ExerciseReviewPage.tsx`; the app's local history picks up
+    review outcomes on refresh.

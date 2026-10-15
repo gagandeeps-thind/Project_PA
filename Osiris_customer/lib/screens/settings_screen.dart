@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_error.dart';
 import '../api/growth_models.dart';
 import '../providers.dart';
+import 'exercise_hub_screen.dart' show ExerciseConsentTile;
 import '../services/share_helper.dart';
 import '../theme.dart';
 
@@ -218,6 +219,7 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Public achievement page'),
             subtitle: const Text('Shows your rank, runs, and badges. Never your location.'),
           ),
+          const ExerciseConsentTile(),
           const _Header('Invite friends'),
           referral.when(
             loading: () => const LinearProgressIndicator(),

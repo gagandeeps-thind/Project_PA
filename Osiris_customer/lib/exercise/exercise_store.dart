@@ -217,6 +217,10 @@ class ExerciseStore {
     return {for (final r in rows) r['exercise_key'] as String: (r['best'] as num).toDouble()};
   }
 
+  /// Erases one player's sets and reps from this phone (consent withdrawn with deletion).
+  Future<int> deleteUserSessions(int userId) =>
+      db.delete('exercise_sessions', where: 'user_id = ?', whereArgs: [userId]);
+
   /// Removes everything stored for other accounts, so one person's history never shows to
   /// the next person who signs in on this phone.
   Future<void> forgetOtherUsers(int? userId) =>

@@ -17,6 +17,13 @@ def needs_location_consent(db: Session, user_id: int) -> bool:
     return profile is not None and bool(profile.consent_required) and profile.location_consent_at is None
 
 
+def latest_consent(db: Session, user_id: int, kind: str) -> "models.ConsentRecord | None":
+    """The ledger is append-only; the newest record for a kind is the player's current choice."""
+    return db.query(models.ConsentRecord).filter(
+        models.ConsentRecord.user_id == user_id, models.ConsentRecord.kind == kind,
+    ).order_by(models.ConsentRecord.id.desc()).first()
+
+
 def blocked_user_ids(db: Session, user_id: int) -> set[int]:
     """Everyone this player blocked or was blocked by."""
     rows = db.query(models.UserBlock.blocker_id, models.UserBlock.blocked_id).filter(

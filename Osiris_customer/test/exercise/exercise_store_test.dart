@@ -111,6 +111,16 @@ void main() {
     expect(orphanReps.single['n'], 0);
   });
 
+  test("deleting a player's sets removes their reps and nobody else's", () async {
+    await store.saveSession(_summary(), userId: 7, startedAt: DateTime.utc(2026, 1, 1));
+    await store.saveSession(_summary(), userId: 8, startedAt: DateTime.utc(2026, 1, 1));
+    expect(await store.deleteUserSessions(7), 1);
+    expect(await store.recent(7), isEmpty);
+    expect(await store.recent(8), hasLength(1));
+    final reps = await store.db.rawQuery('SELECT COUNT(*) AS n FROM exercise_reps');
+    expect(reps.single['n'], 11, reason: "only user 8's 11 reps remain");
+  });
+
   test('catalog: bundled first, then the cached server copy', () async {
     final bundled = File('assets/exercise_catalog.json').readAsStringSync();
     final serverCopy = jsonDecode(bundled) as Map<String, dynamic>;

@@ -53,7 +53,7 @@ from services import quests as quest_rules
 router = APIRouter()
 
 POLICY_VERSION = "privacy-2026-09"
-CONSENT_KINDS = ("location", "public_profile", "leaderboard")
+CONSENT_KINDS = ("location", "public_profile", "leaderboard", "exercise_camera")
 REPORT_TARGETS = ("user", "challenge", "community", "share_card")
 REPORT_REASONS = (
     "unsafe_route", "harassment", "cheating", "spam", "inappropriate_name", "privacy", "other",
