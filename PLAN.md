@@ -165,7 +165,7 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [x] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
   - Acceptance: frames are dropped while inference is busy (no queue build-up); Android CAMERA permission, iOS
     `NSCameraUsageDescription` and 15.5 deployment target; widget test drives the screen with a fake pose stream.
-- [ ] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
+- [ ] ci (blocked for agents: guard.sh refuses CI-file commits; see the Sprint 3 `[human]` item): add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
   `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
 - [ ] [human] product: reconcile launch principle 1 in `Documentation/Enterprise/README.md` ("push-ups, squats, pose
   estimation ... are later product increments") with the camera exercise feature now built on request.
