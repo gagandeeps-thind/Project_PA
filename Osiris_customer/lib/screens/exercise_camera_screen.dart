@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../exercise/exercise_catalog.dart';
+import '../exercise/frame_rate_meter.dart';
 import '../exercise/pose_frame.dart';
 import '../exercise/pose_source.dart';
 import '../exercise/rep_engine.dart';
@@ -58,6 +59,11 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
 
   final _frame = ValueNotifier<PoseFrame?>(null);
   final _update = ValueNotifier<EngineUpdate?>(null);
+  // Pose frame rate, so a phone too slow to count this exercise says so (accuracy evaluation:
+  // below min_pose_fps reps are missed, never invented).
+  var _meter = FrameRateMeter();
+  late final _slowDetector = SlowTrackingDetector(widget.spec.minPoseFps);
+  final _slowFps = ValueNotifier<double?>(null);
 
   bool get _recording => _engine != null;
 
@@ -74,6 +80,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     _closeCamera();
     _frame.dispose();
     _update.dispose();
+    _slowFps.dispose();
     super.dispose();
   }
 
@@ -90,6 +97,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
   }
 
   Future<void> _openCamera() async {
+    _meter = FrameRateMeter(); // a reopened camera warms up again
     final source = ref.read(poseSourceFactoryProvider)();
     _source = source;
     _sub = source.frames.listen(_onFrame);
@@ -124,6 +132,12 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
 
   void _onFrame(PoseFrame f) {
     _frame.value = f;
+    _meter.add(f.tMs);
+    final fps = _meter.fps;
+    final slow = _slowDetector.update(fps) ? fps : null;
+    if ((slow == null) != (_slowFps.value == null) || (slow != null && slow.round() != _slowFps.value!.round())) {
+      _slowFps.value = slow;
+    }
     final engine = _engine;
     if (engine == null) return;
     final u = engine.addFrame(f);
@@ -188,7 +202,13 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
           top: 12,
           child: ValueListenableBuilder<EngineUpdate?>(
             valueListenable: _update,
-            builder: (_, u, _) => _Hud(spec: spec, update: u, recording: _recording),
+            builder: (_, u, _) => Column(mainAxisSize: MainAxisSize.min, children: [
+              _Hud(spec: spec, update: u, recording: _recording),
+              ValueListenableBuilder<double?>(
+                valueListenable: _slowFps,
+                builder: (_, fps, _) => fps == null ? const SizedBox.shrink() : _SlowWarning(spec: spec, fps: fps),
+              ),
+            ]),
           ),
         ),
         Positioned(
@@ -267,6 +287,28 @@ class _Hud extends StatelessWidget {
             ]),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+class _SlowWarning extends StatelessWidget {
+  final ExerciseSpec spec;
+  final double fps;
+
+  const _SlowWarning({required this.spec, required this.fps});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('exercise-slow-warning'),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: Colors.amber.shade900.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(12)),
+      child: Text(
+        'This phone is tracking ${fps.round()} frames a second; ${spec.name.toLowerCase()} needs '
+        '${spec.minPoseFps.round()}. Some reps may not count. More light or closing other apps can help.',
+        style: const TextStyle(color: Colors.white, fontSize: 13),
       ),
     );
   }

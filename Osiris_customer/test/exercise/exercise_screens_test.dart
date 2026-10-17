@@ -127,6 +127,54 @@ void main() {
     expect(source.stopped, isTrue, reason: 'the camera is released when the screen closes');
   });
 
+  group('slow phones', () {
+    Future<FakePoseSource> pumpCamera(WidgetTester tester, String key) async {
+      final source = FakePoseSource();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          exerciseCatalogProvider.overrideWith((ref) async => catalog),
+          poseSourceFactoryProvider.overrideWithValue(() => source),
+          exerciseRecorderProvider.overrideWithValue((s, _) async => const SetOutcome(uploaded: false, xpAwarded: 0)),
+        ],
+        child: MaterialApp(home: ExerciseCameraScreen(spec: catalog.byKey(key)!)),
+      ));
+      await tester.pumpAndSettle();
+      return source;
+    }
+
+    // Two seconds of a standing player at [fps] frames a second.
+    List<PoseFrame> standing(int fps) => [for (var t = 0; t < 4000; t += 1000 ~/ fps) PoseFrame(t, sideBody())];
+
+    testWidgets('below the exercise minimum the player is told reps may be missed', (tester) async {
+      final source = await pumpCamera(tester, 'pushup');
+      source.emitAll(standing(4));
+      await tester.pump();
+      expect(find.byKey(const Key('exercise-slow-warning')), findsOneWidget);
+      expect(find.textContaining('tracking 4 frames a second; push-up needs 5'), findsOneWidget);
+    });
+
+    testWidgets('a normal phone sees no warning', (tester) async {
+      final source = await pumpCamera(tester, 'pushup');
+      source.emitAll(standing(30));
+      await tester.pump();
+      expect(find.byKey(const Key('exercise-slow-warning')), findsNothing);
+    });
+
+    testWidgets('the limit is per exercise: 6 fps is enough for push-ups', (tester) async {
+      final source = await pumpCamera(tester, 'pushup');
+      source.emitAll(standing(6));
+      await tester.pump();
+      expect(find.byKey(const Key('exercise-slow-warning')), findsNothing);
+    });
+
+    testWidgets('...but not for high knees, which need 7', (tester) async {
+      final source = await pumpCamera(tester, 'high_knees');
+      source.emitAll(standing(6));
+      await tester.pump();
+      expect(find.textContaining('high knees needs 7'), findsOneWidget);
+    });
+  });
+
   testWidgets('a set with no real reps is reported as not verified', (tester) async {
     final source = FakePoseSource();
     await tester.pumpWidget(ProviderScope(

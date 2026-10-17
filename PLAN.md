@@ -207,7 +207,7 @@ had only been tested at 30 fps.
   noise, body size, camera roll and tempo, for all 7 exercises; fix what it finds
   - Acceptance: a committed evaluation test prints a per-exercise matrix and asserts budgets (genuine reps counted
     at >= 95% within supported conditions, cheat reps counted at 0%); the supported minimum frame rate is stated.
-- [ ] customer: tell the player when the phone is too slow to count reliably
+- [x] customer: tell the player when the phone is too slow to count reliably
   - Acceptance: below the supported pose frame rate the camera screen says so instead of silently missing reps;
     widget test with a slow fake pose stream.
 - [ ] customer: landmark recording and replay for device QA (debug builds only)
