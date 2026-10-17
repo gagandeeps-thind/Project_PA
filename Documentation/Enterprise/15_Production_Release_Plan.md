@@ -350,3 +350,39 @@ no Docker daemon (image build and the container `/healthz` boot could not be exe
 | `flutter test`, `flutter analyze` | 61 tests pass; no issues |
 | `pip-audit` (lock) | pyjwt, starlette, urllib3 advisories (S2) |
 | `npm audit --omit=dev` | 2 high (S2) |
+
+---
+
+## 7. Android / iOS parity (2026-10-17)
+
+"Identical" here means the same app, version, permissions, behaviour and backend contract on both platforms. The
+binaries themselves differ by nature (AAB vs IPA, different signing). No Android SDK or macOS exists in the build
+environment, so neither binary was produced here; parity is enforced by `test/platform_parity_test.dart`, which
+runs in `flutter test` and therefore in the gate.
+
+**Fixed**
+
+| Gap | Fix |
+|---|---|
+| Store name differed ("Osiris" vs "Osiris Customer") | iOS display name is now "Osiris"; test compares both files |
+| API default `10.0.2.2` only works on the Android emulator | `resolveApiBaseUrl`: debug uses 10.0.2.2 (Android) or 127.0.0.1 (iOS simulator) |
+| A release build could ship with a dev or cleartext API host | Release throws at start unless `API_BASE_URL` is an https URL (closes S11 in the app) |
+| iOS Keychain survives uninstall, Android does not: a reinstall restored the old session on iOS only | First-launch marker in SharedPreferences; missing marker clears stored credentials. Existing test installs are signed out once on upgrade |
+
+**Already equivalent (now asserted by tests):** version and build number both come from `pubspec.yaml`;
+location uses the same consent model (while-in-use, no background-location permission; Android foreground service,
+iOS background mode with the system indicator); camera permission with the "nothing is saved or uploaded" purpose
+text; no cleartext or arbitrary-loads opt-in; one bundle id per platform.
+
+**Open, needs a human (S10)**
+- Final application id. Android `com.example.osiris_customer` and iOS `com.example.osirisCustomer` are the same
+  string up to platform rules (underscores are illegal in bundle ids), but both are placeholders and the store
+  identity cannot change after first upload. Choose the production domain, then change both together; the test
+  keeps them in step.
+- Release signing: Android uses the debug key, iOS has no team. Play App Signing upload key and the Apple
+  distribution certificate must be created by the account owner.
+- Android 13+ notification permission (PLAN.md): the recording notification is hidden until granted; iOS has no equivalent step.
+- Deliberate platform differences that stay: camera image format (NV21 vs BGRA), Android foreground-service
+  notification vs iOS location indicator, ML Kit minimum OS (iOS 15.5).
+- Physical-device runs of the same script on one Android phone and one iPhone remain a UAT gate; the iOS simulator
+  and a macOS build agent are not available in this environment.

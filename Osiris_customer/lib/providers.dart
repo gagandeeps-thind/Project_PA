@@ -120,6 +120,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
 
   Future<void> _loadSession() async {
     try {
+      await dropOrphanedCredentials(ref.read(sharedPreferencesProvider), _storage);
       final token = await _storage.read(key: 'auth_token');
       final userIdStr = await _storage.read(key: 'user_id');
 
@@ -243,6 +244,17 @@ class AuthNotifier extends Notifier<UserProfile?> {
     await _storage.delete(key: 'auth_token');
     await _storage.delete(key: 'user_id');
   }
+}
+
+/// iOS keeps Keychain items after the app is uninstalled; Android secure storage does not.
+/// SharedPreferences is wiped with the app on both, so a missing marker means a fresh
+/// install and any stored credentials belong to a previous installation. Dropping them
+/// makes a reinstall behave the same on both platforms (signed out).
+Future<void> dropOrphanedCredentials(SharedPreferences prefs, FlutterSecureStorage storage) async {
+  if (prefs.getBool('install_seen') == true) return;
+  await storage.delete(key: 'auth_token');
+  await storage.delete(key: 'user_id');
+  await prefs.setBool('install_seen', true);
 }
 
 // ── Camera-verified exercises ──────────────────────────────────────────
