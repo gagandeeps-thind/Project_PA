@@ -85,7 +85,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         title: Text('Step ${_step + 1} of 3'),
         leading: _step == 0
             ? null
-            : IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _step--)),
+            : IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _step--)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

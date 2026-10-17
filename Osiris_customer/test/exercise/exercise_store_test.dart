@@ -7,6 +7,8 @@ import 'package:osiris_customer/exercise/catalog_repository.dart';
 import 'package:osiris_customer/exercise/exercise_store.dart';
 import 'package:osiris_customer/exercise/exercise_sync.dart';
 import 'package:osiris_customer/exercise/rep_engine.dart';
+import 'package:osiris_customer/providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 SessionSummary _summary({int valid = 10, String verdict = 'verified', String key = 'pushup', double hold = 0}) =>
@@ -142,6 +144,32 @@ void main() {
     expect(await store.personalBests(7), {'pushup': 10.0}, reason: 'the approved set now counts as a best');
     final offline = ExerciseSync(store, (_) async => {}, fetchHistory: () async => throw _dioError(null));
     expect(await offline.refreshOutcomes(), 0);
+  });
+
+  test('the database is opened only when the signed-in account changes', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    var opens = 0;
+    Future<ExerciseStore> open() async {
+      opens++;
+      return store;
+    }
+
+    await store.saveSession(_summary(), userId: 7, startedAt: DateTime.utc(2026, 1, 1));
+    await bindExerciseOwner(prefs, 7, open); // first sign-in: owner unknown, so check once
+    await bindExerciseOwner(prefs, 7, open); // every later launch as the same account: free
+    await bindExerciseOwner(prefs, 7, open);
+    expect(opens, 1);
+    expect(await store.recent(7), hasLength(1));
+
+    await bindExerciseOwner(prefs, 8, open); // another account signs in: 7's sets go
+    expect(opens, 2);
+    expect(await store.recent(7), isEmpty);
+
+    await bindExerciseOwner(prefs, null, open); // sign-out clears everything
+    expect(opens, 3);
+    await bindExerciseOwner(prefs, 8, open); // owner forgotten, so the next sign-in checks again
+    expect(opens, 4);
   });
 
   test('catalog: bundled first, then the cached server copy', () async {

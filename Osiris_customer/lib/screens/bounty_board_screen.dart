@@ -95,6 +95,7 @@ class _BountyBoardScreenState extends ConsumerState<BountyBoardScreen> {
         title: const Text('BOUNTY BOARD'),
         actions: [
           IconButton(
+            tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() => _loading = true);

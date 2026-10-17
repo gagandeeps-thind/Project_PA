@@ -98,6 +98,35 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: decision recorded; if retired, the endpoints, their tests, client screens and contract entries are
     removed in agent items.
 
+- [x] customer: camera-denied recovery on the exercise screen (emulator QA 2026-10-14)
+  - Denial left a dead end: no way to settings, and the failed camera was never cleared, so allowing the camera in
+    settings and returning still showed the error. A first fix (retry on every resume) re-asked for permission at once,
+    because the dialog itself pauses/resumes the app; caught on the emulator.
+  - Acceptance: one denial shows the error and OPEN SETTINGS without re-prompting; returning from settings with the
+    camera allowed starts the camera. Widget test covers both; verified on emulator-5554.
+
+- [x] customer: automated accessibility audit (PRD NFR: touch targets, labels, contrast)
+  - `test/accessibility_test.dart` renders the main screens with the real theme in a full-height phone viewport and
+    checks Android tap-target size, labelled tap targets and WCAG AA contrast.
+  - Found and fixed: home footer contrast 3.62 (< 4.5), unlabelled copy-invite, sign-up back and bounty refresh buttons.
+
+- [x] customer: low-light warning before a run (Security plan §3: lighting warnings from available context)
+  - On-device NOAA solar position from the current fix (no network, location stays on the phone); below civil
+    twilight (-6°) START asks first, with advice; the player can still start.
+
+- [x] customer: restore cold start after the exercise feature (release build, 2026-10-14)
+  - Session restore opened the exercise SQLite DB on every launch to drop other accounts' rows (~200 ms). The owner
+    is now remembered in preferences; the DB opens only when the signed-in account changes.
+
+- [ ] [human] product: should a zero-rep exercise set be uploaded? (report 14)
+  - Today it uploads a summary that earns nothing and counts against the 30/min upload limit.
+  - Acceptance: decision recorded; if "no", the app keeps it local and the result sheet says so.
+
+- [ ] [human] size: ML Kit pose model bundled vs delivered by Google Play services (report 14)
+  - Universal APK went 53 → 99.7 MB (arm64 download 43.7 MB). The Play-services model shrinks the app but downloads on
+    first use and needs a dependency change (lockfile).
+  - Acceptance: decision recorded; if switched, first-use download handled in the exercise screen.
+
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
@@ -136,7 +165,7 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [x] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
   - Acceptance: frames are dropped while inference is busy (no queue build-up); Android CAMERA permission, iOS
     `NSCameraUsageDescription` and 15.5 deployment target; widget test drives the screen with a fake pose stream.
-- [ ] [human] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
+- [ ] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
   `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
 - [ ] [human] product: reconcile launch principle 1 in `Documentation/Enterprise/README.md` ("push-ups, squats, pose
   estimation ... are later product increments") with the camera exercise feature now built on request.
@@ -158,7 +187,7 @@ for review had no reviewer.
   - Acceptance: admins list `review` sets and approve (capped XP for that set's day) or reject them, once, with an
     audit event; non-admins get 401/403; admin page `ExerciseReviewPage.tsx`; the app's local history picks up
     review outcomes on refresh.
-- [x] launch test, performance and audit for phase 2 (report 14): admin console and Flutter web build driven in
+- [x] launch test, performance and audit for phase 2 (report 15): admin console and Flutter web build driven in
   Chromium; fixed the database-failure path and the review-queue N+1.
 - [ ] [human] tooling: adopt a browser E2E suite (Playwright) for the admin console and the Flutter web smoke test
-  described in report 14 §5, and decide where it runs (gate, CI, or on demand).
+  described in report 15 §5, and decide where it runs (gate, CI, or on demand).

@@ -9,6 +9,7 @@ import '../api/api_error.dart';
 import '../api/challenge_models.dart';
 import '../api/growth_models.dart';
 import '../providers.dart';
+import '../services/daylight.dart';
 import '../services/location_service.dart';
 import '../services/share_helper.dart';
 import '../theme.dart';
@@ -90,6 +91,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     } else {
       await _discard();
     }
+  }
+
+  /// Security plan §3: lighting warning. Advice, not a block: the player decides.
+  Future<bool> _confirmLowLight() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: OsirisTheme.surface,
+        title: const Text("It's dark out"),
+        content: const Text('Run on lit routes you know, wear something bright or reflective, '
+            'and tell someone your route and when you expect to be back.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('NOT NOW')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('START ANYWAY')),
+        ],
+      ),
+    );
+    return go == true;
   }
 
   Future<void> _confirmDiscard() async {
@@ -200,6 +219,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _snack('Still finding your location. Try again in a moment.', OsirisTheme.secondary);
       return;
     }
+    if (Daylight.isDark(DateTime.now(), _currentPos!.latitude, _currentPos!.longitude) && !await _confirmLowLight()) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     final api = ref.read(apiClientProvider);
     final now = DateTime.now().toUtc();
