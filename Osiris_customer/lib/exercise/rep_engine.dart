@@ -92,9 +92,14 @@ class RepEngine {
 
   RepEngine(this.spec, this.catalog);
 
-  static const double _smoothing = 0.5;
+  // Smoothing is a time constant, not a per-frame weight, so a 5 fps phone and a 30 fps phone
+  // see the same lag (a per-frame weight averaged the peak away at low frame rates).
+  static const double _smoothingTauMs = 45;
   // Faster than any human joint: a single-frame jump this large is a tracking glitch.
   static const double _maxDegPerSecond = 1000;
+  // ...and only when the jump is large in absolute terms: landmark jitter divided by a short
+  // frame interval is also "fast", but it never moves a joint angle this far in one frame.
+  static const double _minGlitchJumpDeg = 60;
   static const double _maxInvisibleFraction = 0.3;
   static const double _maxFormBreakFraction = 0.2;
   static const double _maxBoneCv = 0.3;
@@ -102,10 +107,21 @@ class RepEngine {
   static const double _minLivenessStd = 0.001;
   // Out-of-zone wobble shorter than this does not end a hold.
   static const int _holdGraceMs = 600;
+  // Tracking noise: variation of the tracked limbs' lengths while the player is still at the
+  // top of a rep. Limbs are rigid and not rotating then, so the variation is the tracker's own
+  // jitter. Joint-angle noise is about 57.3 degrees x that coefficient of variation; telling a
+  // full rep from one stopping 15 degrees short at 3 sigma needs <= 5 degrees, i.e. CV <= 0.087.
+  // 0.08 leaves margin (accuracy evaluation: <= 0.069 in the supported envelope).
+  static const double _maxRestLimbCv = 0.08;
+  static const int _minRestSamples = 15;
 
   RepPhase _phase = RepPhase.waiting;
   String? _side;
   double? _smoothed;
+  final _restLimbs = {for (final side in ['left', 'right']) side: (_Stats(), _Stats())};
+  // Previous smoothed value and its time, to interpolate when the angle crossed a zone edge.
+  double? _prevV;
+  int? _prevMs;
   double? _lastRaw;
   int? _lastRawMs;
   int? _firstMs;
@@ -120,7 +136,7 @@ class RepEngine {
   int _repFormBreaks = 0;
   int _repWrongPosition = 0;
   int _repGlitches = 0;
-  double _peakSpread = 0;
+  final _peakSpreads = <double>[];
   final _bone1 = _Stats();
   final _bone2 = _Stats();
 
@@ -161,11 +177,14 @@ class RepEngine {
 
     if (_lastRaw != null && _lastRawMs != null && frame.tMs > _lastRawMs!) {
       final speed = (raw - _lastRaw!).abs() / ((frame.tMs - _lastRawMs!) / 1000.0);
-      if (speed > _maxDegPerSecond && _phase == RepPhase.moving) _repGlitches++;
+      final jump = (raw - _lastRaw!).abs();
+      if (jump >= _minGlitchJumpDeg && speed > _maxDegPerSecond && _phase == RepPhase.moving) _repGlitches++;
     }
+    final dtMs = _lastRawMs == null ? 0 : frame.tMs - _lastRawMs!;
     _lastRaw = raw;
     _lastRawMs = frame.tMs;
-    final v = _smoothed = _smoothed == null ? raw : _smoothed! + _smoothing * (raw - _smoothed!);
+    final alpha = 1 - math.exp(-math.max(dtMs, 0) / _smoothingTauMs);
+    final v = _smoothed = _smoothed == null ? raw : _smoothed! + alpha * (raw - _smoothed!);
 
     if (spec.isHold) {
       _hold(frame, v);
@@ -177,12 +196,13 @@ class RepEngine {
         _hint = 'Get into the start position';
         if (spec.rest.contains(v)) _phase = RepPhase.rest;
       case RepPhase.rest:
+        _sampleRestLimbs(frame);
         _hint = _valid == 0 ? 'Start when ready' : 'Keep going';
-        if (!spec.rest.contains(v)) _startRep(frame.tMs, v);
+        if (!spec.rest.contains(v)) _startRep(_crossingMs(frame.tMs, v), v);
       case RepPhase.moving:
         _accumulate(frame, v);
         if (spec.rest.contains(v)) {
-          newRep = _finishRep(frame.tMs);
+          newRep = _finishRep(_crossingMs(frame.tMs, v));
           _phase = RepPhase.rest;
         } else if (frame.tMs - _repStartMs > spec.maxRepS * 1500) {
           newRep = _record(frame.tMs, false, 'too_slow');
@@ -192,6 +212,8 @@ class RepEngine {
       case RepPhase.holding:
         break;
     }
+    _prevV = v;
+    _prevMs = frame.tMs;
     return _update(v, true, newRep);
   }
 
@@ -210,6 +232,17 @@ class RepEngine {
       final spread = _holdHipX.std + _holdHipY.std;
       if (_holdHipX.n >= 10 && spread < _minLivenessStd) reasons.add('static_pose');
     } else {
+      if (_unsteady && _valid > 0) {
+        // Reps counted before enough still frames were seen cannot be trusted either.
+        for (var i = 0; i < _reps.length; i++) {
+          final r = _reps[i];
+          if (r.valid) {
+            _reps[i] = RepResult(index: r.index, startMs: r.startMs, durationMs: r.durationMs,
+                peakValue: r.peakValue, valid: false, reason: 'unsteady_tracking');
+          }
+        }
+        _valid = 0;
+      }
       for (final r in _reps) {
         if (!r.valid && r.reason != null) reasons.add(r.reason!);
       }
@@ -230,6 +263,7 @@ class RepEngine {
     // Rep-level reasons on rejected reps are evidence, not a session failure on their own.
     final repLevel = {
       'too_fast', 'too_slow', 'form_break', 'wrong_position', 'low_visibility', 'tracking_glitch', 'partial_range',
+      'unsteady_tracking',
     };
     final soft = unique.where((r) => !repLevel.contains(r)).isNotEmpty;
     final verdict = hard ? 'rejected' : (soft ? 'review' : 'verified');
@@ -298,6 +332,41 @@ class RepEngine {
 
   // ── reps ─────────────────────────────────────────────────────────────
 
+  void _sampleRestLimbs(PoseFrame f) {
+    final j = spec.joints;
+    for (final side in _restLimbs.keys) {
+      final a = f.get(side, j[0]), b = f.get(side, j[1]), c = f.get(side, j[2]);
+      final minLik = catalog.minLikelihood;
+      if (a == null || b == null || c == null) continue;
+      if (a.likelihood < minLik || b.likelihood < minLik || c.likelihood < minLik) continue;
+      final (s1, s2) = _restLimbs[side]!;
+      s1.add(a.distanceTo(b));
+      s2.add(b.distanceTo(c));
+    }
+  }
+
+  /// True once enough still frames show the tracker is too noisy to judge reps. Exercises that
+  /// read the better-tracked side are bounded by the steadier side; exercises that read both sides
+  /// (lunges, high knees, jumping jacks) by the noisier one, since its errors reach the metric too.
+  bool get _unsteady {
+    final cvs = [
+      for (final (s1, s2) in _restLimbs.values)
+        if (s1.n >= _minRestSamples) (s1.cv + s2.cv) / 2,
+    ];
+    if (cvs.isEmpty) return false;
+    return (spec.sides == 'best' ? cvs.reduce(math.min) : cvs.reduce(math.max)) > _maxRestLimbCv;
+  }
+
+  /// When the angle crossed the rest-zone edge, interpolated between the previous frame and
+  /// this one. Rep durations then do not depend on where frames happen to fall: at 7 fps the
+  /// frame grid alone would shift a rep's measured length by up to 140 ms.
+  int _crossingMs(int tMs, double v) {
+    final pv = _prevV, pt = _prevMs;
+    if (pv == null || pt == null || tMs <= pt || v == pv) return tMs;
+    final f = ((spec.rest.threshold - pv) / (v - pv)).clamp(0.0, 1.0);
+    return pt + ((tMs - pt) * f).round();
+  }
+
   void _startRep(int tMs, double v) {
     _phase = RepPhase.moving;
     _repStartMs = tMs;
@@ -308,7 +377,7 @@ class RepEngine {
     _repFormBreaks = 0;
     _repWrongPosition = 0;
     _repGlitches = 0;
-    _peakSpread = 0;
+    _peakSpreads.clear();
     _bone1.reset();
     _bone2.reset();
   }
@@ -325,7 +394,8 @@ class RepEngine {
     for (final rule in spec.form) {
       if (rule.type == 'orientation') continue;
       if (rule.type == 'ankle_spread') {
-        if (atPeak) _peakSpread = math.max(_peakSpread, _ankleSpread(f) ?? 0);
+        final spread = atPeak ? _ankleSpread(f) : null;
+        if (spread != null) _peakSpreads.add(spread);
       } else {
         final a = f.get(side, rule.joints[0]), b = f.get(side, rule.joints[1]), c = f.get(side, rule.joints[2]);
         if (a != null && b != null && c != null && angleDeg(a, b, c) < rule.min) _repFormBreaks++;
@@ -362,12 +432,23 @@ class RepEngine {
     return true;
   }
 
+  /// Ankle distance in torso lengths (shoulder midpoint to hip midpoint). The torso is the
+  /// longest, steadiest segment a front camera sees; hip width is short and jitters.
   double? _ankleSpread(PoseFrame f) {
     final la = f.get('left', 'ankle'), ra = f.get('right', 'ankle');
+    final ls = f.get('left', 'shoulder'), rs = f.get('right', 'shoulder');
     final lh = f.get('left', 'hip'), rh = f.get('right', 'hip');
-    if (la == null || ra == null || lh == null || rh == null) return null;
-    final hips = lh.distanceTo(rh);
-    return hips > 0 ? la.distanceTo(ra) / hips : null;
+    if (la == null || ra == null || ls == null || rs == null || lh == null || rh == null) return null;
+    final torso = Landmark((ls.x + rs.x) / 2, (ls.y + rs.y) / 2, 1).distanceTo(Landmark((lh.x + rh.x) / 2, (lh.y + rh.y) / 2, 1));
+    return torso > 0 ? la.distanceTo(ra) / torso : null;
+  }
+
+  /// Median, so one noisy frame at the top of a rep can neither pass nor fail it.
+  static double _median(List<double> xs) {
+    if (xs.isEmpty) return 0;
+    final s = [...xs]..sort();
+    final m = s.length ~/ 2;
+    return s.length.isOdd ? s[m] : (s[m - 1] + s[m]) / 2;
   }
 
   RepResult? _finishRep(int tMs) {
@@ -381,7 +462,9 @@ class RepEngine {
       return _record(tMs, false, 'partial_range');
     }
     String? reason;
-    if (_repFrames > 0 && _repInvisible / _repFrames > _maxInvisibleFraction) {
+    if (_unsteady) {
+      reason = 'unsteady_tracking';
+    } else if (_repFrames > 0 && _repInvisible / _repFrames > _maxInvisibleFraction) {
       reason = 'low_visibility';
     } else if (_repGlitches > 0 || (_bone1.n >= 3 && (_bone1.cv > _maxBoneCv || _bone2.cv > _maxBoneCv))) {
       reason = 'tracking_glitch';
@@ -400,6 +483,7 @@ class RepEngine {
       'form_break' => spec.key == 'pushup' ? 'Keep your body in a straight line' : 'Watch your form',
       'low_visibility' || 'tracking_glitch' => 'Stay fully in view of the camera',
       'wrong_position' => 'Get into the position shown for this exercise',
+      'unsteady_tracking' => 'Tracking is unsteady. Move closer or add light',
       _ => 'That rep did not count',
     };
     return _record(tMs, reason == null, reason);
@@ -408,7 +492,7 @@ class RepEngine {
   bool _formBroken() {
     for (final rule in spec.form) {
       if (rule.type == 'ankle_spread') {
-        if (_peakSpread < rule.min) return true;
+        if (_median(_peakSpreads) < rule.min) return true;
       }
     }
     final angleRules = spec.form.where((r) => r.type == 'angle').length;

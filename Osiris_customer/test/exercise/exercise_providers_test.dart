@@ -33,7 +33,7 @@ void main() {
     addTearDown(container.dispose);
     final catalog = await container.read(exerciseCatalogProvider.future);
     expect(catalog.exercises, hasLength(7));
-    expect(catalog.rulesVersion, 'exercise-rules-v1');
+    expect(catalog.rulesVersion, 'exercise-rules-v2');
   });
 
   test('without a local database a signed-in player sees an empty history, not an error', () async {

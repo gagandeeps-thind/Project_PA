@@ -20,6 +20,7 @@ String explainExerciseReason(String code) => switch (code) {
       'wrong_position' => 'Body position did not match the exercise',
       'low_visibility' => 'You were partly out of view',
       'tracking_glitch' => 'The camera lost track of you',
+      'unsteady_tracking' => 'Tracking was too unsteady to count. Move closer or add light',
       'partial_range' => 'Some reps were not full range',
       'no_valid_reps' => 'No reps counted',
       'low_valid_ratio' => 'Most reps did not count',

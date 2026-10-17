@@ -203,7 +203,7 @@ had only been tested at 30 fps.
   "Tests — Growth G4 …" and before "Crystal ledger reconciliation after suites":
   `- name: Tests — camera-verified exercises` / `run: python tests/test_exercise_sessions.py`.
   Verified locally on 2026-10-17 with CI's full sequence on a fresh database (all 14 suites, reconcile, drift).
-- [ ] customer: accuracy evaluation of the rep engine (false rejects / false accepts) across frame rate, landmark
+- [x] customer: accuracy evaluation of the rep engine (false rejects / false accepts) across frame rate, landmark
   noise, body size, camera roll and tempo, for all 7 exercises; fix what it finds
   - Acceptance: a committed evaluation test prints a per-exercise matrix and asserts budgets (genuine reps counted
     at >= 95% within supported conditions, cheat reps counted at 0%); the supported minimum frame rate is stated.

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osiris_customer/exercise/pose_frame.dart';
 import 'package:osiris_customer/exercise/rep_engine.dart';
@@ -32,7 +34,7 @@ List<PoseFrame> pushups(List<int> tempo, {double top = 170, double bottom = 80, 
 
 void main() {
   test('bundled catalog parses and lists every exercise', () {
-    expect(catalog.rulesVersion, 'exercise-rules-v1');
+    expect(catalog.rulesVersion, 'exercise-rules-v2');
     expect(catalog.exercises.map((e) => e.key),
         ['pushup', 'squat', 'lunge', 'situp', 'jumping_jack', 'high_knees', 'plank']);
     expect(catalog.sessionRules.hardReasons, contains('no_valid_reps'));
@@ -139,7 +141,8 @@ void main() {
     expect(good.verdict, 'verified', reason: '${good.reasons}');
     final folded = run('squat', squats(35, 90));
     expect(folded.repsValid, 0);
-    expect(folded.reasons, contains('form_break'));
+    // Rejected either by the hip angle (form) or because the torso is no longer upright (position).
+    expect(folded.reasons.toSet().intersection({'form_break', 'wrong_position'}), isNotEmpty);
   });
 
   test('alternating lunges count each leg', () {
@@ -233,6 +236,46 @@ void main() {
       final s = run('plank', frames);
       expect(s.holdS, 0);
       expect(s.reasons, contains('hold_too_short'));
+    });
+  });
+
+  group('frame rate and tracking noise (catalog v2)', () {
+    test('a tracker too unsteady to judge is refused with a reason, never counted', () {
+      // ~16 px of jitter on a 60 px forearm: a half rep and a full rep look alike.
+      final noise = Noise(31, px: 16);
+      final frames = cycles(humanTempo(10, 1600),
+          (p, _) => sideBody(torsoDeg: 190, elbow: swing(p, 170, 118), shoulder: 80, noise: noise));
+      final s = run('pushup', frames);
+      expect(s.repsValid, 0);
+      expect(s.reasons, contains('unsteady_tracking'));
+      expect(s.verdict, 'rejected');
+    });
+
+    test('steady tracking is never called unsteady', () {
+      final s = run('pushup', pushups(humanTempo(12, 1600)));
+      expect(s.reasons, isNot(contains('unsteady_tracking')));
+      expect(s.repsValid, 12);
+    });
+
+    test('high knees at 10 fps still count every lift (smoothing is per second, not per frame)', () {
+      final noise = Noise(32);
+      final frames = cycles(humanTempo(16, 600), (p, i) {
+        final lift = swing(p, 178, 95), knee = swing(p, 178, 90);
+        return i.isEven
+            ? sideBody(hip: lift, knee: knee, farHip: 178, farKnee: 178, noise: noise)
+            : sideBody(hip: 178, knee: 178, farHip: lift, farKnee: knee, noise: noise);
+      }, fps: 10, pauseMs: 60);
+      expect(run('high_knees', frames).repsValid, 16);
+    });
+
+    test('rep durations are interpolated between frames, not snapped to the frame grid', () {
+      // Identical 1.5 s cycles at 7 fps (143 ms frames): snapped durations would jump by a frame.
+      final frames = cycles(List.filled(6, 1500),
+          (p, _) => sideBody(torsoDeg: 190, elbow: swing(p, 170, 80), shoulder: 80), fps: 7, pauseMs: 400);
+      final durations = run('pushup', frames).validRepDurationsS;
+      expect(durations, hasLength(6));
+      final spread = durations.reduce(math.max) - durations.reduce(math.min);
+      expect(spread, lessThan(0.06), reason: '$durations');
     });
   });
 

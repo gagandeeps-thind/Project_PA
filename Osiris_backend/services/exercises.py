@@ -20,7 +20,12 @@ from dataclasses import dataclass
 from statistics import mean, pstdev
 from typing import Any, Iterable, Sequence
 
-RULES_VERSION = "exercise-rules-v1"
+RULES_VERSION = "exercise-rules-v2"
+# Versions whose sets the server still accepts. The server-side checks (tempo bounds, rate,
+# totals) are unchanged since v1; v2 only changed device-side thresholds. A set recorded
+# offline before the app fetched v2 is therefore still judged fairly. Drop a version from this
+# list once a change makes its sets incomparable.
+ACCEPTED_RULES_VERSIONS = frozenset({"exercise-rules-v1", RULES_VERSION})
 
 # Device-side landmark likelihood below which a joint counts as not visible.
 MIN_LANDMARK_LIKELIHOOD = 0.5
@@ -28,7 +33,14 @@ MIN_LANDMARK_LIKELIHOOD = 0.5
 # Joint triples are (a, vertex, c); the engine measures the angle at the vertex in degrees.
 # Form rules of type "orientation" bound a body segment's tilt from the horizontal or vertical
 # axis, so the movement must happen in the right position: elbow curls while standing are not
-# push-ups, and standing straight is not a plank.
+# push-ups, and standing straight is not a plank. Each limit sits about midway between the
+# genuine posture's largest tilt and the nearest cheat posture, leaving room for a phone
+# propped up to 15 degrees off level (v2; v1 limits failed genuine squats at 12 degrees).
+# "min_pose_fps" is the slowest pose stream the engine counts reliably for the exercise
+# (Osiris_customer/test/exercise/accuracy_eval_test.dart); below it the app warns the player.
+# "ankle_spread" is the ankle distance in torso lengths (shoulder midpoint to hip midpoint),
+# taken as the median over the rep's peak frames (v2; v1 used the max over hip widths, which
+# jitter pushed over the limit for arms-only jumping jacks).
 # Names follow ML Kit / BlazePose landmark names without the side prefix; the engine uses
 # the side the camera sees best, or both sides for front-facing exercises.
 CATALOG: tuple[dict[str, Any], ...] = (
@@ -43,9 +55,10 @@ CATALOG: tuple[dict[str, Any], ...] = (
         "peak": {"below": 100.0},
         "form": [
             {"code": "body_line", "joints": ["shoulder", "hip", "ankle"], "min": 145.0},
-            {"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "horizontal", "max_deg": 40.0},
+            {"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "horizontal", "max_deg": 50.0},
         ],
         "min_rep_s": 0.6, "max_rep_s": 8.0, "max_reps_per_min": 60,
+        "min_pose_fps": 5,
         "xp_per_rep": 1, "daily_xp_cap": 40,
     },
     {
@@ -59,9 +72,10 @@ CATALOG: tuple[dict[str, Any], ...] = (
         "peak": {"below": 110.0},
         "form": [
             {"code": "torso_upright", "joints": ["shoulder", "hip", "knee"], "min": 45.0},
-            {"code": "body_position", "type": "orientation", "joints": ["knee", "ankle"], "axis": "vertical", "max_deg": 50.0},
+            {"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 65.0},
         ],
         "min_rep_s": 0.8, "max_rep_s": 10.0, "max_reps_per_min": 50,
+        "min_pose_fps": 5,
         "xp_per_rep": 1, "daily_xp_cap": 40,
     },
     {
@@ -73,8 +87,9 @@ CATALOG: tuple[dict[str, Any], ...] = (
         "metric": {"type": "angle", "joints": ["hip", "knee", "ankle"], "sides": "min"},
         "rest": {"above": 150.0},
         "peak": {"below": 115.0},
-        "form": [{"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 35.0}],
+        "form": [{"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 45.0}],
         "min_rep_s": 0.9, "max_rep_s": 10.0, "max_reps_per_min": 40,
+        "min_pose_fps": 5,
         "xp_per_rep": 1, "daily_xp_cap": 30,
     },
     {
@@ -86,8 +101,9 @@ CATALOG: tuple[dict[str, Any], ...] = (
         "metric": {"type": "angle", "joints": ["shoulder", "hip", "knee"], "sides": "best"},
         "rest": {"above": 115.0},
         "peak": {"below": 75.0},
-        "form": [{"code": "body_position", "type": "orientation", "joints": ["hip", "ankle"], "axis": "horizontal", "max_deg": 35.0}],
+        "form": [{"code": "body_position", "type": "orientation", "joints": ["hip", "ankle"], "axis": "horizontal", "max_deg": 45.0}],
         "min_rep_s": 0.8, "max_rep_s": 10.0, "max_reps_per_min": 50,
+        "min_pose_fps": 5,
         "xp_per_rep": 1, "daily_xp_cap": 30,
     },
     {
@@ -100,10 +116,11 @@ CATALOG: tuple[dict[str, Any], ...] = (
         "rest": {"below": 50.0},
         "peak": {"above": 130.0},
         "form": [
-            {"code": "legs_apart", "type": "ankle_spread", "min": 1.3, "at": "peak"},
-            {"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 30.0},
+            {"code": "legs_apart", "type": "ankle_spread", "min": 0.7, "at": "peak"},
+            {"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 45.0},
         ],
         "min_rep_s": 0.4, "max_rep_s": 4.0, "max_reps_per_min": 100,
+        "min_pose_fps": 5,
         "xp_per_rep": 1, "daily_xp_cap": 30,
     },
     {
@@ -115,8 +132,9 @@ CATALOG: tuple[dict[str, Any], ...] = (
         "metric": {"type": "angle", "joints": ["shoulder", "hip", "knee"], "sides": "min"},
         "rest": {"above": 155.0},
         "peak": {"below": 115.0},
-        "form": [{"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 35.0}],
+        "form": [{"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "vertical", "max_deg": 45.0}],
         "min_rep_s": 0.25, "max_rep_s": 3.0, "max_reps_per_min": 180,
+        "min_pose_fps": 7,
         "xp_per_rep": 1, "daily_xp_cap": 25,
     },
     {
@@ -129,8 +147,9 @@ CATALOG: tuple[dict[str, Any], ...] = (
         # The hold counts while the body line is straight; entering from outside it is required.
         "rest": {"below": 140.0},
         "peak": {"above": 160.0},
-        "form": [{"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "horizontal", "max_deg": 40.0}],
+        "form": [{"code": "body_position", "type": "orientation", "joints": ["shoulder", "hip"], "axis": "horizontal", "max_deg": 50.0}],
         "min_rep_s": 0.0, "max_rep_s": 0.0, "max_reps_per_min": 0,
+        "min_pose_fps": 5,
         "max_hold_s": 600, "xp_per_10s": 1, "daily_xp_cap": 30,
     },
 )
@@ -142,6 +161,7 @@ BY_KEY: dict[str, dict[str, Any]] = {e["key"]: e for e in CATALOG}
 REASON_CODES = frozenset({
     # rep level (device)
     "too_fast", "too_slow", "form_break", "wrong_position", "low_visibility", "tracking_glitch", "partial_range",
+    "unsteady_tracking",
     # session level (device and server)
     "no_valid_reps", "low_valid_ratio", "replay_suspected", "rate_implausible", "no_entry_transition",
     "static_pose", "hold_too_short",
@@ -216,7 +236,7 @@ def evaluate(claim: SessionClaim) -> Decision:
     that no human could have produced under the catalog's tempo rules."""
     ex = BY_KEY[claim.exercise_key]
     reasons: list[str] = [r for r in claim.client_reasons if r in REASON_CODES]
-    if claim.rules_version != RULES_VERSION:
+    if claim.rules_version not in ACCEPTED_RULES_VERSIONS:
         reasons.append("rules_version_mismatch")
     if claim.client_verdict == "rejected":
         reasons.append("client_rejected")

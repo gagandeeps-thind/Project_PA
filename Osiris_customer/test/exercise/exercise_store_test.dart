@@ -175,14 +175,14 @@ void main() {
   test('catalog: bundled first, then the cached server copy', () async {
     final bundled = File('assets/exercise_catalog.json').readAsStringSync();
     final serverCopy = jsonDecode(bundled) as Map<String, dynamic>;
-    serverCopy['rules_version'] = 'exercise-rules-v2';
+    serverCopy['rules_version'] = 'exercise-rules-v3';
     final repo = CatalogRepository(store: store, loadBundled: () async => bundled, fetch: () async => serverCopy);
-    expect((await repo.load()).rulesVersion, 'exercise-rules-v1');
-    expect((await repo.refresh())?.rulesVersion, 'exercise-rules-v2');
     expect((await repo.load()).rulesVersion, 'exercise-rules-v2');
+    expect((await repo.refresh())?.rulesVersion, 'exercise-rules-v3');
+    expect((await repo.load()).rulesVersion, 'exercise-rules-v3');
     final offline = CatalogRepository(store: store, loadBundled: () async => bundled, fetch: () async => throw _dioError(null));
     expect(await offline.refresh(), isNull);
-    expect((await offline.load()).rulesVersion, 'exercise-rules-v2');
+    expect((await offline.load()).rulesVersion, 'exercise-rules-v3');
   });
 
   test('saving 20 sets and reading history stays fast', () async {

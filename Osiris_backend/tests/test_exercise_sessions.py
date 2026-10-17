@@ -149,6 +149,16 @@ def test_implausible_sets_are_refused() -> None:
     print("PASS implausible sets are refused")
 
 
+def test_previous_rules_version_still_accepted() -> None:
+    # A set recorded offline before the app fetched the current catalog stays fair game:
+    # the server-side checks have not changed since v1.
+    headers = _register("oldrules")
+    r = client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=8, rules_version="exercise-rules-v1"))
+    assert r.status_code == 201 and r.json()["status"] == "verified" and r.json()["xp_awarded"] == 8, r.text
+    assert rules.RULES_VERSION == "exercise-rules-v2" and "exercise-rules-v1" in rules.ACCEPTED_RULES_VERSIONS
+    print("PASS previous rules version still accepted")
+
+
 def test_rate_limit_on_reps_per_minute() -> None:
     decision = rules.evaluate(rules.SessionClaim(
         exercise_key="pushup", rules_version=rules.RULES_VERSION, duration_s=30.0, reps_attempted=40,
@@ -352,6 +362,7 @@ if __name__ == "__main__":
         test_catalog_served_and_bundled_copy_in_sync()
         test_verified_set_awards_xp_once()
         test_implausible_sets_are_refused()
+        test_previous_rules_version_still_accepted()
         test_rate_limit_on_reps_per_minute()
         test_bad_input_is_422()
         test_daily_caps_per_exercise_and_total()

@@ -19,6 +19,7 @@ const REASONS: Record<string, string> = {
   wrong_position: "Wrong body position",
   low_visibility: "Partly out of view",
   tracking_glitch: "Tracking glitch",
+  unsteady_tracking: "Unsteady tracking",
   partial_range: "Partial range",
 };
 
