@@ -191,3 +191,27 @@ for review had no reviewer.
   Chromium; fixed the database-failure path and the review-queue N+1.
 - [ ] [human] tooling: adopt a browser E2E suite (Playwright) for the admin console and the Flutter web smoke test
   described in report 15 §5, and decide where it runs (gate, CI, or on demand).
+
+## Sprint 3: rep-counting accuracy before device QA (2026-10-17)
+Goal: know, with numbers, where the rep engine is right and wrong before people test it, and make device QA
+produce reusable labeled data. Input: report 14 measured pose detection at 5.1 fps on the emulator; the engine
+had only been tested at 30 fps.
+
+- [x] gate: run `tests/test_exercise_sessions.py` in `.claude/hooks/gate.sh` (done 2026-10-17)
+- [ ] [human] ci: add the exercise suite to the CI workflow. The PLAN item above lost its `[human]` tag on master, but
+  `guard.sh` still blocks agents from committing CI files, so an agent cannot finish it. Add this step after
+  "Tests — Growth G4 …" and before "Crystal ledger reconciliation after suites":
+  `- name: Tests — camera-verified exercises` / `run: python tests/test_exercise_sessions.py`.
+  Verified locally on 2026-10-17 with CI's full sequence on a fresh database (all 14 suites, reconcile, drift).
+- [ ] customer: accuracy evaluation of the rep engine (false rejects / false accepts) across frame rate, landmark
+  noise, body size, camera roll and tempo, for all 7 exercises; fix what it finds
+  - Acceptance: a committed evaluation test prints a per-exercise matrix and asserts budgets (genuine reps counted
+    at >= 95% within supported conditions, cheat reps counted at 0%); the supported minimum frame rate is stated.
+- [ ] customer: tell the player when the phone is too slow to count reliably
+  - Acceptance: below the supported pose frame rate the camera screen says so instead of silently missing reps;
+    widget test with a slow fake pose stream.
+- [ ] customer: landmark recording and replay for device QA (debug builds only)
+  - Acceptance: a debug-only switch on the camera screen saves the landmark stream (no images) with the tester's
+    true rep count to a local JSON file; a replay test runs every recording in `test/exercise/recordings/` through
+    the engine and compares with the label; format and retrieval documented; release builds cannot record.
+- [ ] audit: sprint 3 report (accuracy matrix, fixes, how to record and replay)
