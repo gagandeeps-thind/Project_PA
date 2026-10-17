@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
@@ -331,6 +334,11 @@ class ExerciseConsentNotifier extends AsyncNotifier<bool> {
     ref.invalidate(exerciseHistoryProvider);
   }
 }
+
+/// Where QA landmark recordings are written (debug builds only; see pose_recording.dart).
+final poseRecordingDirProvider = FutureProvider<Directory>(
+  (ref) async => Directory(p.join(await getDatabasesPath(), 'pose_recordings')),
+);
 
 /// A fresh pose source per camera session (ML Kit on device; scripted in tests).
 final poseSourceFactoryProvider = Provider<PoseSource Function()>((ref) => () => MlKitPoseSource());

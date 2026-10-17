@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../exercise/exercise_catalog.dart';
 import '../exercise/frame_rate_meter.dart';
+import '../exercise/pose_recording.dart';
 import '../exercise/pose_frame.dart';
 import '../exercise/pose_source.dart';
 import '../exercise/rep_engine.dart';
@@ -64,6 +65,9 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
   var _meter = FrameRateMeter();
   late final _slowDetector = SlowTrackingDetector(widget.spec.minPoseFps);
   final _slowFps = ValueNotifier<double?>(null);
+  // QA only (debug builds): record this set's landmarks with the tester's label.
+  bool _recordLandmarks = false;
+  PoseRecorder? _recorder;
 
   bool get _recording => _engine != null;
 
@@ -140,6 +144,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     }
     final engine = _engine;
     if (engine == null) return;
+    _recorder?.add(f);
     final u = engine.addFrame(f);
     final prev = _update.value;
     // Rebuild the HUD only when something the player sees changed, not on every frame.
@@ -157,6 +162,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     if (catalog == null) return;
     setState(() {
       _engine = RepEngine(widget.spec, catalog);
+      _recorder = kPoseRecordingAllowed && _recordLandmarks ? PoseRecorder() : null;
       _startedAt = DateTime.now().toUtc();
       _update.value = null;
     });
@@ -167,6 +173,9 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     if (engine == null || _saving) return;
     final summary = engine.finish();
     final stats = _source?.stats.toString();
+    final recorder = _recorder;
+    _recorder = null;
+    if (recorder != null) await _saveRecording(recorder, summary.rulesVersion);
     setState(() {
       _engine = null;
       _saving = true;
@@ -187,13 +196,75 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// Asks the tester how many reps should have counted (or seconds held), then saves the
+  /// landmark stream with that label. Skipping saves nothing: unlabeled data cannot test anything.
+  Future<void> _saveRecording(PoseRecorder recorder, String rulesVersion) async {
+    final spec = widget.spec;
+    final ctrl = TextEditingController();
+    final label = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('QA: label this recording'),
+        content: TextField(
+          key: const Key('pose-recording-label'),
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: spec.isHold ? 'Seconds of good plank hold' : 'Reps that should count',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('DISCARD')),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('SAVE')),
+        ],
+      ),
+    );
+    final value = num.tryParse(label ?? '');
+    if (value == null || !mounted) return;
+    try {
+      final dir = await ref.read(poseRecordingDirProvider.future);
+      final file = await saveRecording(
+        recorder.finish(
+          exerciseKey: spec.key,
+          rulesVersion: rulesVersion,
+          labelReps: spec.isHold ? null : value.round(),
+          labelHoldS: spec.isHold ? value.toDouble() : null,
+        ),
+        dir,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Landmarks saved: ${file.path}')));
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Recording not saved: $e'), backgroundColor: OsirisTheme.error));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final spec = widget.spec;
     final ready = ref.watch(exerciseCatalogProvider).hasValue;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: Text(spec.name), backgroundColor: Colors.black),
+      appBar: AppBar(
+        title: Text(spec.name),
+        backgroundColor: Colors.black,
+        actions: [
+          if (kPoseRecordingAllowed)
+            IconButton(
+              key: const Key('pose-recording-toggle'),
+              tooltip: _recordLandmarks ? 'QA: stop recording landmarks' : 'QA: record landmarks',
+              icon: Icon(_recordLandmarks ? Icons.fiber_manual_record : Icons.fiber_manual_record_outlined,
+                  color: _recordLandmarks ? Colors.redAccent : Colors.white54),
+              onPressed: _recording ? null : () => setState(() => _recordLandmarks = !_recordLandmarks),
+            ),
+        ],
+      ),
       body: Stack(children: [
         Positioned.fill(child: _cameraLayer()),
         Positioned(

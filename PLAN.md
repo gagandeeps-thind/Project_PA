@@ -210,7 +210,7 @@ had only been tested at 30 fps.
 - [x] customer: tell the player when the phone is too slow to count reliably
   - Acceptance: below the supported pose frame rate the camera screen says so instead of silently missing reps;
     widget test with a slow fake pose stream.
-- [ ] customer: landmark recording and replay for device QA (debug builds only)
+- [x] customer: landmark recording and replay for device QA (debug builds only)
   - Acceptance: a debug-only switch on the camera screen saves the landmark stream (no images) with the tester's
     true rep count to a local JSON file; a replay test runs every recording in `test/exercise/recordings/` through
     the engine and compares with the label; format and retrieval documented; release builds cannot record.

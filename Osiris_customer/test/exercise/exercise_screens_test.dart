@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osiris_customer/exercise/exercise_store.dart';
 import 'package:osiris_customer/exercise/pose_frame.dart';
+import 'package:osiris_customer/exercise/pose_recording.dart';
 import 'package:osiris_customer/exercise/pose_source.dart';
 import 'package:osiris_customer/exercise/rep_engine.dart';
 import 'package:osiris_customer/providers.dart';
@@ -125,6 +128,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget);
     expect(source.stopped, isTrue, reason: 'the camera is released when the screen closes');
+  });
+
+  testWidgets('QA recording: a labeled landmark file is saved after the set (debug builds)', (tester) async {
+    final dir = await tester.runAsync(() => Directory.systemTemp.createTemp('pose_rec_'));
+    addTearDown(() => dir!.deleteSync(recursive: true));
+    final source = FakePoseSource();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        exerciseCatalogProvider.overrideWith((ref) async => catalog),
+        poseSourceFactoryProvider.overrideWithValue(() => source),
+        exerciseRecorderProvider.overrideWithValue((s, _) async => const SetOutcome(uploaded: false, xpAwarded: 0)),
+        poseRecordingDirProvider.overrideWith((ref) async => dir!),
+      ],
+      child: MaterialApp(home: ExerciseCameraScreen(spec: catalog.byKey('pushup')!)),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pose-recording-toggle')));
+    await tester.pump();
+    await tester.tap(find.text('START'));
+    await tester.pump();
+    final noise = Noise(61);
+    final frames = cycles(humanTempo(5, 1600),
+        (p, _) => sideBody(torsoDeg: 190, elbow: swing(p, 170, 80), shoulder: 80, noise: noise));
+    source.emitAll(frames);
+    await tester.pump();
+    await tester.tap(find.text('FINISH'));
+    await tester.pumpAndSettle();
+    expect(find.text('QA: label this recording'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('pose-recording-label')), '5');
+    await tester.tap(find.text('SAVE'));
+    // The save runs in the widget's fake-async zone: let real file I/O progress between pumps,
+    // until the file holds complete JSON.
+    bool written() {
+      final fs = dir!.listSync().whereType<File>();
+      if (fs.isEmpty) return false;
+      try {
+        jsonDecode(fs.first.readAsStringSync());
+        return true;
+      } on FormatException {
+        return false;
+      }
+    }
+
+    for (var i = 0; i < 100 && !written(); i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    final files = dir!.listSync().whereType<File>().toList();
+    expect(files, hasLength(1));
+    expect(files.single.path, contains('pushup_'));
+    final saved = PoseRecording.fromJson(jsonDecode(files.single.readAsStringSync()) as Map<String, dynamic>);
+    expect(saved.labelReps, 5);
+    expect(saved.source, 'device');
+    expect(saved.frames, hasLength(frames.length));
+    for (var i = 0; i < 50 && find.text('Verified').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Landmarks saved:'), findsOneWidget);
+    expect(find.text('Verified'), findsOneWidget, reason: 'the normal result follows the label step');
   });
 
   group('slow phones', () {
