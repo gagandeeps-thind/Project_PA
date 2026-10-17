@@ -1,9 +1,34 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+
+/// Resolves the API origin identically for Android and iOS.
+///
+/// Release builds must be given `--dart-define=API_BASE_URL=https://...`; a missing or
+/// non-https value fails at start-up instead of shipping a build that talks to a dev host.
+/// Debug and profile builds fall back to the host that reaches the dev machine from the
+/// platform's emulator: 10.0.2.2 on Android, 127.0.0.1 on the iOS simulator.
+String resolveApiBaseUrl({
+  required String configured,
+  required TargetPlatform platform,
+  required bool release,
+}) {
+  if (release) {
+    if (!configured.startsWith('https://')) {
+      throw StateError('Release builds require --dart-define=API_BASE_URL=https://<host>');
+    }
+    return configured;
+  }
+  if (configured.isNotEmpty) return configured;
+  return platform == TargetPlatform.android ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+}
 
 /// Self-contained Dio-based API client for the Osiris backend.
-/// Connects to the local dev server at http://10.0.2.2:8000 (Android emulator).
 class ApiClient {
-  static const String _baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000');
+  static final String _baseUrl = resolveApiBaseUrl(
+    configured: const String.fromEnvironment('API_BASE_URL'),
+    platform: defaultTargetPlatform,
+    release: kReleaseMode,
+  );
 
   final Dio _dio;
   String? _token;
