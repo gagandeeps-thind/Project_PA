@@ -214,4 +214,7 @@ had only been tested at 30 fps.
   - Acceptance: a debug-only switch on the camera screen saves the landmark stream (no images) with the tester's
     true rep count to a local JSON file; a replay test runs every recording in `test/exercise/recordings/` through
     the engine and compares with the label; format and retrieval documented; release builds cannot record.
-- [ ] audit: sprint 3 report (accuracy matrix, fixes, how to record and replay)
+- [x] audit: sprint 3 report (accuracy matrix, fixes, how to record and replay): report 16
+- [ ] [human] device QA with recordings: record real sets on Android and iPhone (both good and deliberately
+  bad sets, labeled), commit them with the person's consent to `Osiris_customer/test/exercise/recordings/`, and
+  re-tune thresholds if any fail. Report 16 §1: the accuracy envelope is synthetic until then.
