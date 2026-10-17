@@ -33,11 +33,11 @@ setting the repo up for autonomous agent work (2026-10-12).
 - [x] backend: resolve the OpenAPI contract drift
   - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.
   - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
-    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contains only intended changes.
+    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contntended changes.
 
 - [ ] [human] ci: add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
-  - Acceptance: the CI job runs the suite and it passes.
+  - Acceptance: the CI josuite and it passes.
 
 - [ ] [human] ci: add jobs for `Osiris_admin_web` (`npm run build`) and `Osiris_customer` (`flutter analyze`, `flutter test`)
   - Today CI covers the backend only. Both commands pass locally.
@@ -129,8 +129,7 @@ setting the repo up for autonomous agent work (2026-10-12).
 
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
-    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
-  - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
+    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL be  - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
 
 - [ ] [human] ci: make the mypy step blocking
   - Since the typed-models refactor the CI mypy command reports zero errors, but the CI workflow still marks the
@@ -163,9 +162,9 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [x] customer: local SQLite store (catalog cache, sessions, reps) and an upload queue
   - Acceptance: sets survive restarts, upload once the network returns, never duplicate XP; tested with sqflite ffi.
 - [x] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
-  - Acceptance: frames are dropped while inference is busy (no queue build-up); Android CAMERA permission, iOS
+  - Acceptance: frames are dropped while inference is busy (no qu ); Android CAMERA permission, iOS
     `NSCameraUsageDescription` and 15.5 deployment target; widget test drives the screen with a fake pose stream.
-- [ ] [human] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
+- [ ] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
   `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
 - [ ] [human] product: reconcile launch principle 1 in `Documentation/Enterprise/README.md` ("push-ups, squats, pose
   estimation ... are later product increments") with the camera exercise feature now built on request.

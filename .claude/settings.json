@@ -66,7 +66,7 @@
       "Edit(**/package-lock.json)",
       "Write(**/package-lock.json)",
       "Edit(**/pubspec.lock)",
-      "Write(**/pubspec.lock)",
+      "Write(**/pubspec.lock)"
     ]
   },
   "hooks": {
@@ -74,7 +74,10 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh\""
+          }
         ]
       }
     ],
@@ -82,14 +85,21 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\"" }
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\""
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.sh\"", "timeout": 600 }
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.sh\"",
+            "timeout": 600
+          }
         ]
       }
     ]
