@@ -24,6 +24,7 @@ This directory is the maintained startup-level source of truth for Osiris. Obsol
 | [12 Performance Test and Audit 2026-10-12](12_Performance_and_Audit_2026-10-12.md) | Device E2E results, API latency under load, release-build metrics, audit findings and fixes |
 | [13 Camera-Verified Exercises 2026-10-14](13_Exercise_Verification_Performance_and_Audit_2026-10-14.md) | On-device pose rep counting: design, genuineness checks, performance, audit |
 | [14 Device QA, Accessibility and Performance 2026-10-14](14_Device_QA_Accessibility_and_Performance_2026-10-14.md) | First device run of exercises, accessibility audit, low-light warning, release size and cold start |
+| [15 Production Release Plan 2026-10-17](15_Production_Release_Plan.md) | Hosting decision, security hardening before the release build, CI/CD and rollback, monitoring and maintenance, build status |
 
 ## Product north star
 
