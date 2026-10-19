@@ -12,13 +12,17 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
+# Sustained speed, measured over at least SPEED_WINDOW_SECONDS so GPS noise between 1 s fixes
+# does not fail an honest run; a single segment may reach MAX_SEGMENT_SPEED_KMH.
 MAX_SPEED_KMH = 25.0
+SPEED_WINDOW_SECONDS = 5.0
+MAX_SEGMENT_SPEED_KMH = 40.0
 MAX_POINT_GAP_SECONDS = 300.0
 MIN_POINTS = 3
 MIN_DURATION_SECONDS = 60.0
 MIN_DISTANCE_METERS = 100.0
 MAX_ACCEPTED_ACCURACY_METERS = 100.0
-RULES_VERSION = "run-rules-v1"
+RULES_VERSION = "run-rules-v2"
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,27 @@ def _distance_m(a: dict, b: dict) -> float:
     dlng = math.radians(b["lng"] - a["lng"])
     hav = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
     return 2 * radius * math.asin(min(1.0, math.sqrt(hav)))
+
+
+def _max_sustained_speed_kmh(timestamps: list[int], cumulative: list[float]) -> float:
+    """Highest average speed over any stretch of at least SPEED_WINDOW_SECONDS, ending at each
+    point and starting at the latest point that still makes the stretch that long. A route
+    shorter than the window is measured end to end."""
+    if len(timestamps) < 2:
+        return 0.0
+    window_ms = SPEED_WINDOW_SECONDS * 1000
+    total_ms = timestamps[-1] - timestamps[0]
+    if total_ms < window_ms:
+        return (cumulative[-1] - cumulative[0]) / (total_ms / 1000.0) * 3.6 if total_ms > 0 else 0.0
+    best = 0.0
+    start = 0
+    for end in range(1, len(timestamps)):
+        while start + 1 < end and timestamps[end] - timestamps[start + 1] >= window_ms:
+            start += 1
+        span_ms = timestamps[end] - timestamps[start]
+        if span_ms >= window_ms:
+            best = max(best, (cumulative[end] - cumulative[start]) / (span_ms / 1000.0) * 3.6)
+    return best
 
 
 def canonical_route_hash(points: Iterable[dict]) -> str:
@@ -62,19 +87,23 @@ def verify_route(points: list[dict]) -> VerificationResult:
         reasons.append("INSUFFICIENT_ROUTE_POINTS")
 
     distance_m = 0.0
-    max_speed_kmh = 0.0
+    max_segment_speed_kmh = 0.0
     max_gap_seconds = 0.0
     timestamps = [p["t_ms"] for p in normalized]
     if any(b <= a for a, b in zip(timestamps, timestamps[1:])):
         reasons.append("NON_MONOTONIC_TIMESTAMPS")
 
+    # cumulative[i]: path length from the first point to point i.
+    cumulative = [0.0]
     for previous, current in zip(normalized, normalized[1:]):
         segment_distance = _distance_m(previous, current)
         distance_m += segment_distance
+        cumulative.append(distance_m)
         gap_seconds = (current["t_ms"] - previous["t_ms"]) / 1000.0
         max_gap_seconds = max(max_gap_seconds, gap_seconds)
         if gap_seconds > 0:
-            max_speed_kmh = max(max_speed_kmh, segment_distance / gap_seconds * 3.6)
+            max_segment_speed_kmh = max(max_segment_speed_kmh, segment_distance / gap_seconds * 3.6)
+    max_speed_kmh = _max_sustained_speed_kmh(timestamps, cumulative)
 
     duration_seconds = 0.0
     if len(normalized) >= 2 and timestamps[-1] > timestamps[0]:
@@ -82,7 +111,7 @@ def verify_route(points: list[dict]) -> VerificationResult:
 
     accuracies = [p["accuracy_m"] for p in normalized if p["accuracy_m"] is not None]
     average_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0.0
-    if max_speed_kmh > MAX_SPEED_KMH:
+    if max_speed_kmh > MAX_SPEED_KMH or max_segment_speed_kmh > MAX_SEGMENT_SPEED_KMH:
         reasons.append("IMPOSSIBLE_SPEED")
     if max_gap_seconds > MAX_POINT_GAP_SECONDS:
         reasons.append("ROUTE_GAP_TOO_LARGE")
@@ -99,6 +128,7 @@ def verify_route(points: list[dict]) -> VerificationResult:
         "distance_m": round(distance_m, 2),
         "duration_seconds": round(duration_seconds, 2),
         "max_speed_kmh": round(max_speed_kmh, 2),
+        "max_segment_speed_kmh": round(max_segment_speed_kmh, 2),
         "max_gap_seconds": round(max_gap_seconds, 2),
         "average_accuracy_m": round(average_accuracy, 2),
     }

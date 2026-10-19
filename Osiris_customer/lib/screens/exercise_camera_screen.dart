@@ -6,6 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../exercise/exercise_catalog.dart';
+import '../exercise/frame_rate_meter.dart';
+import '../exercise/pose_recording.dart';
 import '../exercise/pose_frame.dart';
 import '../exercise/pose_source.dart';
 import '../exercise/rep_engine.dart';
@@ -20,6 +22,7 @@ String explainExerciseReason(String code) => switch (code) {
       'wrong_position' => 'Body position did not match the exercise',
       'low_visibility' => 'You were partly out of view',
       'tracking_glitch' => 'The camera lost track of you',
+      'unsteady_tracking' => 'Tracking was too unsteady to count. Move closer or add light',
       'partial_range' => 'Some reps were not full range',
       'no_valid_reps' => 'No reps counted',
       'low_valid_ratio' => 'Most reps did not count',
@@ -57,6 +60,14 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
 
   final _frame = ValueNotifier<PoseFrame?>(null);
   final _update = ValueNotifier<EngineUpdate?>(null);
+  // Pose frame rate, so a phone too slow to count this exercise says so (accuracy evaluation:
+  // below min_pose_fps reps are missed, never invented).
+  var _meter = FrameRateMeter();
+  late final _slowDetector = SlowTrackingDetector(widget.spec.minPoseFps);
+  final _slowFps = ValueNotifier<double?>(null);
+  // QA only (debug builds): record this set's landmarks with the tester's label.
+  bool _recordLandmarks = false;
+  PoseRecorder? _recorder;
 
   bool get _recording => _engine != null;
 
@@ -73,6 +84,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     _closeCamera();
     _frame.dispose();
     _update.dispose();
+    _slowFps.dispose();
     super.dispose();
   }
 
@@ -89,6 +101,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
   }
 
   Future<void> _openCamera() async {
+    _meter = FrameRateMeter(); // a reopened camera warms up again
     final source = ref.read(poseSourceFactoryProvider)();
     _source = source;
     _sub = source.frames.listen(_onFrame);
@@ -123,8 +136,15 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
 
   void _onFrame(PoseFrame f) {
     _frame.value = f;
+    _meter.add(f.tMs);
+    final fps = _meter.fps;
+    final slow = _slowDetector.update(fps) ? fps : null;
+    if ((slow == null) != (_slowFps.value == null) || (slow != null && slow.round() != _slowFps.value!.round())) {
+      _slowFps.value = slow;
+    }
     final engine = _engine;
     if (engine == null) return;
+    _recorder?.add(f);
     final u = engine.addFrame(f);
     final prev = _update.value;
     // Rebuild the HUD only when something the player sees changed, not on every frame.
@@ -142,6 +162,7 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     if (catalog == null) return;
     setState(() {
       _engine = RepEngine(widget.spec, catalog);
+      _recorder = kPoseRecordingAllowed && _recordLandmarks ? PoseRecorder() : null;
       _startedAt = DateTime.now().toUtc();
       _update.value = null;
     });
@@ -152,6 +173,9 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     if (engine == null || _saving) return;
     final summary = engine.finish();
     final stats = _source?.stats.toString();
+    final recorder = _recorder;
+    _recorder = null;
+    if (recorder != null) await _saveRecording(recorder, summary.rulesVersion);
     setState(() {
       _engine = null;
       _saving = true;
@@ -172,13 +196,75 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// Asks the tester how many reps should have counted (or seconds held), then saves the
+  /// landmark stream with that label. Skipping saves nothing: unlabeled data cannot test anything.
+  Future<void> _saveRecording(PoseRecorder recorder, String rulesVersion) async {
+    final spec = widget.spec;
+    final ctrl = TextEditingController();
+    final label = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('QA: label this recording'),
+        content: TextField(
+          key: const Key('pose-recording-label'),
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: spec.isHold ? 'Seconds of good plank hold' : 'Reps that should count',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('DISCARD')),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('SAVE')),
+        ],
+      ),
+    );
+    final value = num.tryParse(label ?? '');
+    if (value == null || !mounted) return;
+    try {
+      final dir = await ref.read(poseRecordingDirProvider.future);
+      final file = await saveRecording(
+        recorder.finish(
+          exerciseKey: spec.key,
+          rulesVersion: rulesVersion,
+          labelReps: spec.isHold ? null : value.round(),
+          labelHoldS: spec.isHold ? value.toDouble() : null,
+        ),
+        dir,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Landmarks saved: ${file.path}')));
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Recording not saved: $e'), backgroundColor: OsirisTheme.error));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final spec = widget.spec;
     final ready = ref.watch(exerciseCatalogProvider).hasValue;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: Text(spec.name), backgroundColor: Colors.black),
+      appBar: AppBar(
+        title: Text(spec.name),
+        backgroundColor: Colors.black,
+        actions: [
+          if (kPoseRecordingAllowed)
+            IconButton(
+              key: const Key('pose-recording-toggle'),
+              tooltip: _recordLandmarks ? 'QA: stop recording landmarks' : 'QA: record landmarks',
+              icon: Icon(_recordLandmarks ? Icons.fiber_manual_record : Icons.fiber_manual_record_outlined,
+                  color: _recordLandmarks ? Colors.redAccent : Colors.white54),
+              onPressed: _recording ? null : () => setState(() => _recordLandmarks = !_recordLandmarks),
+            ),
+        ],
+      ),
       body: Stack(children: [
         Positioned.fill(child: _cameraLayer()),
         Positioned(
@@ -187,7 +273,13 @@ class _ExerciseCameraScreenState extends ConsumerState<ExerciseCameraScreen> wit
           top: 12,
           child: ValueListenableBuilder<EngineUpdate?>(
             valueListenable: _update,
-            builder: (_, u, _) => _Hud(spec: spec, update: u, recording: _recording),
+            builder: (_, u, _) => Column(mainAxisSize: MainAxisSize.min, children: [
+              _Hud(spec: spec, update: u, recording: _recording),
+              ValueListenableBuilder<double?>(
+                valueListenable: _slowFps,
+                builder: (_, fps, _) => fps == null ? const SizedBox.shrink() : _SlowWarning(spec: spec, fps: fps),
+              ),
+            ]),
           ),
         ),
         Positioned(
@@ -271,6 +363,28 @@ class _Hud extends StatelessWidget {
   }
 }
 
+class _SlowWarning extends StatelessWidget {
+  final ExerciseSpec spec;
+  final double fps;
+
+  const _SlowWarning({required this.spec, required this.fps});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('exercise-slow-warning'),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: Colors.amber.shade900.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(12)),
+      child: Text(
+        'This phone is tracking ${fps.round()} frames a second; ${spec.name.toLowerCase()} needs '
+        '${spec.minPoseFps.round()}. Some reps may not count. More light or closing other apps can help.',
+        style: const TextStyle(color: Colors.white, fontSize: 13),
+      ),
+    );
+  }
+}
+
 class _ResultSheet extends StatelessWidget {
   final ExerciseSpec spec;
   final SessionSummary summary;
@@ -289,7 +403,7 @@ class _ResultSheet extends StatelessWidget {
     final amount = spec.isHold ? '${summary.holdS.toStringAsFixed(0)} s hold' : '${summary.repsValid} reps';
     final o = outcome;
     final sync = o == null
-        ? 'Saved on your phone. It will upload later.'
+        ? 'This set could not be saved on your phone.'
         : o.uploaded
             ? (o.xpAwarded > 0 ? '+${o.xpAwarded} XP' : 'Uploaded. No XP for this set.')
             : 'Saved on your phone. It will upload when you are online.';

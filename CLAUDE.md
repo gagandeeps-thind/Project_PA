@@ -25,6 +25,9 @@ CI (`.github/workflows/ci.yml`) exports `OSIRIS_JWT_SECRET=ci-fixed-secret-not-f
 | Admin typecheck + build | `npm run build` (`tsc && vite build`) | Osiris_admin_web |
 | App analyze / test | `flutter analyze` / `flutter test` | Osiris_customer |
 | App build / run | `flutter build apk --debug` / `flutter run -d emulator-5554` | Osiris_customer |
+| KMP shared tests | `./gradlew :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest` | repo root |
+| KMP iOS type-check | `./gradlew :shared:presentation:compileKotlinIosSimulatorArm64` | repo root |
+| KMP Android build / install | `./gradlew :android_version:app:assembleDebug` / `installDebug` (needs Android SDK) | repo root |
 
 The gate (`.claude/hooks/gate.sh`, Stop hook) runs ruff → admin build → flutter test → migrations +
 13 CI backend suites → flutter analyze, and only re-checks components whose diff changed since the last pass.
@@ -45,6 +48,9 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 - `Osiris_admin_web/src/` — `api/client.ts` + `types.ts`, `pages/*Page.tsx`, `components/`. Entry `main.tsx`.
 - `Osiris_merchant/` — future partner app, not part of the first player release.
 - `Documentation/openapi.json` — committed API contract, checked for drift in CI.
+- Kotlin Multiplatform player app (replacing `Osiris_customer` at parity): `shared/` (core, domain, data,
+  presentation), `android_version/app` (Compose), `ios_version` (SwiftUI), config in `config/environments/`.
+  See `docs/architecture/README.md`.
 
 ## Conventions
 - Backend tests have no pytest dependency. Each `tests/test_*.py` sets `os.environ.setdefault("OSIRIS_ENV", "test")`

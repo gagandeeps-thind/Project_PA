@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window theme behind Compose: the same dark background, so launch shows no white flash. -->
+    <style name="Theme.Osiris" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/osiris_background</item>
+        <item name="android:statusBarColor">@color/osiris_surface</item>
+        <item name="android:navigationBarColor">@color/osiris_background</item>
+    </style>
+</resources>

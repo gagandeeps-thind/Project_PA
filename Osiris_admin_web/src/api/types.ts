@@ -162,3 +162,32 @@ export interface SeasonOut {
   status: string;
   participants: number;
 }
+
+export interface AdminExerciseSet {
+  id: number;
+  user_id: number;
+  display_name: string;
+  exercise_key: string;
+  exercise_name: string;
+  status: string;
+  client_verdict: string;
+  reason_codes: string[];
+  reps_attempted: number;
+  reps_valid: number;
+  hold_s: number;
+  duration_s: number;
+  form_score: number;
+  rep_durations_s: number[];
+  rep_duration_cv: number | null;
+  xp_if_approved: number;
+  player_sets: number;
+  player_flagged_sets: number;
+  local_date: string;
+  created_at: string;
+}
+
+export interface AdminExerciseReviewResult {
+  id: number;
+  status: string;
+  xp_awarded: number;
+}

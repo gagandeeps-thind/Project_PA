@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osiris_customer/exercise/exercise_store.dart';
 import 'package:osiris_customer/exercise/pose_frame.dart';
+import 'package:osiris_customer/exercise/pose_recording.dart';
 import 'package:osiris_customer/exercise/pose_source.dart';
 import 'package:osiris_customer/exercise/rep_engine.dart';
 import 'package:osiris_customer/providers.dart';
@@ -13,6 +16,22 @@ import 'package:osiris_customer/screens/exercise_camera_screen.dart';
 import 'package:osiris_customer/screens/exercise_hub_screen.dart';
 
 import 'pose_synth.dart';
+
+/// Consent state without a server; records every change.
+class FakeConsent extends ExerciseConsentNotifier {
+  FakeConsent(this.initial);
+  final bool initial;
+  final calls = <(bool, bool)>[];
+
+  @override
+  Future<bool> build() async => initial;
+
+  @override
+  Future<void> set(bool granted, {bool deleteData = false}) async {
+    calls.add((granted, deleteData));
+    state = AsyncData(granted);
+  }
+}
 
 /// Scripted pose stream standing in for camera + ML Kit.
 class FakePoseSource extends PoseSource {
@@ -109,6 +128,116 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget);
     expect(source.stopped, isTrue, reason: 'the camera is released when the screen closes');
+  });
+
+  testWidgets('QA recording: a labeled landmark file is saved after the set (debug builds)', (tester) async {
+    final dir = await tester.runAsync(() => Directory.systemTemp.createTemp('pose_rec_'));
+    addTearDown(() => dir!.deleteSync(recursive: true));
+    final source = FakePoseSource();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        exerciseCatalogProvider.overrideWith((ref) async => catalog),
+        poseSourceFactoryProvider.overrideWithValue(() => source),
+        exerciseRecorderProvider.overrideWithValue((s, _) async => const SetOutcome(uploaded: false, xpAwarded: 0)),
+        poseRecordingDirProvider.overrideWith((ref) async => dir!),
+      ],
+      child: MaterialApp(home: ExerciseCameraScreen(spec: catalog.byKey('pushup')!)),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pose-recording-toggle')));
+    await tester.pump();
+    await tester.tap(find.text('START'));
+    await tester.pump();
+    final noise = Noise(61);
+    final frames = cycles(humanTempo(5, 1600),
+        (p, _) => sideBody(torsoDeg: 190, elbow: swing(p, 170, 80), shoulder: 80, noise: noise));
+    source.emitAll(frames);
+    await tester.pump();
+    await tester.tap(find.text('FINISH'));
+    await tester.pumpAndSettle();
+    expect(find.text('QA: label this recording'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('pose-recording-label')), '5');
+    await tester.tap(find.text('SAVE'));
+    // The save runs in the widget's fake-async zone: let real file I/O progress between pumps,
+    // until the file holds complete JSON.
+    bool written() {
+      final fs = dir!.listSync().whereType<File>();
+      if (fs.isEmpty) return false;
+      try {
+        jsonDecode(fs.first.readAsStringSync());
+        return true;
+      } on FormatException {
+        return false;
+      }
+    }
+
+    for (var i = 0; i < 100 && !written(); i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    final files = dir!.listSync().whereType<File>().toList();
+    expect(files, hasLength(1));
+    expect(files.single.path, contains('pushup_'));
+    final saved = PoseRecording.fromJson(jsonDecode(files.single.readAsStringSync()) as Map<String, dynamic>);
+    expect(saved.labelReps, 5);
+    expect(saved.source, 'device');
+    expect(saved.frames, hasLength(frames.length));
+    for (var i = 0; i < 50 && find.text('Verified').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Landmarks saved:'), findsOneWidget);
+    expect(find.text('Verified'), findsOneWidget, reason: 'the normal result follows the label step');
+  });
+
+  group('slow phones', () {
+    Future<FakePoseSource> pumpCamera(WidgetTester tester, String key) async {
+      final source = FakePoseSource();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          exerciseCatalogProvider.overrideWith((ref) async => catalog),
+          poseSourceFactoryProvider.overrideWithValue(() => source),
+          exerciseRecorderProvider.overrideWithValue((s, _) async => const SetOutcome(uploaded: false, xpAwarded: 0)),
+        ],
+        child: MaterialApp(home: ExerciseCameraScreen(spec: catalog.byKey(key)!)),
+      ));
+      await tester.pumpAndSettle();
+      return source;
+    }
+
+    // Two seconds of a standing player at [fps] frames a second.
+    List<PoseFrame> standing(int fps) => [for (var t = 0; t < 4000; t += 1000 ~/ fps) PoseFrame(t, sideBody())];
+
+    testWidgets('below the exercise minimum the player is told reps may be missed', (tester) async {
+      final source = await pumpCamera(tester, 'pushup');
+      source.emitAll(standing(4));
+      await tester.pump();
+      expect(find.byKey(const Key('exercise-slow-warning')), findsOneWidget);
+      expect(find.textContaining('tracking 4 frames a second; push-up needs 5'), findsOneWidget);
+    });
+
+    testWidgets('a normal phone sees no warning', (tester) async {
+      final source = await pumpCamera(tester, 'pushup');
+      source.emitAll(standing(30));
+      await tester.pump();
+      expect(find.byKey(const Key('exercise-slow-warning')), findsNothing);
+    });
+
+    testWidgets('the limit is per exercise: 6 fps is enough for push-ups', (tester) async {
+      final source = await pumpCamera(tester, 'pushup');
+      source.emitAll(standing(6));
+      await tester.pump();
+      expect(find.byKey(const Key('exercise-slow-warning')), findsNothing);
+    });
+
+    testWidgets('...but not for high knees, which need 7', (tester) async {
+      final source = await pumpCamera(tester, 'high_knees');
+      source.emitAll(standing(6));
+      await tester.pump();
+      expect(find.textContaining('high knees needs 7'), findsOneWidget);
+    });
   });
 
   testWidgets('a set with no real reps is reported as not verified', (tester) async {
@@ -219,5 +348,72 @@ void main() {
     await tester.scrollUntilVisible(find.text('Under review'), 100);
     expect(find.text('+10 XP'), findsOneWidget);
     expect(find.text('Waiting to upload'), findsOneWidget);
+  });
+
+  group('consent', () {
+    Future<FakeConsent> pumpHub(WidgetTester tester, {required bool consented}) async {
+      final consent = FakeConsent(consented);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          exerciseCatalogProvider.overrideWith((ref) async => catalog),
+          exerciseHistoryProvider.overrideWith((ref) async => const ExerciseHistory([], {})),
+          exerciseConsentProvider.overrideWith(() => consent),
+          poseSourceFactoryProvider.overrideWithValue(FakePoseSource.new),
+        ],
+        child: const MaterialApp(home: ExerciseHubScreen()),
+      ));
+      await tester.pumpAndSettle();
+      return consent;
+    }
+
+    testWidgets('the camera does not open until the player allows it', (tester) async {
+      final consent = await pumpHub(tester, consented: false);
+      await tester.tap(find.byKey(const Key('exercise-pushup')));
+      await tester.pumpAndSettle();
+      expect(find.text('Count reps with your camera?'), findsOneWidget);
+      expect(find.textContaining('never saved or uploaded'), findsOneWidget);
+      await tester.tap(find.text('NOT NOW'));
+      await tester.pumpAndSettle();
+      expect(find.text('START'), findsNothing);
+      expect(consent.calls, isEmpty);
+
+      await tester.tap(find.byKey(const Key('exercise-pushup')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('exercise-consent-allow')));
+      await tester.pumpAndSettle();
+      expect(consent.calls, [(true, false)]);
+      expect(find.text('START'), findsOneWidget, reason: 'the camera screen opens after consent');
+    });
+
+    testWidgets('with consent the camera opens directly', (tester) async {
+      await pumpHub(tester, consented: true);
+      expect(find.byKey(const Key('exercise-consent-open')), findsNothing);
+      await tester.tap(find.byKey(const Key('exercise-squat')));
+      await tester.pumpAndSettle();
+      expect(find.text('Count reps with your camera?'), findsNothing);
+      expect(find.text('START'), findsOneWidget);
+    });
+
+    testWidgets('settings: withdrawing offers to delete the sets', (tester) async {
+      final consent = FakeConsent(true);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [exerciseConsentProvider.overrideWith(() => consent)],
+        child: const MaterialApp(home: Scaffold(body: ExerciseConsentTile())),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isTrue);
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      expect(find.text('Stop counting exercises?'), findsOneWidget);
+      await tester.tap(find.text('CANCEL'));
+      await tester.pumpAndSettle();
+      expect(consent.calls, isEmpty);
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DELETE MY SETS'));
+      await tester.pumpAndSettle();
+      expect(consent.calls, [(false, true)]);
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isFalse);
+    });
   });
 }

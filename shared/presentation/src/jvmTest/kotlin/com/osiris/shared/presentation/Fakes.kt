@@ -1,0 +1,181 @@
+package com.osiris.shared.presentation
+
+import com.osiris.shared.core.error.AppError
+import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.domain.exercise.ExerciseCatalog
+import com.osiris.shared.domain.exercise.PoseRecording
+import com.osiris.shared.domain.exercise.SessionSummary
+import com.osiris.shared.domain.model.AttemptSummary
+import com.osiris.shared.domain.model.ChallengeDraft
+import com.osiris.shared.domain.model.ChallengeSummary
+import com.osiris.shared.domain.model.CourseRoute
+import com.osiris.shared.domain.model.CourseSummary
+import com.osiris.shared.domain.model.ExerciseHistory
+import com.osiris.shared.domain.model.PlayerProfile
+import com.osiris.shared.domain.model.Progression
+import com.osiris.shared.domain.model.Quest
+import com.osiris.shared.domain.model.ReferralSummary
+import com.osiris.shared.domain.model.Registration
+import com.osiris.shared.domain.model.ReportReason
+import com.osiris.shared.domain.model.RunResult
+import com.osiris.shared.domain.model.SetOutcome
+import com.osiris.shared.domain.model.ShareCard
+import com.osiris.shared.domain.model.TodayData
+import com.osiris.shared.domain.model.UserProfile
+import com.osiris.shared.domain.model.WeeklyGoal
+import com.osiris.shared.domain.repository.AuthRepository
+import com.osiris.shared.domain.repository.AuthState
+import com.osiris.shared.domain.repository.ChallengeRepository
+import com.osiris.shared.domain.repository.ExerciseRepository
+import com.osiris.shared.domain.repository.PlayerRepository
+import com.osiris.shared.domain.repository.RunRepository
+import com.osiris.shared.domain.run.ActiveRun
+import com.osiris.shared.domain.run.LatLng
+import com.osiris.shared.domain.run.LocationFix
+import java.io.File
+import kotlin.time.Clock
+import kotlin.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.JsonObject
+
+class FixedClock(var now: Instant) : Clock {
+    override fun now(): Instant = now
+}
+
+fun <T> ok(value: T): Outcome<T> = Outcome.Success(value)
+fun fail(error: AppError): Outcome<Nothing> = Outcome.Failure(error)
+
+val catalog: ExerciseCatalog by lazy { ExerciseCatalog.parse(File(System.getProperty("osiris.catalog")).readText()) }
+
+fun recording(name: String): PoseRecording =
+    PoseRecording.parse(File(System.getProperty("osiris.recordings"), name).readText())
+
+class FakeAuth : AuthRepository {
+    override val state = MutableStateFlow<AuthState>(AuthState.SignedOut)
+    var loginResult: Outcome<UserProfile> = ok(UserProfile(id = 7))
+    val registrations = mutableListOf<Registration>()
+    override suspend fun restore() {
+        state.value = AuthState.SignedOut
+    }
+    override suspend fun login(email: String, password: String) = loginResult.also {
+        it.getOrNull()?.let { u -> state.value = AuthState.SignedIn(u) }
+    }
+    override suspend fun register(registration: Registration): Outcome<UserProfile> {
+        registrations += registration
+        return ok(UserProfile(id = 7))
+    }
+    override suspend fun signOutEverywhere() = ok(Unit)
+    override suspend fun logout() {
+        state.value = AuthState.SignedOut
+    }
+    override suspend fun onSessionExpired() = logout()
+}
+
+fun quest(completed: Boolean = false) = Quest(key = "q", kind = "daily", title = "Walk 1 km", targetM = 1000, completed = completed)
+
+val today = TodayData(today = quest(completed = true), tomorrow = quest().copy(title = "Run 2 km"), week = WeeklyGoal(activeDays = 2))
+
+class FakePlayer : PlayerRepository {
+    val events = mutableListOf<Pair<String, Map<String, String>>>()
+    var todayResult: Outcome<TodayData> = ok(today)
+    override suspend fun today(position: LatLng?) = todayResult
+    override suspend fun profile() = ok(PlayerProfile(userId = 7, identity = "athlete"))
+    override suspend fun updateProfile(changes: JsonObject) = ok(PlayerProfile(userId = 7))
+    override suspend fun progression() = ok(Progression(xp = 120, nextRankXp = 200))
+    override suspend fun referrals() = ok(ReferralSummary(code = "ABC", url = "https://osiris.example/r/ABC"))
+    override suspend fun shareAchievement(kind: String, entityId: Int) = ok(ShareCard("t", "https://osiris.example/s/t"))
+    override suspend fun track(event: String, properties: Map<String, String>) {
+        events += event to properties
+    }
+}
+
+class FakeRuns(initial: ActiveRun? = null) : RunRepository {
+    override val active = MutableStateFlow(initial)
+    override val offline = MutableStateFlow(false)
+    val fixes = mutableListOf<LocationFix>()
+    var finishResult: Outcome<RunResult> = ok(RunResult("accepted", distanceM = 2400.0, durationSeconds = 720.0, xpAwarded = 40))
+    override suspend fun bindAccount(userId: Int?) = Unit
+    override suspend fun start(challengeId: Int?, now: Instant): Outcome<ActiveRun> {
+        val run = ActiveRun(runId = 11, userId = 7, startedAt = now, challengeId = challengeId)
+        active.value = run
+        return ok(run)
+    }
+    override suspend fun addFix(fix: LocationFix, now: Instant) {
+        fixes += fix
+        active.value = active.value?.withFix(fix, now)
+    }
+    override suspend fun flush() = ok(true)
+    override suspend fun finish(now: Instant): Outcome<RunResult> =
+        finishResult.also { if (it.isSuccess) active.value = null }
+    override suspend fun discard() {
+        active.value = null
+    }
+}
+
+class FakeChallenges : ChallengeRepository {
+    var challenge = ChallengeSummary(id = 3, title = "Park loop", status = "open")
+    val calls = mutableListOf<String>()
+    var attempt = AttemptSummary(id = 1, challengeId = 3, status = "completed", outcome = "won", elapsedSeconds = 600.0, targetSeconds = 650.0, xpAwarded = 30)
+    override suspend fun nearby(position: LatLng, radiusKm: Double) = ok(listOf(challenge))
+    override suspend fun challenge(id: Int) = ok(challenge)
+    override suspend fun course(challengeId: Int): Outcome<CourseRoute> {
+        calls += "course"
+        return ok(CourseRoute())
+    }
+    override suspend fun join(challengeId: Int): Outcome<Unit> {
+        calls += "join"
+        return ok(Unit)
+    }
+    override suspend fun submitAttempt(challengeId: Int, runId: Int): Outcome<AttemptSummary> {
+        calls += "attempt $challengeId $runId"
+        return ok(attempt)
+    }
+    override suspend fun myCourses() = ok(emptyList<CourseSummary>())
+    override suspend fun registerCourse(runId: Int, name: String): Outcome<Unit> {
+        calls += "course $runId $name"
+        return ok(Unit)
+    }
+    override suspend fun publish(draft: ChallengeDraft) = ok(9)
+    override suspend fun invite(challengeId: Int) = ok("Race me: https://osiris.example/i/x")
+    override suspend fun report(challengeId: Int, reason: ReportReason) = ok("Thanks, we'll look at it.")
+    override suspend fun blockCreator(challengeId: Int): Outcome<Unit> {
+        calls += "block"
+        return ok(Unit)
+    }
+}
+
+class FakeExercises : ExerciseRepository {
+    var consented = false
+    var saveResult: Outcome<SetOutcome> = ok(SetOutcome(uploaded = true, xpAwarded = 15))
+    val saved = mutableListOf<SessionSummary>()
+    val recordings = mutableListOf<PoseRecording>()
+    override suspend fun bindAccount(userId: Int?) = Unit
+    override suspend fun catalog() = ok(catalog)
+    override suspend fun consent() = consented
+    override suspend fun setConsent(granted: Boolean, deleteData: Boolean): Outcome<Boolean> {
+        consented = granted
+        return ok(granted)
+    }
+    override suspend fun saveSet(summary: SessionSummary, startedAt: Instant): Outcome<SetOutcome> {
+        saved += summary
+        return saveResult
+    }
+    override suspend fun history() = ExerciseHistory.EMPTY
+    override suspend fun sync() = false
+    override suspend fun saveRecording(recording: PoseRecording): Outcome<String> {
+        recordings += recording
+        return ok("/tmp/${recording.exerciseKey}.json")
+    }
+}
+
+class FakePrivacy : com.osiris.shared.domain.repository.PrivacyRepository {
+    override suspend fun blocks() = ok(emptyList<com.osiris.shared.domain.model.BlockEntry>())
+    override suspend fun unblock(blockId: Int) = ok(Unit)
+    override suspend fun export() = ok(JsonObject(emptyMap()))
+    override suspend fun erase(password: String) = ok(Unit)
+    override suspend fun rules() = ok(
+        kotlinx.serialization.json.buildJsonObject {
+            put("verification", kotlinx.serialization.json.JsonArray(listOf(kotlinx.serialization.json.JsonPrimitive("Runs are checked for speed."))))
+        },
+    )
+}

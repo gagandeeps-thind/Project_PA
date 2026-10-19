@@ -16,6 +16,8 @@ import type {
   AdminCommunity,
   AdminReport,
   SeasonOut,
+  AdminExerciseSet,
+  AdminExerciseReviewResult,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -224,4 +226,24 @@ export async function resolveReport(
 
 export async function resetDisplayName(userId: number, reason: string): Promise<void> {
   await api.post(`/api/v2/admin/users/${userId}/reset-display-name`, { reason });
+}
+
+/* ── Camera-verified exercise review ─────────────────────── */
+export async function getExerciseSets(status: string, userId?: number): Promise<AdminExerciseSet[]> {
+  const params: Record<string, string | number> = { status };
+  if (userId) params.user_id = userId;
+  const { data } = await api.get<AdminExerciseSet[]>("/api/v2/admin/exercise-sessions", { params });
+  return data;
+}
+
+export async function reviewExerciseSet(
+  id: number,
+  decision: "approve" | "reject",
+  note: string
+): Promise<AdminExerciseReviewResult> {
+  const { data } = await api.post<AdminExerciseReviewResult>(`/api/v2/admin/exercise-sessions/${id}/review`, {
+    decision,
+    note,
+  });
+  return data;
 }

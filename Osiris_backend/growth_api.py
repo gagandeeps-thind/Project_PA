@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validate_email
 from sqlalchemy import case
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ from main import (
     _rl_onboard,
     app,
     ChallengePublic,
+    NewPassword,
     create_access_token,
     get_active_player,
     get_current_admin,
@@ -286,7 +287,7 @@ def optional_token(authorization: Optional[str] = Header(default=None)) -> Optio
 
 class RegisterRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
-    password: str = Field(min_length=8, max_length=128)
+    password: NewPassword
     display_name: str = Field(min_length=2, max_length=30)
     goal: str = Field(default=quest_rules.DEFAULT_GOAL)
     referral_code: Optional[str] = Field(default=None, max_length=16)
@@ -426,7 +427,10 @@ def register_player(req: RegisterRequest, db: Session = Depends(get_db), _rl: No
     until this player completes a verified run (see G2 referral rules)."""
     _validate_goal(req.goal)
     email = req.email.strip().lower()
-    if "@" not in email:
+    # The same check as EmailStr on login and the v1 profile, so every account can sign in.
+    try:
+        validate_email(email)
+    except ValueError:
         raise _api_error(422, "INVALID_EMAIL", "Enter a valid email address")
     _check_email_unique(db, email)
 

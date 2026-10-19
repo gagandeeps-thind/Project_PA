@@ -1,0 +1,16 @@
+// Android target for a shared Kotlin Multiplatform module. Applied by the root build only when
+// the Android SDK is available. Groovy on purpose: it is compiled lazily, so the Kotlin build
+// scripts never reference Android Gradle Plugin types that are absent on SDK-less machines.
+apply plugin: 'com.android.library'
+
+android {
+    namespace = project.ext['osiris.androidNamespace']
+    compileSdk = libs.versions.android.compileSdk.get().toInteger()
+    defaultConfig {
+        minSdk = libs.versions.android.minSdk.get().toInteger()
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

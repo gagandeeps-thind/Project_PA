@@ -427,6 +427,17 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getExerciseConsent() async {
+    final response = await _dio.get('/api/v2/me/exercise-consent');
+    return response.data as Map<String, dynamic>;
+  }
+
+  /// Grant or withdraw camera exercise counting; [deleteData] also erases stored sets.
+  Future<Map<String, dynamic>> setExerciseConsent(bool granted, {bool deleteData = false}) async {
+    final response = await _dio.put('/api/v2/me/exercise-consent', data: {'granted': granted, 'delete_data': deleteData});
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getExerciseHistory({int limit = 20}) async {
     final response = await _dio.get('/api/v2/me/exercise-sessions', queryParameters: {'limit': limit});
     return response.data as Map<String, dynamic>;

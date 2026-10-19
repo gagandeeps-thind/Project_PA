@@ -33,11 +33,11 @@ setting the repo up for autonomous agent work (2026-10-12).
 - [x] backend: resolve the OpenAPI contract drift
   - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.
   - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
-    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contntended changes.
+    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contains only intended changes.
 
 - [ ] [human] ci: add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
-  - Acceptance: the CI josuite and it passes.
+  - Acceptance: the CI job runs the suite and it passes.
 
 - [ ] [human] ci: add jobs for `Osiris_admin_web` (`npm run build`) and `Osiris_customer` (`flutter analyze`, `flutter test`)
   - Today CI covers the backend only. Both commands pass locally.
@@ -129,7 +129,8 @@ setting the repo up for autonomous agent work (2026-10-12).
 
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
-    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL be  - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
+    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
+  - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
 
 - [ ] [human] ci: make the mypy step blocking
   - Since the typed-models refactor the CI mypy command reports zero errors, but the CI workflow still marks the
@@ -162,9 +163,9 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [x] customer: local SQLite store (catalog cache, sessions, reps) and an upload queue
   - Acceptance: sets survive restarts, upload once the network returns, never duplicate XP; tested with sqflite ffi.
 - [x] customer: camera screen with live skeleton overlay, ML Kit adapter, entry point, platform permissions
-  - Acceptance: frames are dropped while inference is busy (no qu ); Android CAMERA permission, iOS
+  - Acceptance: frames are dropped while inference is busy (no queue build-up); Android CAMERA permission, iOS
     `NSCameraUsageDescription` and 15.5 deployment target; widget test drives the screen with a fake pose stream.
-- [ ] ci: add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
+- [ ] ci (blocked for agents: guard.sh refuses CI-file commits; see the Sprint 3 `[human]` item): add `python tests/test_exercise_sessions.py` to `.github/workflows/ci.yml`; then an agent adds it to
   `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
 - [ ] [human] product: reconcile launch principle 1 in `Documentation/Enterprise/README.md` ("push-ups, squats, pose
   estimation ... are later product increments") with the camera exercise feature now built on request.
@@ -173,3 +174,47 @@ Human approval (2026-10-14, session owner): add the Flutter plugins (pubspec.loc
 - [ ] [human] device QA: run the exercise screen on a physical Android phone and an iPhone (this build environment has
   no KVM, no Android SDK access and no macOS, so no emulator or simulator run was possible), and tune thresholds
   with real recordings if needed (bump `RULES_VERSION` when thresholds change).
+
+## Camera exercises, phase 2 (2026-10-15)
+Backlog Phase 5: "Add pose estimation behind explicit activity and ML consent." Also closes the gap that sets flagged
+for review had no reviewer.
+
+- [x] backend+customer: explicit, revocable consent for camera exercise counting
+  - Acceptance: `exercise_camera` consent kind in the append-only ledger; `GET/PUT /api/v2/me/exercise-consent`;
+    uploads without consent are refused (403 `EXERCISE_CONSENT_REQUIRED`); withdrawing can delete exercise data;
+    the app shows a consent screen before the camera can open and a withdraw control in Settings; tests both sides.
+- [x] backend+admin web: review queue for flagged exercise sets
+  - Acceptance: admins list `review` sets and approve (capped XP for that set's day) or reject them, once, with an
+    audit event; non-admins get 401/403; admin page `ExerciseReviewPage.tsx`; the app's local history picks up
+    review outcomes on refresh.
+- [x] launch test, performance and audit for phase 2 (report 15): admin console and Flutter web build driven in
+  Chromium; fixed the database-failure path and the review-queue N+1.
+- [ ] [human] tooling: adopt a browser E2E suite (Playwright) for the admin console and the Flutter web smoke test
+  described in report 15 §5, and decide where it runs (gate, CI, or on demand).
+
+## Sprint 3: rep-counting accuracy before device QA (2026-10-17)
+Goal: know, with numbers, where the rep engine is right and wrong before people test it, and make device QA
+produce reusable labeled data. Input: report 14 measured pose detection at 5.1 fps on the emulator; the engine
+had only been tested at 30 fps.
+
+- [x] gate: run `tests/test_exercise_sessions.py` in `.claude/hooks/gate.sh` (done 2026-10-17)
+- [ ] [human] ci: add the exercise suite to the CI workflow. The PLAN item above lost its `[human]` tag on master, but
+  `guard.sh` still blocks agents from committing CI files, so an agent cannot finish it. Add this step after
+  "Tests — Growth G4 …" and before "Crystal ledger reconciliation after suites":
+  `- name: Tests — camera-verified exercises` / `run: python tests/test_exercise_sessions.py`.
+  Verified locally on 2026-10-17 with CI's full sequence on a fresh database (all 14 suites, reconcile, drift).
+- [x] customer: accuracy evaluation of the rep engine (false rejects / false accepts) across frame rate, landmark
+  noise, body size, camera roll and tempo, for all 7 exercises; fix what it finds
+  - Acceptance: a committed evaluation test prints a per-exercise matrix and asserts budgets (genuine reps counted
+    at >= 95% within supported conditions, cheat reps counted at 0%); the supported minimum frame rate is stated.
+- [x] customer: tell the player when the phone is too slow to count reliably
+  - Acceptance: below the supported pose frame rate the camera screen says so instead of silently missing reps;
+    widget test with a slow fake pose stream.
+- [x] customer: landmark recording and replay for device QA (debug builds only)
+  - Acceptance: a debug-only switch on the camera screen saves the landmark stream (no images) with the tester's
+    true rep count to a local JSON file; a replay test runs every recording in `test/exercise/recordings/` through
+    the engine and compares with the label; format and retrieval documented; release builds cannot record.
+- [x] audit: sprint 3 report (accuracy matrix, fixes, how to record and replay): report 16
+- [ ] [human] device QA with recordings: record real sets on Android and iPhone (both good and deliberately
+  bad sets, labeled), commit them with the person's consent to `Osiris_customer/test/exercise/recordings/`, and
+  re-tune thresholds if any fail. Report 16 §1: the accuracy envelope is synthetic until then.

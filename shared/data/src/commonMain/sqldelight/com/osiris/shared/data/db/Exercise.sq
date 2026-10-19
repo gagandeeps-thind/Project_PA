@@ -1,0 +1,95 @@
+-- On-device store for camera-verified exercises: catalog cache, sets and rep timings.
+-- Camera frames and landmarks are never stored; only the per-set summary and per-rep timings.
+-- Same schema as the Flutter app's sqflite store (osiris_exercise.db, version 1).
+
+CREATE TABLE exercise_catalog (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  rules_version TEXT NOT NULL,
+  json TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL
+);
+
+CREATE TABLE exercise_sessions (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id INTEGER NOT NULL,
+  exercise_key TEXT NOT NULL,
+  rules_version TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  duration_s REAL NOT NULL,
+  reps_attempted INTEGER NOT NULL,
+  reps_valid INTEGER NOT NULL,
+  hold_s REAL NOT NULL,
+  form_score REAL NOT NULL,
+  verdict TEXT NOT NULL,
+  reasons_json TEXT NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  server_status TEXT,
+  xp_awarded INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX ix_exercise_sessions_sync ON exercise_sessions (sync_state, created_at);
+CREATE INDEX ix_exercise_sessions_user ON exercise_sessions (user_id, exercise_key, started_at);
+
+CREATE TABLE exercise_reps (
+  session_id TEXT NOT NULL REFERENCES exercise_sessions (id) ON DELETE CASCADE,
+  idx INTEGER NOT NULL,
+  start_ms INTEGER NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  peak_value REAL NOT NULL,
+  valid INTEGER NOT NULL,
+  reason TEXT,
+  PRIMARY KEY (session_id, idx)
+);
+
+cachedCatalog:
+SELECT json FROM exercise_catalog WHERE id = 1;
+
+cacheCatalog:
+INSERT OR REPLACE INTO exercise_catalog (id, rules_version, json, fetched_at) VALUES (1, ?, ?, ?);
+
+insertSession:
+INSERT INTO exercise_sessions (
+  id, user_id, exercise_key, rules_version, started_at, duration_s, reps_attempted, reps_valid,
+  hold_s, form_score, verdict, reasons_json, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertRep:
+INSERT INTO exercise_reps (session_id, idx, start_ms, duration_ms, peak_value, valid, reason)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+pendingSessions:
+SELECT * FROM exercise_sessions WHERE user_id = ? AND sync_state = 'pending' ORDER BY created_at ASC;
+
+recentSessions:
+SELECT * FROM exercise_sessions WHERE user_id = ? ORDER BY started_at DESC LIMIT ?;
+
+validRepDurations:
+SELECT session_id, duration_ms FROM exercise_reps WHERE valid = 1 AND session_id IN ? ORDER BY session_id, idx;
+
+markSynced:
+UPDATE exercise_sessions SET sync_state = 'synced', server_status = ?, xp_awarded = ?, last_error = NULL WHERE id = ?;
+
+applyServerResult:
+UPDATE exercise_sessions SET server_status = :status, xp_awarded = :xp
+WHERE id = :id AND sync_state = 'synced' AND (server_status IS NOT :status OR xp_awarded != :xp);
+
+markFailed:
+UPDATE exercise_sessions SET attempts = attempts + 1, last_error = ?, sync_state = ? WHERE id = ?;
+
+personalBests:
+SELECT exercise_key, MAX(CASE WHEN hold_s > 0 THEN hold_s ELSE reps_valid END) AS best
+FROM exercise_sessions
+WHERE user_id = ? AND verdict = 'verified' AND COALESCE(server_status, 'verified') = 'verified'
+GROUP BY exercise_key;
+
+deleteUserSessions:
+DELETE FROM exercise_sessions WHERE user_id = ?;
+
+deleteOtherUsers:
+DELETE FROM exercise_sessions WHERE user_id != ?;
+
+deleteAllSessions:
+DELETE FROM exercise_sessions;

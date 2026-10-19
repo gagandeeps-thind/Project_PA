@@ -10,10 +10,11 @@ import {
   LogOut,
   TrendingUp,
   Users,
+  Dumbbell,
 } from "lucide-react";
 import type { AdminUser } from "../api/types";
 
-export type PageKey = "dashboard" | "growth" | "community" | "trust" | "merchants" | "bounties";
+export type PageKey = "dashboard" | "growth" | "community" | "trust" | "exercise" | "merchants" | "bounties";
 
 interface SidebarProps {
   activePage: PageKey;
@@ -27,6 +28,7 @@ const navItems: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] 
   { key: "growth", label: "Growth", icon: TrendingUp },
   { key: "community", label: "Community", icon: Users },
   { key: "trust", label: "Trust & Safety", icon: ShieldCheck },
+  { key: "exercise", label: "Exercise review", icon: Dumbbell },
   { key: "merchants", label: "Merchants", icon: Store },
   { key: "bounties", label: "Bounties", icon: MapPin },
 ];

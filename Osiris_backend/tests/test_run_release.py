@@ -19,6 +19,7 @@ import database
 import growth_api
 import main
 import models
+import run_verifier
 
 
 EMAIL = "run_release_test@example.com"
@@ -132,6 +133,45 @@ def test_invalid_route_is_rejected_with_reason_codes() -> None:
     assert "IMPOSSIBLE_SPEED" in response.json()["rejection_reason"]
 
 
+M_PER_DEG_LAT = 111_195.0
+
+
+def _straight_route(steps_m: list[float], step_ms: int = 1_000) -> list[dict]:
+    """Points heading north, one per step_ms, each the given distance after the previous one."""
+    points, lat = [], 44.6
+    for i, step in enumerate([0.0] + steps_m):
+        lat += step / M_PER_DEG_LAT
+        points.append({"sequence": i, "t_ms": i * step_ms, "lat": lat, "lng": -63.6, "accuracy_m": 8})
+    return points
+
+
+def test_gps_noise_between_fixes_does_not_fail_an_honest_fast_run() -> None:
+    # 14 km/h (3.9 m/s) for two minutes, with fixes alternating 2 m short and 2 m long: every
+    # other one-second segment reads about 21 km/h, and the noisiest about 29 km/h.
+    steps = [3.9 + (2.0 if i % 2 else -2.0) for i in range(120)]
+    steps[60] = 8.0
+    result = run_verifier.verify_route(_straight_route(steps))
+    assert result.status == "accepted", result.reason_codes
+    assert result.metrics["max_segment_speed_kmh"] > run_verifier.MAX_SPEED_KMH
+    assert result.metrics["max_speed_kmh"] < run_verifier.MAX_SPEED_KMH
+    assert result.metrics["rules_version"] == "run-rules-v2"
+
+
+def test_sustained_speed_over_the_limit_is_rejected() -> None:
+    # A bike at 30 km/h (8.3 m/s) for a minute: every 5 s window is over 25 km/h.
+    result = run_verifier.verify_route(_straight_route([8.3] * 60))
+    assert "IMPOSSIBLE_SPEED" in result.reason_codes
+
+
+def test_a_single_jump_past_the_segment_cap_is_rejected() -> None:
+    # A slow walk with one 15 m jump in a second (54 km/h): too short to lift the 5 s average.
+    steps = [1.4] * 120
+    steps[50] = 15.0
+    result = run_verifier.verify_route(_straight_route(steps))
+    assert result.metrics["max_speed_kmh"] < run_verifier.MAX_SPEED_KMH
+    assert "IMPOSSIBLE_SPEED" in result.reason_codes
+
+
 def test_route_sequence_and_authentication_are_enforced() -> None:
     _cleanup()
     client = TestClient(main.app)
@@ -224,6 +264,9 @@ if __name__ == "__main__":
         test_metrics_count_requests_and_verification_outcomes,
         test_valid_run_is_verified_and_finish_is_idempotent,
         test_invalid_route_is_rejected_with_reason_codes,
+        test_gps_noise_between_fixes_does_not_fail_an_honest_fast_run,
+        test_sustained_speed_over_the_limit_is_rejected,
+        test_a_single_jump_past_the_segment_cap_is_rejected,
         test_route_sequence_and_authentication_are_enforced,
         test_raw_route_points_expire_after_retention_window,
     ):
