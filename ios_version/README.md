@@ -4,11 +4,10 @@ SwiftUI app on top of the shared Kotlin code (`shared/`), which Swift imports as
 `OsirisShared` framework. All business logic, networking, storage and screen state live in
 `shared/`; this folder only renders state and adapts iOS services.
 
-**Status: skeleton, not yet built.** It has the app entry, session routing, sign-in and the
-Today screen. The other screens follow the Android app (`android_version/app/.../ui/`) one to
-one, each wrapping its shared view model with `Observed`. The Swift code has not been compiled:
-it needs a Mac with Xcode. The shared Kotlin code does compile for iOS (`iosArm64`,
-`iosSimulatorArm64`) on any machine.
+**Status: every player screen written, not yet compiled.** The screens follow the Android app
+(`android_version/app/.../ui/`) one to one in copy and behaviour, each wrapping its shared view
+model with `Observed`. The Swift code has not been compiled or run: it needs a Mac with Xcode.
+The shared Kotlin code does compile for iOS (`iosArm64`, `iosSimulatorArm64`) on any machine.
 
 ## Build (on a Mac)
 
@@ -33,11 +32,30 @@ The dev environment points the simulator at `http://localhost:8000`. Choose anot
 
 | Screen | Shared view model | iOS |
 |---|---|---|
-| Sign-in | `LoginViewModel` | done |
-| Today | `TodayViewModel` | done (no nav grid yet) |
-| Onboarding | `OnboardingViewModel` | to do |
-| Run (MapKit, Core Location) | `RunViewModel` | to do |
-| Challenges, detail, my courses | `ChallengeBoard/Detail/CoursesViewModel` | to do |
-| Clubs, club, rankings | `Communities/CommunityDetail/RankingsViewModel` | to do |
-| Progress, settings | `ProgressViewModel`, `SettingsViewModel` | to do |
-| Exercise hub, camera (Vision body pose) | `ExerciseHub/ExerciseSessionViewModel` | to do |
+| Sign-in | `LoginViewModel` | `Session/LoginView.swift` |
+| Onboarding (goal, location, account) | `OnboardingViewModel` | `Session/OnboardingView.swift` |
+| Today, with the way to every screen | `TodayViewModel` | `Today/TodayView.swift` |
+| Run (MapKit, Core Location, every run dialog) | `RunViewModel` | `Run/RunView.swift`, `Run/LocationTracker.swift`, `Map/RunMap.swift` |
+| Challenges, challenge, my courses | `ChallengeBoard/ChallengeDetail/CoursesViewModel` | `Challenge/*.swift` |
+| Clubs, club, rankings (week, season) | `Communities/CommunityDetail/RankingsViewModel` | `Community/*.swift` |
+| Progress | `ProgressViewModel` | `Progress/ProgressScreen.swift` |
+| Settings (incl. two-step erase) | `SettingsViewModel` | `Settings/SettingsView.swift` |
+| Bodyweight hub, consent, camera set | `ExerciseHub/ExerciseSessionViewModel` | `Exercise/*.swift` |
+
+Navigation is one `NavigationStack` driven by `Route` (`App/Navigator.swift`).
+
+## Platform adapters
+
+- **Location**: `LocationTracker` streams Core Location fixes with `CLLocation.timestamp` as
+  `LocationFix.at` (built by `IosSupport.locationFix`). While recording it turns on background
+  updates (the `location` background mode) with only "while in use" permission, like Android.
+- **Map**: `RunMap` is an `MKMapView` (iOS 16 has no SwiftUI polyline overlays): course line,
+  green start and red finish zones, the live trace and nearby challenge markers.
+- **Camera set**: `PoseCamera` runs AVFoundation at VGA, portrait and unmirrored, and Apple
+  Vision `VNDetectHumanBodyPoseRequest` synchronously on the capture queue, so one frame is in
+  flight and late frames are dropped. Vision joints map to the 13 landmark names the shared
+  rep engine reads (`nose`, `left_`/`right_` shoulder, elbow, wrist, hip, knee, ankle), in
+  top-left image pixels, with Vision's confidence as the likelihood.
+- `shared/presentation/src/iosMain/.../IosSupport.kt` holds the small Kotlin helpers Swift
+  needs (building `LocationFix` from epoch millis, permission errors, local challenge times,
+  loading an exercise from the catalog).

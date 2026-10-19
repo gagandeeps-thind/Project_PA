@@ -23,6 +23,8 @@ targets:
         NSLocationWhenInUseUsageDescription: Osiris uses your location while you record a run, to verify the distance. Your route is never shown to other players.
         NSCameraUsageDescription: Osiris counts exercise reps with the camera. Images are analysed on this phone and never saved or uploaded.
         UIBackgroundModes: [location]
+        # Portrait only: the camera set and the run map are laid out for it, as on Android phones.
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         # Dev builds call a backend on localhost over http; remote hosts stay HTTPS-only.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
