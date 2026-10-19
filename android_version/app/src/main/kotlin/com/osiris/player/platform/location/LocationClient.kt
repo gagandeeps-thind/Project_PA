@@ -4,7 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -17,6 +19,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.nanoseconds
+import kotlin.time.Instant
 
 /**
  * Fused location as a flow of [LocationFix]. High accuracy, one fix a second at most and only
@@ -53,6 +58,7 @@ class LocationClient(context: Context) {
                             accuracyM = if (l.hasAccuracy()) l.accuracy.toDouble() else null,
                             speedMps = if (l.hasSpeed()) l.speed.toDouble() else null,
                             altitudeM = if (l.hasAltitude()) l.altitude else null,
+                            at = l.measuredAt(),
                         ),
                     )
                 }
@@ -60,7 +66,14 @@ class LocationClient(context: Context) {
         }
         // A fast first position from the cache, so the map centres before the first live fix.
         runCatching { fused.lastLocation.await() }.getOrNull()?.let {
-            trySend(LocationFix(it.latitude, it.longitude, if (it.hasAccuracy()) it.accuracy.toDouble() else null))
+            trySend(
+                LocationFix(
+                    lat = it.latitude,
+                    lng = it.longitude,
+                    accuracyM = if (it.hasAccuracy()) it.accuracy.toDouble() else null,
+                    at = it.measuredAt(),
+                ),
+            )
         }
         try {
             fused.requestLocationUpdates(request, callback, Looper.getMainLooper()).await()
@@ -70,6 +83,15 @@ class LocationClient(context: Context) {
             close(LocationUnavailable(AppError.Unexpected(e)))
         }
         awaitClose { fused.removeLocationUpdates(callback) }
+    }
+
+    /**
+     * When the fix was measured, from its monotonic age rather than [Location.getTime], so a wrong
+     * device or GNSS clock cannot shift points against the run's start.
+     */
+    private fun Location.measuredAt(): Instant {
+        val age = (SystemClock.elapsedRealtimeNanos() - elapsedRealtimeNanos).coerceAtLeast(0)
+        return Clock.System.now() - age.nanoseconds
     }
 
     companion object {

@@ -55,7 +55,12 @@ class RunRepositoryTest {
     }
 
     private suspend fun TestApp.walk(fixes: Int) {
-        repeat(fixes) { i -> graph.runs.addFix(LocationFix(52.0 + i * 0.0001, 4.0), t0 + (i + 1).seconds) }
+        // Carry on from the last point: fixes not after it are dropped, as the server requires.
+        val done = graph.runs.active.value?.nextSequence ?: 0
+        repeat(fixes) { i ->
+            val n = done + i
+            graph.runs.addFix(LocationFix(52.0 + n * 0.0001, 4.0), t0 + (n + 1).seconds)
+        }
     }
 
     @Test

@@ -15,6 +15,8 @@ data class LocationFix(
     /** Negative or null when the platform has no speed. */
     val speedMps: Double? = null,
     val altitudeM: Double? = null,
+    /** When the fix was measured. Null means when it arrived, which adds delivery jitter to segment speeds. */
+    val at: Instant? = null,
 ) {
     val position: LatLng get() = LatLng(lat, lng)
 }
@@ -33,6 +35,8 @@ data class ActiveRun(
     /** Last fix, to measure the next segment; kept so distance continues after a restart. */
     @SerialName("last_lat") val lastLat: Double? = null,
     @SerialName("last_lng") val lastLng: Double? = null,
+    /** Run-relative time of the last point; the server rejects timestamps that do not increase. */
+    @SerialName("last_t_ms") val lastTMs: Long? = null,
 ) {
     val uploaded: Int get() = nextSequence - pending.size
 
@@ -45,13 +49,18 @@ data class ActiveRun(
     fun paceSecPerKm(now: Instant): Double? =
         if (distanceM > 50) elapsed(now).inWholeSeconds / (distanceM / 1000) else null
 
-    /** Appends a fix with the next sequence number and adds the segment to the distance. */
+    /**
+     * Appends a fix with the next sequence number and adds the segment to the distance. A fix measured
+     * before the run started (a cached position) or not after the last point is dropped.
+     */
     fun withFix(fix: LocationFix, now: Instant): ActiveRun {
+        val tMs = ((fix.at ?: now) - startedAt).inWholeMilliseconds
+        if (tMs < 0 || (lastTMs != null && tMs <= lastTMs)) return this
         val last = if (lastLat != null && lastLng != null) LatLng(lastLat, lastLng) else null
         val segment = if (last == null) 0.0 else Geo.distanceM(last, fix.position)
         val point = RoutePoint(
             sequence = nextSequence,
-            tMs = (now - startedAt).inWholeMilliseconds,
+            tMs = tMs,
             lat = fix.lat,
             lng = fix.lng,
             accuracyM = fix.accuracyM,
@@ -64,6 +73,7 @@ data class ActiveRun(
             pending = pending + point,
             lastLat = fix.lat,
             lastLng = fix.lng,
+            lastTMs = tMs,
         )
     }
 
