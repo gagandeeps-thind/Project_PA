@@ -21,19 +21,19 @@ dev and the test suite run without real keys (tests patch these functions).
 """
 from __future__ import annotations
 
-import os
-
 import stripe
+
+import settings
 
 # An explicit dev/test environment disables Stripe instead of failing the boot, mirroring
 # the OSIRIS_WEBHOOK_SECRET handling in main.py. Anything else (including a forgotten/unknown
 # OSIRIS_ENV) is treated as production and must be fully configured.
-_DEV_ENVS = {"dev", "development", "test", "testing", "local"}
-_IS_DEV_ENV = os.environ.get("OSIRIS_ENV", "").lower() in _DEV_ENVS
+_DEV_ENVS = settings.DEV_ENVS
+_IS_DEV_ENV = settings.is_dev_env()
 
-STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
-STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
+STRIPE_SECRET_KEY = settings.secret("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = settings.secret("STRIPE_WEBHOOK_SECRET")
+STRIPE_PUBLISHABLE_KEY = settings.secret("STRIPE_PUBLISHABLE_KEY")
 
 # Stripe is "on" only when both server-side secrets are present. The publishable key is
 # client-facing and not required for the gateway to function.

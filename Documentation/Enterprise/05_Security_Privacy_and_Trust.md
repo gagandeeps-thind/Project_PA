@@ -22,6 +22,14 @@ Primary threats are GPS spoofing and replay, fabricated routes, account takeover
 - Security headers, input limits, schema validation, SQL parameterization, and safe error messages.
 - Payment webhooks verified against raw payload and provider signature; deduplicated by provider event ID.
 
+### Secrets and configuration
+
+- No secret in the repository or in either app. `.env.example` lists every backend setting; `.env` is local only.
+- Deployed environments deliver secrets from the secret manager (AWS Secrets Manager via ECS `secrets`,
+  Vault Agent, or Kubernetes/Docker secrets) as `NAME` or as a mounted file named by `NAME_FILE`;
+  `Osiris_backend/settings.py` reads both. An unreadable `NAME_FILE` fails the boot instead of running unset.
+- An unset or unknown `OSIRIS_ENV` counts as production and refuses to boot without its secrets.
+
 ### Anti-cheat
 
 - Treat client telemetry as evidence, never truth.

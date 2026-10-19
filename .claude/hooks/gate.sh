@@ -29,8 +29,8 @@ LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT
 
 fingerprint() {
-  { git diff HEAD -- "$1"
-    git ls-files -z -o --exclude-standard -- "$1" | xargs -0 -r git hash-object --
+  { git diff HEAD -- $1
+    git ls-files -z -o --exclude-standard -- $1 | xargs -0 -r git hash-object --
   } 2>/dev/null | git hash-object --stdin
 }
 needs_check() {
@@ -51,12 +51,13 @@ run() {
 
 BACKEND_TESTS="test_ml_referee test_v2_10_flows test_phase2_security test_phase3_stripe test_phase2_ledger
 test_replay_guard test_party_stats test_run_release test_challenge_release test_growth_core_loop
-test_growth_sharing test_growth_communities test_growth_safety test_exercise_sessions"
+test_growth_sharing test_growth_communities test_growth_safety test_exercise_sessions test_settings"
 
-check_backend=0; check_admin=0; check_customer=0
+check_backend=0; check_admin=0; check_customer=0; check_kmp=0
 needs_check Osiris_backend backend && check_backend=1
 needs_check Osiris_admin_web admin && check_admin=1
 needs_check Osiris_customer customer && check_customer=1
+needs_check "shared android_version build.gradle.kts gradle config" kmp && check_kmp=1
 
 # Fastest first.
 [ $check_backend = 1 ] && run Osiris_backend "$RUFF" check .                 # lint, <1s
@@ -71,5 +72,9 @@ fi
 if [ $check_customer = 1 ]; then
   run Osiris_customer flutter analyze                                        # ~110s
   mark_passed Osiris_customer customer
+fi
+if [ $check_kmp = 1 ]; then                                                  # ~3 min cold
+  run . ./gradlew --console=plain -q detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest
+  mark_passed "shared android_version build.gradle.kts gradle config" kmp
 fi
 exit 0

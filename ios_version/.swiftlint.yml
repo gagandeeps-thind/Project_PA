@@ -1,0 +1,14 @@
+# SwiftLint for the SwiftUI app (run `swiftlint` in ios_version/ on macOS).
+included:
+  - Osiris/Sources
+opt_in_rules:
+  - explicit_init
+  - force_unwrapping
+analyzer_rules:
+  - unused_declaration
+  - unused_import
+line_length:
+  warning: 140
+  error: 160
+force_cast: error
+force_try: error

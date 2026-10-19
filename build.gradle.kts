@@ -16,6 +16,7 @@ buildscript {
         classpath(libs.kotlin.serialization.plugin)
         classpath(libs.compose.compiler.plugin)
         classpath(libs.sqldelight.gradle.plugin)
+        classpath(libs.detekt.gradle.plugin)
         if (androidEnabled) classpath(libs.android.gradle.plugin)
     }
 }
@@ -64,6 +65,21 @@ subprojects {
                 showStandardStreams = providers.gradleProperty("osiris.testOutput").orNull == "true"
                 exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
             }
+        }
+    }
+}
+
+// Static analysis for every Kotlin module: `./gradlew detekt`. Findings that predate the
+// rules live in each module's detekt-baseline.xml; new code must be clean.
+subprojects {
+    if (path.startsWith(":shared:") || path == ":android_version:app") {
+        apply(plugin = "io.gitlab.arturbosch.detekt")
+        extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
+            buildUponDefaultConfig = true
+            config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+            baseline = file("detekt-baseline.xml")
+            source.setFrom(fileTree("src") { include("**/kotlin/**/*.kt") })
+            parallel = true
         }
     }
 }

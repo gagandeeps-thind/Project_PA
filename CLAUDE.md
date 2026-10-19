@@ -21,16 +21,18 @@ CI (`.github/workflows/ci.yml`) exports `OSIRIS_JWT_SECRET=ci-fixed-secret-not-f
 | OpenAPI drift | `python scripts/check_openapi_drift.py` (`--write` regenerates `Documentation/openapi.json`) | Osiris_backend |
 | Run API | `..\.venv\Scripts\uvicorn.exe main:app --reload --host 0.0.0.0` | Osiris_backend |
 | Image | `docker build -t osiris-backend:ci Osiris_backend` | repo root |
+| Local stack (API :8000, admin :8080) | `docker compose up --build` (reads root `.env`, see `.env.example`) | repo root |
 | Admin install / dev | `npm install` / `npm run dev` | Osiris_admin_web |
 | Admin typecheck + build | `npm run build` (`tsc && vite build`) | Osiris_admin_web |
 | App analyze / test | `flutter analyze` / `flutter test` | Osiris_customer |
 | App build / run | `flutter build apk --debug` / `flutter run -d emulator-5554` | Osiris_customer |
 | KMP shared tests | `./gradlew :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest` | repo root |
+| KMP static analysis | `./gradlew detekt` (baselines in `shared/*/detekt-baseline.xml`; new code must be clean) | repo root |
 | KMP iOS type-check | `./gradlew :shared:presentation:compileKotlinIosSimulatorArm64` | repo root |
 | KMP Android build / install | `./gradlew :android_version:app:assembleDebug` / `installDebug` (needs Android SDK) | repo root |
 
 The gate (`.claude/hooks/gate.sh`, Stop hook) runs ruff → admin build → flutter test → migrations +
-13 CI backend suites → flutter analyze, and only re-checks components whose diff changed since the last pass.
+the backend suites → flutter analyze → detekt + KMP shared tests, and only re-checks components whose diff changed since the last pass.
 No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat files wholesale.
 
 ## Architecture map
@@ -61,6 +63,8 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 - Every crystal movement goes through `services.ledger.apply_crystal_delta`; it does not commit,
   the endpoint owns the transaction. Challenges must never touch crystals.
 - Python: snake_case, type hints on new code, ruff rules `E`,`F` at line length 120.
+- Backend config: read secrets with `settings.secret("NAME")` (accepts `NAME` or `NAME_FILE`), never `os.environ` directly;
+  add every new setting to `.env.example`.
 - Dart: files `snake_case_screen.dart` / `_service.dart`; lints from `flutter_lints` (`analysis_options.yaml`).
 - TS/React: pages `XxxPage.tsx`, API types centralised in `src/api/types.ts`.
 - API changes require regenerating `Documentation/openapi.json` with `python scripts/check_openapi_drift.py --write`.

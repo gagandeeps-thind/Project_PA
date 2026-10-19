@@ -37,6 +37,7 @@ from jwt.exceptions import InvalidTokenError
 # Import our newly created database connection and models
 import database
 import models
+import settings
 import spatial_utils
 import ml_referee
 import run_verifier
@@ -187,7 +188,7 @@ def prometheus_metrics(request: Request):
     deploy never exposes traffic patterns by accident."""
     from fastapi.responses import PlainTextResponse
 
-    expected = os.environ.get("OSIRIS_METRICS_TOKEN")
+    expected = settings.secret("OSIRIS_METRICS_TOKEN")
     if expected:
         supplied = request.headers.get("Authorization", "")
         if not hmac.compare_digest(supplied, f"Bearer {expected}"):
@@ -248,7 +249,7 @@ def _alembic_head_revision() -> Optional[str]:
 # Set OSIRIS_JWT_SECRET in any non-dev environment. Deployment must use a 32+ byte secret
 # (HS256 minimum per RFC 7518 § 3.2). Setting OSIRIS_ENV=production makes a missing secret
 # fatal at boot — that's the production-safety check.
-_jwt_secret_from_env = os.environ.get("OSIRIS_JWT_SECRET")
+_jwt_secret_from_env = settings.secret("OSIRIS_JWT_SECRET")
 if _jwt_secret_from_env:
     SECRET_KEY = _jwt_secret_from_env
 elif os.environ.get("OSIRIS_ENV", "").lower() == "production":
@@ -319,9 +320,9 @@ def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
 # must refuse to boot — the old behavior (fail open whenever the secret was unset, only
 # fail-fast when OSIRIS_ENV was *explicitly* "production") meant a deploy that forgot the env
 # var served a wide-open, forgeable payment webhook. Inverted here.
-_DEV_ENVS = {"dev", "development", "test", "testing", "local"}
-_IS_DEV_ENV = os.environ.get("OSIRIS_ENV", "").lower() in _DEV_ENVS
-_WEBHOOK_SECRET = os.environ.get("OSIRIS_WEBHOOK_SECRET")
+_DEV_ENVS = settings.DEV_ENVS
+_IS_DEV_ENV = settings.is_dev_env()
+_WEBHOOK_SECRET = settings.secret("OSIRIS_WEBHOOK_SECRET")
 if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
     raise RuntimeError(
         "OSIRIS_WEBHOOK_SECRET is required unless OSIRIS_ENV is one of "

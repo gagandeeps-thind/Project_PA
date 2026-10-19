@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:ExerciseSessionViewModel.kt$ExerciseSessionViewModel$prev == null || prev.validReps != u.validReps || prev.attemptedReps != u.attemptedReps || prev.hint != u.hint || floor(prev.holdS) != floor(u.holdS)</ID>
+    <ID>MaxLineLength:ExerciseSessionViewModel.kt$ExerciseSessionState$get() = slowFps?.let { "This phone is tracking $it frames a second; ${spec.name.lowercase()} needs ${spec.minPoseFps.roundToInt()}. Some reps may not count. More light or closing other apps can help." }</ID>
+    <ID>MaxLineLength:Fakes.kt$FakeChallenges$var attempt = AttemptSummary(id = 1, challengeId = 3, status = "completed", outcome = "won", elapsedSeconds = 600.0, targetSeconds = 650.0, xpAwarded = 30)</ID>
+    <ID>MaxLineLength:Fakes.kt$FakePrivacy$put("verification", kotlinx.serialization.json.JsonArray(listOf(kotlinx.serialization.json.JsonPrimitive("Runs are checked for speed."))))</ID>
+    <ID>ReturnCount:RunViewModel.kt$RunViewModel$fun start(confirmedLowLight: Boolean = false)</ID>
+  </CurrentIssues>
+</SmellBaseline>

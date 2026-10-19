@@ -218,3 +218,17 @@ had only been tested at 30 fps.
 - [ ] [human] device QA with recordings: record real sets on Android and iPhone (both good and deliberately
   bad sets, labeled), commit them with the person's consent to `Osiris_customer/test/exercise/recordings/`, and
   re-tune thresholds if any fail. Report 16 §1: the accuracy envelope is synthetic until then.
+
+## Next phase: FrostMatte player app (2026-10-19)
+Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per pipeline phase.
+
+- [x] scaffolding: `.env.example`, `settings.secret()` (env or secret-manager file), `OSIRIS_DATABASE_URL`,
+  `docker-compose.yml` + admin image, detekt for Kotlin with baselines, SwiftLint config, gate covers KMP
+- [ ] [human] ci: add `python tests/test_settings.py` after the existing suites in `.github/workflows/ci.yml`.
+- [ ] [human] ci: add a KMP job on `ubuntu-latest` with JDK 17 running
+  `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest :shared:presentation:compileKotlinIosSimulatorArm64`
+  for pull requests touching `shared/**`, `android_version/**`, `gradle/**`, `*.gradle.kts`, `config/**`;
+  and an Android job (`android-actions/setup-android`) running `./gradlew :android_version:app:assembleDebug detekt`.
+- [ ] [human] admin web: add `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks` and `prettier` to devDependencies
+  (`npm install -D ...` rewrites `package-lock.json`, which agents may not edit); an agent then adds the configs and a `lint` script.
+- [ ] [human] infra: pick the cloud (AWS or GCP) before Terraform is written; until then `infrastructure/` holds only images.
