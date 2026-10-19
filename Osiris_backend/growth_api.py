@@ -771,3 +771,4 @@ import growth_social  # noqa: E402,F401
 import growth_communities  # noqa: E402,F401
 import growth_safety  # noqa: E402
 import exercise_api  # noqa: E402,F401
+import growth_hub  # noqa: E402,F401
