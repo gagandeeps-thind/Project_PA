@@ -92,6 +92,9 @@ class ChallengeDetailViewModel(
         }
     }
 
+    /** Share text for an accepted attempt's result, or null (the failure is shown). */
+    suspend fun shareResult(attemptId: Int): String? = player.shareAchievement("challenge_result", attemptId).orShow()?.text
+
     fun shared(completed: Boolean) {
         val request = _state.value.share ?: return
         _state.update { it.copy(share = null) }

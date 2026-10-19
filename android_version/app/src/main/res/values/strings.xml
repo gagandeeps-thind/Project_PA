@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Osiris</string>
+    <string name="run_channel_name">Run recording</string>
+    <string name="run_notification_title">Osiris is recording your run</string>
+    <string name="run_notification_text">GPS stays on until you finish. Your route stays private.</string>
+</resources>

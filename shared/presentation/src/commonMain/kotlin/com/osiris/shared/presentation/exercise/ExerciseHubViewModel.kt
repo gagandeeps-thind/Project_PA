@@ -22,7 +22,14 @@ import kotlinx.datetime.toLocalDateTime
 
 data class ExerciseTile(val spec: ExerciseSpec, val best: String?)
 
-data class RecentSetRow(val id: String, val title: String, val time: String, val status: String, val tone: Tone) {
+data class RecentSetRow(
+    val id: String,
+    val exerciseKey: String,
+    val title: String,
+    val time: String,
+    val status: String,
+    val tone: Tone,
+) {
     enum class Tone { NEUTRAL, GOOD, WARN, BAD }
 }
 
@@ -78,6 +85,11 @@ class ExerciseHubViewModel(
         }
     }
 
+    /** Consent from the banner, without opening an exercise. */
+    fun grantConsent() {
+        scope.launch { exercises.setConsent(true).orShow()?.let { now -> _state.update { it.copy(consented = now) } } }
+    }
+
     /** The camera screen was opened (or closed again): clear the request and reload history. */
     fun opened() = _state.update { it.copy(open = null) }
 
@@ -112,6 +124,7 @@ class ExerciseHubViewModel(
         fun two(v: Int) = v.toString().padStart(2, '0')
         return RecentSetRow(
             id = s.id,
+            exerciseKey = s.exerciseKey,
             title = "${spec?.name ?: s.exerciseKey} · ${ExerciseCopy.amount(spec, s.repsValid, s.holdS)}",
             time = "${t.year}-${two(t.month.ordinal + 1)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}",
             status = status,
