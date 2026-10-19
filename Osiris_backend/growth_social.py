@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import secrets
 from datetime import datetime
 from typing import List, Optional
@@ -26,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+import settings
 from growth_api import (
     REFERRAL_CAP,
     REFERRAL_CAP_WINDOW_DAYS,
@@ -54,7 +54,14 @@ APP_DEEP_LINK = "osiris://"
 
 
 def _base_url(request: Request) -> str:
-    return os.environ.get("OSIRIS_PUBLIC_BASE_URL", str(request.base_url)).rstrip("/")
+    """Links come from configuration; the request's Host header is used only in dev, since a
+    forged Host would otherwise put an attacker's origin into share and invite links."""
+    configured = settings.public_base_url()
+    if configured:
+        return configured
+    if settings.is_dev_env():
+        return str(request.base_url).rstrip("/")
+    raise _api_error(503, "PUBLIC_BASE_URL_UNSET", "Sharing links are not available right now")
 
 
 def _token() -> str:
