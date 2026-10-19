@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
@@ -274,9 +277,18 @@ final exerciseStoreProvider = FutureProvider<ExerciseStore>((ref) async {
 /// The catalog the rep engine runs with: cached server copy, else the bundled one. A server
 /// refresh runs in the background and applies from the next set on.
 final exerciseCatalogProvider = FutureProvider<ExerciseCatalog>((ref) async {
+  Future<String> bundled() => rootBundle.loadString('assets/exercise_catalog.json');
+  final ExerciseStore store;
+  try {
+    store = await ref.watch(exerciseStoreProvider.future);
+  } on Object {
+    // No local database (unsupported platform, full disk, corrupt file): the exercises
+    // still list and count from the bundled catalog.
+    return ExerciseCatalog.parse(await bundled());
+  }
   final repo = CatalogRepository(
-    store: await ref.watch(exerciseStoreProvider.future),
-    loadBundled: () => rootBundle.loadString('assets/exercise_catalog.json'),
+    store: store,
+    loadBundled: bundled,
     fetch: ref.read(apiClientProvider).getExerciseCatalog,
   );
   final catalog = await repo.load();
@@ -284,12 +296,57 @@ final exerciseCatalogProvider = FutureProvider<ExerciseCatalog>((ref) async {
   return catalog;
 });
 
+/// Explicit, revocable consent to count exercises with the camera. The server is the
+/// source of truth (it refuses uploads without consent); the last known answer is cached per
+/// account so the gate also works offline.
+final exerciseConsentProvider =
+    AsyncNotifierProvider<ExerciseConsentNotifier, bool>(ExerciseConsentNotifier.new);
+
+class ExerciseConsentNotifier extends AsyncNotifier<bool> {
+  String _key(int userId) => 'osiris.exercise_consent.$userId';
+
+  @override
+  Future<bool> build() async {
+    final user = ref.watch(authProvider);
+    if (user == null) return false;
+    final prefs = ref.read(sharedPreferencesProvider);
+    try {
+      final granted = (await ref.read(apiClientProvider).getExerciseConsent())['granted'] as bool;
+      await prefs.setBool(_key(user.id), granted);
+      return granted;
+    } on Object {
+      return prefs.getBool(_key(user.id)) ?? false;
+    }
+  }
+
+  /// Grant or withdraw. Withdrawing with [deleteData] erases the sets on the server and on
+  /// this phone.
+  Future<void> set(bool granted, {bool deleteData = false}) async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+    final out = await ref.read(apiClientProvider).setExerciseConsent(granted, deleteData: deleteData);
+    final now = out['granted'] as bool;
+    await ref.read(sharedPreferencesProvider).setBool(_key(user.id), now);
+    if (!now && deleteData) {
+      await (await ref.read(exerciseStoreProvider.future)).deleteUserSessions(user.id);
+    }
+    state = AsyncData(now);
+    ref.invalidate(exerciseHistoryProvider);
+  }
+}
+
+/// Where QA landmark recordings are written (debug builds only; see pose_recording.dart).
+final poseRecordingDirProvider = FutureProvider<Directory>(
+  (ref) async => Directory(p.join(await getDatabasesPath(), 'pose_recordings')),
+);
+
 /// A fresh pose source per camera session (ML Kit on device; scripted in tests).
 final poseSourceFactoryProvider = Provider<PoseSource Function()>((ref) => () => MlKitPoseSource());
 
 final exerciseSyncProvider = FutureProvider<ExerciseSync>((ref) async {
   final store = await ref.watch(exerciseStoreProvider.future);
-  return ExerciseSync(store, ref.read(apiClientProvider).submitExerciseSession);
+  final api = ref.read(apiClientProvider);
+  return ExerciseSync(store, api.submitExerciseSession, fetchHistory: () => api.getExerciseHistory(limit: 50));
 });
 
 /// What happened to a finished set: saved locally, and uploaded if the network allowed.
@@ -305,11 +362,16 @@ final exerciseRecorderProvider = Provider<Future<SetOutcome> Function(SessionSum
   return (summary, startedAt) async {
     final user = ref.read(authProvider);
     if (user == null) return const SetOutcome(uploaded: false, xpAwarded: 0);
+    // A failure to save propagates: the caller tells the player the set was not kept.
     final store = await ref.read(exerciseStoreProvider.future);
     await store.saveSession(summary, userId: user.id, startedAt: startedAt);
-    final result = await (await ref.read(exerciseSyncProvider.future)).flush(user.id);
     ref.invalidate(exerciseHistoryProvider);
-    return SetOutcome(uploaded: !result.offline && result.uploaded > 0, xpAwarded: result.xpAwarded);
+    try {
+      final result = await (await ref.read(exerciseSyncProvider.future)).flush(user.id);
+      return SetOutcome(uploaded: !result.offline && result.uploaded > 0, xpAwarded: result.xpAwarded);
+    } on Object {
+      return const SetOutcome(uploaded: false, xpAwarded: 0); // saved; uploads on a later pass
+    }
   };
 });
 
@@ -321,11 +383,26 @@ class ExerciseHistory {
 }
 
 /// Recent sets and personal bests, read from SQLite (instant, offline). Opening it also
-/// retries any uploads still pending.
+/// retries pending uploads and pulls review outcomes in the background; if anything changed,
+/// the history reloads once.
 final exerciseHistoryProvider = FutureProvider.autoDispose<ExerciseHistory>((ref) async {
   final user = ref.watch(authProvider);
   if (user == null) return const ExerciseHistory([], {});
-  final store = await ref.watch(exerciseStoreProvider.future);
-  unawaited(ref.read(exerciseSyncProvider.future).then((s) => s.flush(user.id)).catchError((_) => const SyncResult(0, 0)));
+  final ExerciseStore store;
+  try {
+    store = await ref.watch(exerciseStoreProvider.future);
+  } on Object {
+    return const ExerciseHistory([], {});
+  }
+  unawaited(() async {
+    try {
+      final sync = await ref.read(exerciseSyncProvider.future);
+      final uploaded = (await sync.flush(user.id)).uploaded;
+      final changed = await sync.refreshOutcomes();
+      if ((uploaded > 0 || changed > 0) && ref.mounted) ref.invalidateSelf();
+    } on Object {
+      // Offline or signed out: the local history stands.
+    }
+  }());
   return ExerciseHistory(await store.recent(user.id), await store.personalBests(user.id));
 });

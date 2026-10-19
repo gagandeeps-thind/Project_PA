@@ -60,3 +60,19 @@ Osiris_admin_web/.vite/
 *.swo
 .DS_Store
 Thumbs.db
+
+# --- Kotlin Multiplatform / Gradle ---
+.gradle/
+.kotlin/
+build/
+local.properties
+config/environments/local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+# --- Xcode ---
+ios_version/**/xcuserdata/
+ios_version/**/DerivedData/
+ios_version/**/*.xcworkspace/xcuserdata/

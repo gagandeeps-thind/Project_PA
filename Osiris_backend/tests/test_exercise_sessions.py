@@ -25,6 +25,7 @@ from services import exercises as rules
 
 PREFIX = "exercise_test_"
 PASSWORD = "ExerciseTest1!"
+ADMIN_EMAIL = PREFIX + "admin@example.com"
 
 client = TestClient(main.app)
 
@@ -34,6 +35,11 @@ def cleanup() -> None:
     try:
         ids = [u.id for u in db.query(models.User).filter(models.User.email.like(PREFIX + "%")).all()]
         if ids:
+            set_ids = [i for (i,) in db.query(models.ExerciseSession.id).filter(
+                models.ExerciseSession.user_id.in_(ids)).all()] or [-1]
+            db.query(models.AuditEvent).filter(
+                (models.AuditEvent.entity_type == "exercise_session") & models.AuditEvent.entity_id.in_(set_ids)
+            ).delete(synchronize_session=False)
             growth_api.delete_growth_data(db, ids)
             db.query(models.AuditEvent).filter(
                 ((models.AuditEvent.actor_type == "player") & models.AuditEvent.actor_id.in_(ids))
@@ -41,18 +47,37 @@ def cleanup() -> None:
             ).delete(synchronize_session=False)
             db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.User).filter(models.User.id.in_(ids)).delete(synchronize_session=False)
+        db.query(models.Admin).filter(models.Admin.email == ADMIN_EMAIL).delete(synchronize_session=False)
         db.commit()
     finally:
         db.close()
 
 
-def _register(name):
+def _register(name, exercise_consent=True):
     r = client.post("/api/v2/auth/register", json={
         "email": f"{PREFIX}{name}@example.com", "password": PASSWORD, "display_name": name.title(),
         "goal": "fitness", "location_consent": True,
     })
     assert r.status_code == 201, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    if exercise_consent:
+        r = client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": True})
+        assert r.status_code == 200 and r.json()["granted"], r.text
+    return headers
+
+
+def _admin() -> dict:
+    db = database.SessionLocal()
+    try:
+        admin = db.query(models.Admin).filter(models.Admin.email == ADMIN_EMAIL).first()
+        if admin is None:
+            admin = models.Admin(email=ADMIN_EMAIL, hashed_password="x", name="Exercise Admin")
+            db.add(admin)
+            db.commit()
+        admin_id = admin.id
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
 
 
 def _durations(n, base=1.5):
@@ -124,6 +149,16 @@ def test_implausible_sets_are_refused() -> None:
     print("PASS implausible sets are refused")
 
 
+def test_previous_rules_version_still_accepted() -> None:
+    # A set recorded offline before the app fetched the current catalog stays fair game:
+    # the server-side checks have not changed since v1.
+    headers = _register("oldrules")
+    r = client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=8, rules_version="exercise-rules-v1"))
+    assert r.status_code == 201 and r.json()["status"] == "verified" and r.json()["xp_awarded"] == 8, r.text
+    assert rules.RULES_VERSION == "exercise-rules-v2" and "exercise-rules-v1" in rules.ACCEPTED_RULES_VERSIONS
+    print("PASS previous rules version still accepted")
+
+
 def test_rate_limit_on_reps_per_minute() -> None:
     decision = rules.evaluate(rules.SessionClaim(
         exercise_key="pushup", rules_version=rules.RULES_VERSION, duration_s=30.0, reps_attempted=40,
@@ -191,6 +226,111 @@ def test_submission_is_rate_limited() -> None:
     print("PASS submission is rate limited")
 
 
+def test_consent_is_explicit_and_revocable() -> None:
+    headers = _register("consent", exercise_consent=False)
+    state = client.get("/api/v2/me/exercise-consent", headers=headers).json()
+    assert state == {"granted": False, "policy_version": None, "updated_at": None, "deleted_sets": 0}, state
+    r = client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=5))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "EXERCISE_CONSENT_REQUIRED", r.text
+
+    assert client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": True}).json()["granted"]
+    # Granting twice does not add a second ledger row.
+    client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": True})
+    body = _set(reps=5)
+    assert client.post("/api/v2/exercise-sessions", headers=headers, json=body).status_code == 201
+
+    r = client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": False, "delete_data": True})
+    assert r.status_code == 200 and r.json()["granted"] is False and r.json()["deleted_sets"] == 1, r.text
+    assert client.get("/api/v2/me/exercise-sessions", headers=headers).json()["sessions"] == []
+    r = client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=5))
+    assert r.status_code == 403, "no new sets after withdrawal"
+
+    export = client.get("/api/v2/me/export", headers=headers).json()
+    ledger = [(c["kind"], c["granted"]) for c in export["consents"] if c["kind"] == "exercise_camera"]
+    assert ledger == [("exercise_camera", True), ("exercise_camera", False)], ledger
+    db = database.SessionLocal()
+    try:
+        uid = db.query(models.User.id).filter(models.User.email == f"{PREFIX}consent@example.com").one()[0]
+        actions = {a for (a,) in db.query(models.AuditEvent.action).filter(
+            models.AuditEvent.actor_type == "player", models.AuditEvent.actor_id == uid).all()}
+        assert {"consent.exercise_camera.granted", "consent.exercise_camera.withdrawn",
+                "exercise.data_deleted"} <= actions, actions
+    finally:
+        db.close()
+    print("PASS consent is explicit and revocable")
+
+
+def test_replay_after_withdrawal_returns_stored_result() -> None:
+    headers = _register("replay")
+    body = _set(reps=6)
+    first = client.post("/api/v2/exercise-sessions", headers=headers, json=body).json()
+    client.put("/api/v2/me/exercise-consent", headers=headers, json={"granted": False})
+    retry = client.post("/api/v2/exercise-sessions", headers=headers, json=body)
+    assert retry.status_code == 200 and retry.json()["id"] == first["id"] and retry.json()["duplicate"], retry.text
+    print("PASS replay after withdrawal returns the stored result")
+
+
+def test_admin_review_queue() -> None:
+    headers = _register("reviewed")
+    flagged = [client.post("/api/v2/exercise-sessions", headers=headers,
+                           json=_set(reps=10, rep_durations_s=[1.2] * 10)).json() for _ in range(3)]
+    assert all(f["status"] == "review" and f["xp_awarded"] == 0 for f in flagged), flagged
+    ids = [f["id"] for f in flagged]
+
+    assert client.get("/api/v2/admin/exercise-sessions").status_code == 401
+    assert client.get("/api/v2/admin/exercise-sessions", headers=headers).status_code == 403
+    assert client.post(f"/api/v2/admin/exercise-sessions/{ids[0]}/review", headers=headers,
+                       json={"decision": "approve", "note": "self approve"}).status_code == 403
+
+    admin = _admin()
+    uid = client.get("/api/v2/me/profile", headers=headers).json()["user_id"]
+    # Filter by player: the shared dev database may hold other flagged sets ahead of these.
+    queue = client.get("/api/v2/admin/exercise-sessions", params={"user_id": uid}, headers=admin).json()
+    assert [q["id"] for q in queue] == ids, queue
+    item = queue[0]
+    assert item["display_name"] == "Reviewed" and item["exercise_name"] == "Push-up", item
+    assert "replay_suspected" in item["reason_codes"] and item["rep_duration_cv"] == 0.0, item
+    assert item["rep_durations_s"] == [1.2] * 10 and item["xp_if_approved"] == 10, item
+    assert item["player_sets"] == 3 and item["player_flagged_sets"] == 3, item
+
+    before = client.get("/api/v2/me/exercise-sessions", headers=headers).json()["today_xp"]
+    r = client.post(f"/api/v2/admin/exercise-sessions/{ids[0]}/review", headers=admin,
+                    json={"decision": "approve", "note": "real person, metronome app"})
+    assert r.status_code == 200 and r.json() == {"id": ids[0], "status": "verified", "xp_awarded": 10}, r.text
+    again = client.post(f"/api/v2/admin/exercise-sessions/{ids[0]}/review", headers=admin,
+                        json={"decision": "reject", "note": "changed my mind"})
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "EXERCISE_SET_NOT_IN_REVIEW", again.text
+
+    r = client.post(f"/api/v2/admin/exercise-sessions/{ids[1]}/review", headers=admin,
+                    json={"decision": "reject", "note": "looped video"})
+    assert r.json()["status"] == "rejected" and r.json()["xp_awarded"] == 0, r.text
+    assert client.post(f"/api/v2/admin/exercise-sessions/{ids[2]}/review", headers=admin,
+                       json={"decision": "approve", "note": "x"}).status_code == 422, "a note is required"
+    assert client.post("/api/v2/admin/exercise-sessions/999999999/review", headers=admin,
+                       json={"decision": "approve", "note": "missing"}).status_code == 404
+
+    hist = {s["id"]: s for s in client.get("/api/v2/me/exercise-sessions", headers=headers).json()["sessions"]}
+    assert hist[ids[0]]["status"] == "verified" and hist[ids[0]]["xp_awarded"] == 10
+    assert hist[ids[1]]["status"] == "rejected"
+    assert client.get("/api/v2/me/exercise-sessions", headers=headers).json()["today_xp"] == before + 10
+
+    # Approval respects the day's caps: fill the push-up cap, then approve the last flagged set.
+    for _ in range(2):
+        client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=20))
+    r = client.post(f"/api/v2/admin/exercise-sessions/{ids[2]}/review", headers=admin,
+                    json={"decision": "approve", "note": "fine but capped"})
+    assert r.json() == {"id": ids[2], "status": "verified", "xp_awarded": 0}, r.text
+
+    db = database.SessionLocal()
+    try:
+        actions = [a for (a,) in db.query(models.AuditEvent.action).filter(
+            models.AuditEvent.entity_type == "exercise_session", models.AuditEvent.entity_id.in_(ids)).all()]
+        assert sorted(actions) == ["exercise.review.approve", "exercise.review.approve", "exercise.review.reject"]
+    finally:
+        db.close()
+    print("PASS admin review queue")
+
+
 def test_history_export_erase_and_metrics() -> None:
     headers = _register("history")
     client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=8))
@@ -222,11 +362,15 @@ if __name__ == "__main__":
         test_catalog_served_and_bundled_copy_in_sync()
         test_verified_set_awards_xp_once()
         test_implausible_sets_are_refused()
+        test_previous_rules_version_still_accepted()
         test_rate_limit_on_reps_per_minute()
         test_bad_input_is_422()
         test_daily_caps_per_exercise_and_total()
         test_plank_hold()
         test_submission_is_rate_limited()
+        test_consent_is_explicit_and_revocable()
+        test_replay_after_withdrawal_returns_stored_result()
+        test_admin_review_queue()
         test_history_export_erase_and_metrics()
     finally:
         cleanup()

@@ -22,14 +22,90 @@ IconData exerciseIcon(String key) => switch (key) {
 String formatBest(ExerciseSpec spec, double best) =>
     spec.isHold ? '${best.toStringAsFixed(0)} s' : '${best.toStringAsFixed(0)} reps';
 
+/// Asks for explicit consent to count exercises with the camera. Returns true once granted.
+Future<bool> askExerciseConsent(BuildContext context, WidgetRef ref) async {
+  final allow = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => const _ConsentSheet(),
+  );
+  if (allow != true) return false;
+  try {
+    await ref.read(exerciseConsentProvider.notifier).set(true);
+    return true;
+  } on Object catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiError.getMessage(e)), backgroundColor: OsirisTheme.error),
+      );
+    }
+    return false;
+  }
+}
+
+class _ConsentSheet extends StatelessWidget {
+  const _ConsentSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    const points = [
+      (Icons.phone_android, 'Camera images are analysed on this phone only, to find where your joints are. '
+          'They are never saved or uploaded.'),
+      (Icons.cloud_upload_outlined, 'Osiris keeps the exercise, your rep count, rep timings and a form score, '
+          'to verify sets and award XP. This is health information.'),
+      (Icons.toggle_off_outlined, 'You can withdraw at any time in Settings, and delete your exercise history.'),
+    ];
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Count reps with your camera?', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 16),
+          for (final (icon, text) in points)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(icon, color: OsirisTheme.secondary),
+                const SizedBox(width: 12),
+                Expanded(child: Text(text)),
+              ]),
+            ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              key: const Key('exercise-consent-allow'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('ALLOW'),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('NOT NOW')),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 /// Pick a camera-verified bodyweight exercise, see personal bests and recent sets.
 class ExerciseHubScreen extends ConsumerWidget {
   const ExerciseHubScreen({super.key});
+
+  Future<void> _open(BuildContext context, WidgetRef ref, ExerciseSpec spec) async {
+    final consented = ref.read(exerciseConsentProvider).value ?? false;
+    if (!consented && !await askExerciseConsent(context, ref)) return;
+    if (!context.mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExerciseCameraScreen(spec: spec)));
+    ref.invalidate(exerciseHistoryProvider);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final catalog = ref.watch(exerciseCatalogProvider);
     final history = ref.watch(exerciseHistoryProvider);
+    final consented = ref.watch(exerciseConsentProvider).value ?? false;
     final bests = history.value?.bests ?? const <String, double>{};
     return Scaffold(
       appBar: AppBar(title: const Text('Bodyweight')),
@@ -41,12 +117,19 @@ class ExerciseHubScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
             children: [
-              const Card(
+              Card(
                 child: ListTile(
-                  leading: Icon(Icons.lock_outline, color: OsirisTheme.secondary),
-                  title: Text('Your camera stays on your phone'),
-                  subtitle: Text('Reps are counted on this device. No video or photos are saved or uploaded; '
+                  leading: const Icon(Icons.lock_outline, color: OsirisTheme.secondary),
+                  title: const Text('Your camera stays on your phone'),
+                  subtitle: const Text('Reps are counted on this device. No video or photos are saved or uploaded; '
                       'only your rep count and timings are.'),
+                  trailing: consented
+                      ? null
+                      : TextButton(
+                          key: const Key('exercise-consent-open'),
+                          onPressed: () => askExerciseConsent(context, ref),
+                          child: const Text('ALLOW'),
+                        ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -61,9 +144,7 @@ class ExerciseHubScreen extends ConsumerWidget {
                         ? const Icon(Icons.chevron_right)
                         : Text('Best ${formatBest(spec, bests[spec.key]!)}',
                             style: const TextStyle(color: OsirisTheme.secondary)),
-                    onTap: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => ExerciseCameraScreen(spec: spec)))
-                        .then((_) => ref.invalidate(exerciseHistoryProvider)),
+                    onTap: () => _open(context, ref, spec),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -109,4 +190,50 @@ class _RecentSet extends StatelessWidget {
   }
 
   static String _two(int v) => v.toString().padLeft(2, '0');
+}
+
+/// Camera exercise counting consent. Withdrawing asks whether to keep or delete the sets.
+class ExerciseConsentTile extends ConsumerWidget {
+  const ExerciseConsentTile({super.key});
+
+  Future<void> _withdraw(BuildContext context, WidgetRef ref) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stop counting exercises?'),
+        content: const Text('Osiris will stop uploading exercise sets. You can also delete your exercise history '
+            'from Osiris and this phone. XP you already earned stays.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'keep'), child: const Text('KEEP MY SETS')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'delete'),
+            child: const Text('DELETE MY SETS', style: TextStyle(color: OsirisTheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    try {
+      await ref.read(exerciseConsentProvider.notifier).set(false, deleteData: choice == 'delete');
+    } on Object catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiError.getMessage(e)), backgroundColor: OsirisTheme.error),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final granted = ref.watch(exerciseConsentProvider).value ?? false;
+    return SwitchListTile(
+      key: const Key('exercise-consent-switch'),
+      value: granted,
+      onChanged: (v) => v ? askExerciseConsent(context, ref) : _withdraw(context, ref),
+      title: const Text('Camera exercise counting'),
+      subtitle: const Text('Counts reps on this phone; keeps rep counts and timings'),
+    );
+  }
 }

@@ -17,7 +17,7 @@ class Zone {
 
 /// A form rule checked while a rep is in progress:
 /// - `angle`: the angle at the middle of three [joints] must stay above [min];
-/// - `ankle_spread`: ankle distance over hip width must reach [min] at the rep's peak;
+/// - `ankle_spread`: ankle distance in torso lengths (median over the rep's peak frames) must reach [min];
 /// - `orientation`: the segment between two [joints] must stay within [maxDeg] of [axis].
 class FormRule {
   final String code;
@@ -62,6 +62,8 @@ class ExerciseSpec {
   final double maxRepS;
   final int maxRepsPerMin;
   final double maxHoldS;
+  /// Slowest pose stream (frames per second) the engine counts this exercise reliably at.
+  final double minPoseFps;
 
   const ExerciseSpec({
     required this.key,
@@ -78,6 +80,7 @@ class ExerciseSpec {
     required this.maxRepS,
     required this.maxRepsPerMin,
     required this.maxHoldS,
+    this.minPoseFps = 5,
   });
 
   bool get isHold => kind == 'hold';
@@ -99,6 +102,7 @@ class ExerciseSpec {
       maxRepS: (j['max_rep_s'] as num).toDouble(),
       maxRepsPerMin: (j['max_reps_per_min'] as num).toInt(),
       maxHoldS: (j['max_hold_s'] as num?)?.toDouble() ?? 0,
+      minPoseFps: (j['min_pose_fps'] as num?)?.toDouble() ?? 5,
     );
   }
 }

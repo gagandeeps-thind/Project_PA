@@ -113,6 +113,39 @@ void main() {
     expect(orphanReps.single['n'], 0);
   });
 
+  test("deleting a player's sets removes their reps and nobody else's", () async {
+    await store.saveSession(_summary(), userId: 7, startedAt: DateTime.utc(2026, 1, 1));
+    await store.saveSession(_summary(), userId: 8, startedAt: DateTime.utc(2026, 1, 1));
+    expect(await store.deleteUserSessions(7), 1);
+    expect(await store.recent(7), isEmpty);
+    expect(await store.recent(8), hasLength(1));
+    final reps = await store.db.rawQuery('SELECT COUNT(*) AS n FROM exercise_reps');
+    expect(reps.single['n'], 11, reason: "only user 8's 11 reps remain");
+  });
+
+  test('review outcomes reach sets already uploaded, and only those', () async {
+    final a = await store.saveSession(_summary(valid: 10), userId: 7, startedAt: DateTime.utc(2026, 1, 1));
+    final b = await store.saveSession(_summary(valid: 9), userId: 7, startedAt: DateTime.utc(2026, 1, 2));
+    await ExerciseSync(store, (body) async => {'status': 'review', 'xp_awarded': 0}).flush(7);
+    final c = await store.saveSession(_summary(valid: 8), userId: 7, startedAt: DateTime.utc(2026, 1, 3));
+    final sync = ExerciseSync(store, (_) async => throw _dioError(null), fetchHistory: () async => {
+          'sessions': [
+            {'client_session_id': a, 'status': 'verified', 'xp_awarded': 10},
+            {'client_session_id': b, 'status': 'review', 'xp_awarded': 0},
+            {'client_session_id': c, 'status': 'verified', 'xp_awarded': 99},
+          ],
+        });
+    expect(await sync.refreshOutcomes(), 1, reason: 'a changed; b is unchanged; c was never uploaded');
+    final byId = {for (final s in await store.recent(7)) s.id: s};
+    expect(byId[a]!.serverStatus, 'verified');
+    expect(byId[a]!.xpAwarded, 10);
+    expect(byId[c]!.syncState, 'pending');
+    expect(byId[c]!.xpAwarded, 0);
+    expect(await store.personalBests(7), {'pushup': 10.0}, reason: 'the approved set now counts as a best');
+    final offline = ExerciseSync(store, (_) async => {}, fetchHistory: () async => throw _dioError(null));
+    expect(await offline.refreshOutcomes(), 0);
+  });
+
   test('the database is opened only when the signed-in account changes', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -142,14 +175,14 @@ void main() {
   test('catalog: bundled first, then the cached server copy', () async {
     final bundled = File('assets/exercise_catalog.json').readAsStringSync();
     final serverCopy = jsonDecode(bundled) as Map<String, dynamic>;
-    serverCopy['rules_version'] = 'exercise-rules-v2';
+    serverCopy['rules_version'] = 'exercise-rules-v3';
     final repo = CatalogRepository(store: store, loadBundled: () async => bundled, fetch: () async => serverCopy);
-    expect((await repo.load()).rulesVersion, 'exercise-rules-v1');
-    expect((await repo.refresh())?.rulesVersion, 'exercise-rules-v2');
     expect((await repo.load()).rulesVersion, 'exercise-rules-v2');
+    expect((await repo.refresh())?.rulesVersion, 'exercise-rules-v3');
+    expect((await repo.load()).rulesVersion, 'exercise-rules-v3');
     final offline = CatalogRepository(store: store, loadBundled: () async => bundled, fetch: () async => throw _dioError(null));
     expect(await offline.refresh(), isNull);
-    expect((await offline.load()).rulesVersion, 'exercise-rules-v2');
+    expect((await offline.load()).rulesVersion, 'exercise-rules-v3');
   });
 
   test('saving 20 sets and reading history stays fast', () async {

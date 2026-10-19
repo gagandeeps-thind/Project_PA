@@ -329,6 +329,175 @@
         "title": "AdminCourseStatus",
         "type": "object"
       },
+      "AdminExerciseItem": {
+        "properties": {
+          "client_verdict": {
+            "title": "Client Verdict",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "exercise_key": {
+            "title": "Exercise Key",
+            "type": "string"
+          },
+          "exercise_name": {
+            "title": "Exercise Name",
+            "type": "string"
+          },
+          "form_score": {
+            "title": "Form Score",
+            "type": "number"
+          },
+          "hold_s": {
+            "title": "Hold S",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "local_date": {
+            "title": "Local Date",
+            "type": "string"
+          },
+          "player_flagged_sets": {
+            "title": "Player Flagged Sets",
+            "type": "integer"
+          },
+          "player_sets": {
+            "title": "Player Sets",
+            "type": "integer"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "rep_duration_cv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rep Duration Cv"
+          },
+          "rep_durations_s": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Rep Durations S",
+            "type": "array"
+          },
+          "reps_attempted": {
+            "title": "Reps Attempted",
+            "type": "integer"
+          },
+          "reps_valid": {
+            "title": "Reps Valid",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "xp_if_approved": {
+            "title": "Xp If Approved",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "display_name",
+          "exercise_key",
+          "exercise_name",
+          "status",
+          "client_verdict",
+          "reason_codes",
+          "reps_attempted",
+          "reps_valid",
+          "hold_s",
+          "duration_s",
+          "form_score",
+          "rep_durations_s",
+          "rep_duration_cv",
+          "xp_if_approved",
+          "player_sets",
+          "player_flagged_sets",
+          "local_date",
+          "created_at"
+        ],
+        "title": "AdminExerciseItem",
+        "type": "object"
+      },
+      "AdminExerciseReview": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "note"
+        ],
+        "title": "AdminExerciseReview",
+        "type": "object"
+      },
+      "AdminExerciseReviewOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "xp_awarded": {
+            "title": "Xp Awarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "xp_awarded"
+        ],
+        "title": "AdminExerciseReviewOut",
+        "type": "object"
+      },
       "AdminMerchantListItem": {
         "properties": {
           "business_type": {
@@ -2274,6 +2443,67 @@
         "title": "EventIn",
         "type": "object"
       },
+      "ExerciseConsentIn": {
+        "properties": {
+          "delete_data": {
+            "default": false,
+            "title": "Delete Data",
+            "type": "boolean"
+          },
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "granted"
+        ],
+        "title": "ExerciseConsentIn",
+        "type": "object"
+      },
+      "ExerciseConsentOut": {
+        "properties": {
+          "deleted_sets": {
+            "default": 0,
+            "title": "Deleted Sets",
+            "type": "integer"
+          },
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "granted",
+          "policy_version",
+          "updated_at"
+        ],
+        "title": "ExerciseConsentOut",
+        "type": "object"
+      },
       "ExerciseHistoryOut": {
         "properties": {
           "daily_xp_cap": {
@@ -3227,7 +3457,7 @@
             "type": "string"
           },
           "new_password": {
-            "maxLength": 128,
+            "maxLength": 72,
             "minLength": 8,
             "title": "New Password",
             "type": "string"
@@ -3864,7 +4094,7 @@
             "type": "boolean"
           },
           "password": {
-            "maxLength": 128,
+            "maxLength": 72,
             "minLength": 8,
             "title": "Password",
             "type": "string"
@@ -4872,7 +5102,6 @@
             "type": "number"
           },
           "email": {
-            "format": "email",
             "title": "Email",
             "type": "string"
           },
@@ -6818,6 +7047,137 @@
         "summary": "Admin Suspend Course"
       }
     },
+    "/api/v2/admin/exercise-sessions": {
+      "get": {
+        "description": "Sets the server re-check flagged (or any status), oldest first, with the evidence a\nreviewer needs: rep timings, reason codes and the player's flag history. `user_id`\nnarrows the queue to one player.",
+        "operationId": "admin_exercise_sessions_api_v2_admin_exercise_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "review",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminExerciseItem"
+                  },
+                  "title": "Response Admin Exercise Sessions Api V2 Admin Exercise Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Exercise Sessions"
+      }
+    },
+    "/api/v2/admin/exercise-sessions/{session_id}/review": {
+      "post": {
+        "description": "Approve (verified, capped XP for that set's day) or reject a flagged set. A set is\ndecided once: the status change is a conditional update, so two reviewers acting at the\nsame time cannot both grant XP.",
+        "operationId": "admin_review_exercise_session_api_v2_admin_exercise_sessions__session_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminExerciseReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminExerciseReviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Review Exercise Session"
+      }
+    },
     "/api/v2/admin/funnel": {
       "get": {
         "description": "Activation funnel and retention for players who registered in the window.\nWeek-N retention = share of the cohort (old enough to measure) with a verified run\n7N..7N+6 days after sign-up.",
@@ -8499,6 +8859,71 @@
           }
         ],
         "summary": "Erase My Account"
+      }
+    },
+    "/api/v2/me/exercise-consent": {
+      "get": {
+        "operationId": "get_exercise_consent_api_v2_me_exercise_consent_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Exercise Consent"
+      },
+      "put": {
+        "description": "Explicit, revocable consent to count exercises with the camera and keep the results\n(rep timings are health data). Each change is a new ledger row; withdrawal stops uploads\nand can erase the stored sets.",
+        "operationId": "set_exercise_consent_api_v2_me_exercise_consent_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExerciseConsentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Set Exercise Consent"
       }
     },
     "/api/v2/me/exercise-sessions": {

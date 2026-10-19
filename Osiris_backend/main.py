@@ -2,9 +2,9 @@
 # FastAPI: The core web framework. HTTPException: Used to return errors (like 404 Not Found). Depends: Used to inject database sessions.
 from fastapi import FastAPI, HTTPException, Depends, Request
 # Pydantic: Used for validating the shape of JSON data coming in and going out of our API.
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Annotated, Optional, List
 import functools
 import json
 import logging
@@ -435,13 +435,29 @@ def _to_naive_utc(dt: datetime) -> datetime:
         return dt
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
+# bcrypt only reads the first 72 bytes and, from bcrypt 4.1, raises on longer input.
+BCRYPT_MAX_BYTES = 72
+
+
 def get_password_hash(password: str) -> str:
     """Takes a plain text password and returns a securely hashed version using bcrypt."""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Checks if a plain text password matches the hashed version stored in the database."""
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    """Checks if a plain text password matches the hashed version stored in the database.
+    Input is cut to bcrypt's 72 bytes, which is what older bcrypt releases hashed, so a longer
+    attempt is a wrong password instead of a server error."""
+    return bcrypt.checkpw(plain_password.encode('utf-8')[:BCRYPT_MAX_BYTES], hashed_password.encode('utf-8'))
+
+
+def _fits_bcrypt(password: str) -> str:
+    if len(password.encode('utf-8')) > BCRYPT_MAX_BYTES:
+        raise ValueError("Password is too long: at most 72 characters, fewer with accents or emoji")
+    return password
+
+
+# A new password: 72 characters, and at most 72 bytes once encoded, so bcrypt can hash it.
+NewPassword = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(_fits_bcrypt)]
 
 # --- Pydantic Models (Data Validation) ---
 # NOTE: Do not confuse Pydantic models with SQLAlchemy models!
@@ -451,7 +467,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # The JSON shape we expect when a user registers
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=72, description="8-72 characters (bcrypt's byte limit).")
+    password: NewPassword = Field(..., description="8-72 characters (bcrypt's byte limit).")
     weight_kg: float = Field(..., gt=0, description="Weight in kg must be greater than 0")
     height_m: float = Field(..., gt=0, description="Height in meters must be greater than 0")
     preferred_path: str = "Balance"  # Options: Strength, Cardio, Balance
@@ -567,7 +583,8 @@ class VerificationResult(BaseModel):
 # The JSON shape we promise to return to the frontend when sending user data
 class UserProfile(BaseModel):
     id: int
-    email: EmailStr
+    # Plain str: older v2 sign-ups stored addresses EmailStr rejects, and output must not fail on them.
+    email: str
     bmi: Optional[float] = None  # v2 registrations collect no body measurements
     avatar_class: str
     xp: int
@@ -731,7 +748,7 @@ class PartyRoleResponse(BaseModel):
 class MerchantCreate(BaseModel):
     name: str
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=72)
+    password: NewPassword
     business_type: str = "general"
 
 class MerchantResponse(BaseModel):

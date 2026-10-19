@@ -38,6 +38,7 @@ from main import (
     _audit,
     _now_naive_utc,
     app,
+    NewPassword,
     create_access_token,
     get_active_player,
     get_current_admin,
@@ -53,7 +54,7 @@ from services import quests as quest_rules
 router = APIRouter()
 
 POLICY_VERSION = "privacy-2026-09"
-CONSENT_KINDS = ("location", "public_profile", "leaderboard")
+CONSENT_KINDS = ("location", "public_profile", "leaderboard", "exercise_camera")
 REPORT_TARGETS = ("user", "challenge", "community", "share_card")
 REPORT_REASONS = (
     "unsafe_route", "harassment", "cheating", "spam", "inappropriate_name", "privacy", "other",
@@ -118,7 +119,7 @@ class BlockOut(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: NewPassword
 
 
 class EraseRequest(BaseModel):

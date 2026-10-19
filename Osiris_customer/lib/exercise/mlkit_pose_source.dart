@@ -49,7 +49,9 @@ class MlKitPoseSource extends PoseSource {
   );
   CameraController? _camera;
   bool _busy = false;
-  final _clock = Stopwatch();
+  // One monotonic clock for every camera session: when the app is backgrounded mid-set and the
+  // camera reopens, frame times keep increasing instead of restarting under an unfinished rep.
+  static final Stopwatch _clock = Stopwatch()..start();
   Size? _imageSize;
   bool _mirrored = false;
 
@@ -78,7 +80,6 @@ class MlKitPoseSource extends PoseSource {
     );
     _camera = camera;
     await camera.initialize();
-    _clock.start();
     await camera.startImageStream(_onImage);
   }
 
