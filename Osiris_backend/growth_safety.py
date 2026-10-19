@@ -38,6 +38,7 @@ from main import (
     _audit,
     _now_naive_utc,
     app,
+    NewPassword,
     create_access_token,
     get_active_player,
     get_current_admin,
@@ -118,7 +119,7 @@ class BlockOut(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: NewPassword
 
 
 class EraseRequest(BaseModel):

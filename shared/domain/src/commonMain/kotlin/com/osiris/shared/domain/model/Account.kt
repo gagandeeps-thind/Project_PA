@@ -91,11 +91,14 @@ data class Registration(
         if (displayName.trim().length > 30) put(FIELD_NAME, "At most 30 characters")
         if (!email.contains('@')) put(FIELD_EMAIL, "Enter a valid email")
         if (password.length < 8) put(FIELD_PASSWORD, "At least 8 characters")
+        // The server's bcrypt limit is in bytes; accents and emoji take more than one.
+        if (password.encodeToByteArray().size > PASSWORD_MAX_BYTES) put(FIELD_PASSWORD, "At most 72 characters")
     }
 
     companion object {
         const val FIELD_NAME = "name"
         const val FIELD_EMAIL = "email"
         const val FIELD_PASSWORD = "password"
+        const val PASSWORD_MAX_BYTES = 72
     }
 }

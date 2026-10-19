@@ -188,6 +188,50 @@ def test_registration_is_bmi_free_and_onboarding_tracks_funnel() -> None:
     assert r.status_code == 200 and r.json()["role"] == "player"
 
 
+def test_sign_up_input_the_profile_cannot_serve_is_refused_up_front() -> None:
+    cleanup()
+    # A reserved domain passed the old "@" check, then every profile load failed EmailStr with a 500.
+    r = client.post("/api/v2/auth/register", json={
+        "email": f"{PREFIX}reserved@example.test", "password": PASSWORD, "display_name": "Reserved",
+    })
+    assert r.status_code == 422, r.text
+    # 40 characters but 80 bytes: bcrypt refuses more than 72 bytes, so this must be a 422, not a 500.
+    long_password = "\u00e9" * 40
+    r = client.post("/api/v2/auth/register", json={
+        "email": f"{PREFIX}long@example.com", "password": long_password, "display_name": "Long",
+    })
+    assert r.status_code == 422, r.text
+    db = database.SessionLocal()
+    try:
+        assert db.query(models.User).filter(models.User.email.in_([
+            f"{PREFIX}reserved@example.test", f"{PREFIX}long@example.com",
+        ])).count() == 0
+    finally:
+        db.close()
+
+    headers, profile = _register("grace")
+    r = client.post("/api/v2/me/password", headers=headers, json={
+        "current_password": PASSWORD, "new_password": long_password,
+    })
+    assert r.status_code == 422, r.text
+    # An over-long attempt is a wrong password, not a server error.
+    r = client.post("/api/v1/auth/login", json={
+        "email": f"{PREFIX}grace@example.com", "password": long_password, "device_timestamp": _now(),
+    })
+    assert r.status_code == 401, r.text
+
+    # Accounts already stored with such an address still load their profile.
+    db = database.SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.id == profile["user_id"]).first()
+        user.email = f"{PREFIX}grace@example.test"
+        db.commit()
+    finally:
+        db.close()
+    r = client.get(f"/api/v1/users/{profile['user_id']}", headers=headers)
+    assert r.status_code == 200 and r.json()["email"] == f"{PREFIX}grace@example.test", r.text
+
+
 def test_today_quest_completes_once_from_verified_run() -> None:
     cleanup()
     headers, profile = _register("grace")
@@ -253,6 +297,7 @@ if __name__ == "__main__":
         test_recovery_after_three_active_days,
         test_weekly_streak_does_not_punish_rest,
         test_registration_is_bmi_free_and_onboarding_tracks_funnel,
+        test_sign_up_input_the_profile_cannot_serve_is_refused_up_front,
         test_today_quest_completes_once_from_verified_run,
         test_client_events_cannot_forge_milestones_or_location,
         test_admin_funnel,
