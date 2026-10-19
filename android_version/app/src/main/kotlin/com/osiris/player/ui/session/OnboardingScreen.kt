@@ -45,8 +45,8 @@ import com.osiris.shared.presentation.session.OnboardingState
 import com.osiris.shared.presentation.session.OnboardingViewModel
 
 @Composable
-fun OnboardingScreen(graph: AppGraph, onBack: () -> Unit) {
-    val vm = rememberShared { graph.onboarding() }
+fun OnboardingScreen(graph: AppGraph, onBack: () -> Unit, inviteToken: String? = null, referralCode: String? = null) {
+    val vm = rememberShared { graph.onboarding(inviteToken, referralCode) }
     val s by vm.state.collectAsStateWithLifecycle()
     val back = { if (s.canGoBack) vm.back() else onBack() }
     BackHandler(onBack = back)

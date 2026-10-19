@@ -2,6 +2,7 @@ package com.osiris.player.ui.progress
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -40,10 +41,10 @@ import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.progress.ProgressSummary
 
 @Composable
-fun ProgressScreen(graph: AppGraph, onBack: () -> Unit) {
+fun ProgressScreen(graph: AppGraph, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
     val vm = rememberShared { graph.progress() }
     val state by vm.state.collectAsStateWithLifecycle()
-    OsirisScaffold("PROGRESS", vm, onBack = onBack) { padding ->
+    OsirisScaffold("PROGRESS", vm, onBack = onBack, actions = actions) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LoadableContent(state, onRetry = vm::refresh) { p ->
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { ProgressionCard(p) }

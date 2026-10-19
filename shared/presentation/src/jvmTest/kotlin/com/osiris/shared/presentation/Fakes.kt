@@ -179,3 +179,14 @@ class FakePrivacy : com.osiris.shared.domain.repository.PrivacyRepository {
         },
     )
 }
+
+class FakeDeviceSetup(primerDone: Boolean = false) : com.osiris.shared.domain.repository.DeviceSetupRepository {
+    override val primerCompleted = MutableStateFlow(primerDone)
+    override val telemetryConsent = MutableStateFlow(false)
+    override suspend fun completePrimer() {
+        primerCompleted.value = true
+    }
+    override suspend fun setTelemetryConsent(granted: Boolean) {
+        telemetryConsent.value = granted
+    }
+}

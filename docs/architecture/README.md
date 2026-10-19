@@ -54,6 +54,14 @@ navigation requests are part of the state, not one-shot events, so nothing is lo
 or when SwiftUI re-renders. `Loadable<T>` (`Loading`, `Ready`, `Failed(message, canRetry)`) is
 the shape of every loaded screen. `AppGraph` is the composition root both apps create once.
 
+**Navigation and design.** `AppNavigatorViewModel` is the route guard at the app root:
+`RootState` is the permission primer on first launch, sign-in, or the tabbed app, and a restored
+session goes straight to Home. `DeepLinkParser` accepts `osiris://…` and the backend's public
+`https://<links.webHost>/i/…` and `/join/…` pages only; a link opened while signed out waits for
+sign-in, and invite/referral links prefill account creation. FrostMatte design tokens live in
+`shared/core` (`FrostMatte`), so Compose (Haze backdrop blur, matte fallback below Android 12) and
+SwiftUI (system materials) draw from one set of values.
+
 **Android.** `rememberShared { graph.today() }` keeps a view model in an androidx `ViewModel`
 and clears it with the screen. Screens collect `state` with `collectAsStateWithLifecycle`.
 Platform adapters live in `platform/`: fused location and the run foreground service, CameraX +

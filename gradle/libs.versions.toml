@@ -23,6 +23,8 @@ camerax = "1.4.2"
 mlkit-pose = "18.0.0-beta5"
 play-services-location = "21.3.0"
 osmdroid = "6.1.20"
+# 1.6.x is the last line built on Compose 1.8 / Kotlin 2.1; 1.7+ and 2.x need Compose 1.12 and Kotlin 2.3+.
+haze = "1.6.10"
 junit = "4.13.2"
 
 [libraries]
@@ -80,4 +82,5 @@ camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax"
 mlkit-pose-detection = { module = "com.google.mlkit:pose-detection", version.ref = "mlkit-pose" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "play-services-location" }
 osmdroid = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroid" }
+haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 junit = { module = "junit:junit", version.ref = "junit" }
