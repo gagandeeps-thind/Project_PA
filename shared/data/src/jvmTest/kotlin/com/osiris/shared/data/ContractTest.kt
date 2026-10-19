@@ -11,6 +11,8 @@ import com.osiris.shared.domain.model.CourseSummary
 import com.osiris.shared.domain.model.ExerciseHistoryResponse
 import com.osiris.shared.domain.model.ExerciseUpload
 import com.osiris.shared.domain.model.ExerciseUploadResult
+import com.osiris.shared.domain.model.GlobalBoard
+import com.osiris.shared.domain.model.HubSectionData
 import com.osiris.shared.domain.model.InviteLink
 import com.osiris.shared.domain.model.Leaderboard
 import com.osiris.shared.domain.model.LoginResponse
@@ -90,6 +92,8 @@ class ContractTest {
         Triple("GET", "/api/v2/leaderboards/local", Leaderboard.serializer()),
         Triple("GET", "/api/v2/seasons", ListSerializer(Season.serializer())),
         Triple("GET", "/api/v2/seasons/{}/leaderboard", SeasonLeaderboard.serializer()),
+        Triple("GET", "/api/v2/challenge-hub", HubSectionData.serializer()),
+        Triple("GET", "/api/v2/leaderboards/global", GlobalBoard.serializer()),
         Triple("POST", "/api/v2/exercise-sessions", ExerciseUploadResult.serializer()),
         Triple("GET", "/api/v2/me/exercise-consent", ConsentState.serializer()),
         Triple("PUT", "/api/v2/me/exercise-consent", ConsentState.serializer()),

@@ -4052,6 +4052,11 @@
             "title": "Performance Rank",
             "type": "string"
           },
+          "rank_floor_xp": {
+            "default": 0,
+            "title": "Rank Floor Xp",
+            "type": "integer"
+          },
           "rank_ladder_version": {
             "title": "Rank Ladder Version",
             "type": "string"

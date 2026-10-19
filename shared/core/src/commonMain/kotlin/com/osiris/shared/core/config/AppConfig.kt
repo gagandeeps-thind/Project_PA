@@ -43,6 +43,7 @@ data class AppConfig(
             features = FeatureFlags(
                 legacyGame = GeneratedEnv.FEATURE_LEGACY,
                 poseRecording = GeneratedEnv.FEATURE_POSE_RECORDING,
+                walletDemo = GeneratedEnv.FEATURE_WALLET_DEMO,
             ),
             webLinkHost = GeneratedEnv.LINKS_WEB_HOST,
         )
@@ -55,8 +56,11 @@ data class AppConfig(
  * @property legacyGame bounty, vault and domain screens kept behind a flag while the product
  *   moves to the run, course and challenge loop (Backlog Phase 3).
  * @property poseRecording landmark recording for device QA; never on in production.
+ * @property walletDemo the Wallet tab backed by mock payment adapters; off in production, where
+ *   no fake balance may be shown.
  */
 data class FeatureFlags(
     val legacyGame: Boolean = false,
     val poseRecording: Boolean = false,
+    val walletDemo: Boolean = false,
 )

@@ -18,6 +18,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import main  # noqa: E402
 import models  # noqa: E402
+from services import challenges as challenge_rules  # noqa: E402
 from database import Base  # noqa: E402
 from services import leaderboards as lb  # noqa: E402
 
@@ -223,6 +224,8 @@ def test_progression_counts_for_the_profile():
     assert (p["challenges_won"], p["challenges_lost"], p["challenges_played"]) == (1, 0, 1)
     assert p["lifetime_distance_km"] == 8.0
     assert p["global_rank"] == 1
+    assert (p["rank_floor_xp"], p["next_rank_xp"]) == (0, 500)
+    assert [challenge_rules.rank_floor(x) for x in (0, 499, 500, 1100, 40000)] == [0, 0, 500, 500, 35000]
     a = client.get("/api/v2/me/progression", headers=ana_h).json()
     assert (a["challenges_won"], a["challenges_lost"], a["challenges_played"], a["global_rank"]) == (0, 1, 1, 3)
     print("PASS test_progression_counts_for_the_profile")

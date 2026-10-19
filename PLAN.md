@@ -232,3 +232,10 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
 - [ ] [human] admin web: add `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks` and `prettier` to devDependencies
   (`npm install -D ...` rewrites `package-lock.json`, which agents may not edit); an agent then adds the configs and a `lint` script.
 - [ ] [human] infra: pick the cloud (AWS or GCP) before Terraform is written; until then `infrastructure/` holds only images.
+- [x] tabs: Discover (live, upcoming, community, finished; `GET /api/v2/challenge-hub`), Social global boards
+  (distance, Riegel Pace Index, reps, rewards; `GET /api/v2/leaderboards/global`), Profile (rank gauge from
+  `rank_floor_xp`, metrics grid), Wallet behind `features.walletDemo` with mock adapters only (no PAN handling,
+  EIP-55 / base58 address checks, never touches crystals)
+- [ ] [human] ci: add `python tests/test_growth_hub.py` after the existing suites in `.github/workflows/ci.yml`.
+- [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
+  activity feed, daily steps; blocks friends, the steps board and rotating refresh tokens.

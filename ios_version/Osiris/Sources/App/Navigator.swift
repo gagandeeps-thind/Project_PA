@@ -1,7 +1,7 @@
 import SwiftUI
 import OsirisShared
 
-/// Screens reachable from Today. Kotlin `Int` ids arrive in Swift as `Int32`.
+/// Screens pushed onto a tab's stack. Kotlin `Int` ids arrive in Swift as `Int32`.
 enum Route: Hashable {
     case run(challengeId: Int32?)
     case challenges
@@ -10,7 +10,6 @@ enum Route: Hashable {
     case clubs
     case club(String)
     case rankings
-    case progress
     case settings
     case exercises
     case exercise(String)
@@ -38,7 +37,6 @@ func destination(_ route: Route, graph: AppGraph) -> some View {
     case .clubs: CommunitiesView(graph: graph)
     case .club(let slug): CommunityDetailView(graph: graph, slug: slug)
     case .rankings: RankingsView(graph: graph)
-    case .progress: ProgressScreen(graph: graph)
     case .settings: SettingsView(graph: graph)
     case .exercises: ExerciseHubView(graph: graph)
     case .exercise(let key): ExerciseCameraView(graph: graph, key: key)

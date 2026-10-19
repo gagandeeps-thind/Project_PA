@@ -24,7 +24,7 @@ val generateEnv by tasks.registering {
         val required = listOf(
             "environment", "api.baseUrl.android", "api.baseUrl.ios", "api.baseUrl.jvm",
             "api.connectTimeoutMs", "api.requestTimeoutMs", "http.logging", "features.legacy", "features.poseRecording",
-            "links.webHost",
+            "features.walletDemo", "links.webHost",
         )
         val missing = required.filter { props.getProperty(it).isNullOrBlank() }
         require(missing.isEmpty()) { "${selected.name} is missing: ${missing.joinToString()}" }
@@ -48,6 +48,7 @@ val generateEnv by tasks.registering {
             |    const val HTTP_LOGGING: Boolean = ${b("http.logging")}
             |    const val FEATURE_LEGACY: Boolean = ${b("features.legacy")}
             |    const val FEATURE_POSE_RECORDING: Boolean = ${b("features.poseRecording")}
+            |    const val FEATURE_WALLET_DEMO: Boolean = ${b("features.walletDemo")}
             |    const val LINKS_WEB_HOST: String = ${s("links.webHost")}
             |}
             |""".trimMargin(),

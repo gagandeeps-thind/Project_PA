@@ -10,7 +10,17 @@ import com.osiris.shared.domain.model.ChallengeDraft
 import com.osiris.shared.domain.model.ChallengeSummary
 import com.osiris.shared.domain.model.CourseRoute
 import com.osiris.shared.domain.model.CourseSummary
+import com.osiris.shared.domain.model.BoardExercise
+import com.osiris.shared.domain.model.BoardKind
+import com.osiris.shared.domain.model.BoardPeriod
+import com.osiris.shared.domain.model.Community
 import com.osiris.shared.domain.model.ExerciseHistory
+import com.osiris.shared.domain.model.GlobalBoard
+import com.osiris.shared.domain.model.HubChallenge
+import com.osiris.shared.domain.model.HubSection
+import com.osiris.shared.domain.model.Leaderboard
+import com.osiris.shared.domain.model.Season
+import com.osiris.shared.domain.model.SeasonLeaderboard
 import com.osiris.shared.domain.model.PlayerProfile
 import com.osiris.shared.domain.model.Progression
 import com.osiris.shared.domain.model.Quest
@@ -26,6 +36,7 @@ import com.osiris.shared.domain.model.WeeklyGoal
 import com.osiris.shared.domain.repository.AuthRepository
 import com.osiris.shared.domain.repository.AuthState
 import com.osiris.shared.domain.repository.ChallengeRepository
+import com.osiris.shared.domain.repository.CommunityRepository
 import com.osiris.shared.domain.repository.ExerciseRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.RunRepository
@@ -81,7 +92,8 @@ class FakePlayer : PlayerRepository {
     override suspend fun today(position: LatLng?) = todayResult
     override suspend fun profile() = ok(PlayerProfile(userId = 7, identity = "athlete"))
     override suspend fun updateProfile(changes: JsonObject) = ok(PlayerProfile(userId = 7))
-    override suspend fun progression() = ok(Progression(xp = 120, nextRankXp = 200))
+    var progressionResult: Outcome<Progression> = ok(Progression(xp = 120, nextRankXp = 200))
+    override suspend fun progression() = progressionResult
     override suspend fun referrals() = ok(ReferralSummary(code = "ABC", url = "https://osiris.example/r/ABC"))
     override suspend fun shareAchievement(kind: String, entityId: Int) = ok(ShareCard("t", "https://osiris.example/s/t"))
     override suspend fun track(event: String, properties: Map<String, String>) {
@@ -142,6 +154,28 @@ class FakeChallenges : ChallengeRepository {
         calls += "block"
         return ok(Unit)
     }
+    var hub: Map<HubSection, Outcome<List<HubChallenge>>> = emptyMap()
+    override suspend fun hub(section: HubSection) = hub[section] ?: ok(emptyList())
+}
+
+/** Global boards are answered by [boards]; a test can suspend one to model a slow response. */
+class FakeCommunities : CommunityRepository {
+    var boards: suspend (BoardKind, BoardPeriod, BoardExercise) -> Outcome<GlobalBoard> =
+        { kind, period, _ -> ok(GlobalBoard(board = kind.wire, period = period.wire, unit = "km")) }
+    override suspend fun globalBoard(kind: BoardKind, period: BoardPeriod, exercise: BoardExercise) =
+        boards(kind, period, exercise)
+    override suspend fun discover(city: String?) = ok(emptyList<Community>())
+    override suspend fun mine() = ok(emptyList<Community>())
+    override suspend fun community(slug: String) = ok(Community(slug, slug))
+    override suspend fun join(slug: String, joinCode: String?) = ok(Community(slug, slug, myRole = "member"))
+    override suspend fun leave(slug: String) = ok(Unit)
+    override suspend fun leaderboard(slug: String) = ok(Leaderboard())
+    override suspend fun challenges(slug: String) = ok(emptyList<ChallengeSummary>())
+    override suspend fun local() = ok(Leaderboard())
+    override suspend fun seasons() = ok(emptyList<Season>())
+    override suspend fun joinSeason(slug: String) = ok(Unit)
+    override suspend fun seasonLeaderboard(slug: String) = ok(SeasonLeaderboard())
+    override suspend fun report(slug: String) = ok("Thanks.")
 }
 
 class FakeExercises : ExerciseRepository {

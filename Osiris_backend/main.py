@@ -1731,6 +1731,7 @@ class ProgressionResponse(BaseModel):
     xp: int
     performance_rank: str
     rank_ladder_version: str
+    rank_floor_xp: int = 0                   # where the current rank starts, for the progress gauge
     next_rank_xp: Optional[int] = None
     verified_runs: int
     courses: int
@@ -2256,6 +2257,7 @@ def my_progression(
         xp=xp,
         performance_rank=challenge_rules.performance_rank(xp),
         rank_ladder_version=challenge_rules.RANK_LADDER_VERSION,
+        rank_floor_xp=challenge_rules.rank_floor(xp),
         next_rank_xp=challenge_rules.next_rank_threshold(xp),
         verified_runs=db.query(models.RunSession).filter(
             models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",

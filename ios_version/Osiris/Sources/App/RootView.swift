@@ -36,12 +36,12 @@ struct RootView: View {
     }
 }
 
-/// The bar's sections. Wallet joins when its screen ships.
+/// The bar's sections. Wallet shows only in builds that have one.
 private enum AppSection: Hashable {
-    case home, discover, social, profile
+    case home, discover, social, wallet, profile
 }
 
-/// Four tabs, each with its own stack; signing out replaces the whole tree.
+/// One stack per tab; signing out replaces the whole tree.
 private struct SignedInRoot: View {
     let graph: AppGraph
     let pending: (any Destination)?
@@ -50,6 +50,7 @@ private struct SignedInRoot: View {
     @StateObject private var home = Navigator()
     @StateObject private var discover = Navigator()
     @StateObject private var social = Navigator()
+    @StateObject private var wallet = Navigator()
     @StateObject private var profile = Navigator()
 
     var body: some View {
@@ -57,13 +58,18 @@ private struct SignedInRoot: View {
             stack(home) { TodayView(graph: graph) }
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(AppSection.home)
-            stack(discover) { ChallengeBoardView(graph: graph) }
+            stack(discover) { DiscoverView(graph: graph) }
                 .tabItem { Label("Discover", systemImage: "safari") }
                 .tag(AppSection.discover)
-            stack(social) { RankingsView(graph: graph) }
+            stack(social) { SocialView(graph: graph) }
                 .tabItem { Label("Social", systemImage: "person.3") }
                 .tag(AppSection.social)
-            stack(profile) { ProgressScreen(graph: graph) }
+            if graph.hasWallet {
+                stack(wallet) { WalletView(graph: graph) }
+                    .tabItem { Label("Wallet", systemImage: "creditcard") }
+                    .tag(AppSection.wallet)
+            }
+            stack(profile) { ProfileView(graph: graph) }
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }
                 .tag(AppSection.profile)
         }
@@ -86,6 +92,7 @@ private struct SignedInRoot: View {
             switch tab.tab {
             case .discover: section = .discover
             case .social: section = .social
+            case .wallet: section = graph.hasWallet ? .wallet : .home
             case .profile: section = .profile
             default: section = .home
             }

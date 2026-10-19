@@ -12,17 +12,20 @@ import com.osiris.shared.presentation.challenge.CoursesViewModel
 import com.osiris.shared.presentation.community.CommunitiesViewModel
 import com.osiris.shared.presentation.community.CommunityDetailViewModel
 import com.osiris.shared.presentation.community.RankingsViewModel
+import com.osiris.shared.presentation.discover.DiscoverViewModel
 import com.osiris.shared.presentation.exercise.ExerciseHubViewModel
 import com.osiris.shared.presentation.exercise.ExerciseSessionViewModel
 import com.osiris.shared.presentation.navigation.AppNavigatorViewModel
 import com.osiris.shared.presentation.navigation.DeepLinkParser
 import com.osiris.shared.presentation.permission.PermissionPrimerViewModel
-import com.osiris.shared.presentation.progress.ProgressViewModel
+import com.osiris.shared.presentation.profile.ProfileViewModel
 import com.osiris.shared.presentation.run.RunViewModel
 import com.osiris.shared.presentation.session.LoginViewModel
 import com.osiris.shared.presentation.session.OnboardingViewModel
 import com.osiris.shared.presentation.settings.SettingsViewModel
+import com.osiris.shared.presentation.social.GlobalBoardsViewModel
 import com.osiris.shared.presentation.today.TodayViewModel
+import com.osiris.shared.presentation.wallet.WalletViewModel
 
 /**
  * The composition root both apps create once, at launch, from their platform dependencies:
@@ -48,7 +51,13 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun communities() = CommunitiesViewModel(data.communities)
     fun community(slug: String) = CommunityDetailViewModel(slug, data.communities)
     fun rankings() = RankingsViewModel(data.communities)
-    fun progress() = ProgressViewModel(data.player)
+    fun profile() = ProfileViewModel(data.player)
+    fun discover() = DiscoverViewModel(data.challenges)
+    fun globalBoards() = GlobalBoardsViewModel(data.communities)
+
+    /** Whether this build has a Wallet tab; [wallet] is only valid when it does. */
+    val hasWallet: Boolean get() = data.wallet != null
+    fun wallet() = WalletViewModel(checkNotNull(data.wallet) { "This build has no wallet" })
     fun settings() = SettingsViewModel(data.auth, data.player, data.privacy, data.exercises)
     fun exerciseHub() = ExerciseHubViewModel(data.exercises)
     fun exerciseSession(spec: ExerciseSpec, catalog: ExerciseCatalog) =

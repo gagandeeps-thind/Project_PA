@@ -42,15 +42,18 @@ use one set of values. `Common/Frost.swift` maps them to SwiftUI: `FrostBackgrou
 | Permission primer (before sign-in, each one optional) | `PermissionPrimerViewModel` | `Permission/PermissionPrimerView.swift` |
 | Sign-in | `LoginViewModel` | `Session/LoginView.swift` |
 | Onboarding (goal, location, account) | `OnboardingViewModel` | `Session/OnboardingView.swift` |
-| Today, with the way to every screen | `TodayViewModel` | `Today/TodayView.swift` |
+| Home (Today) and shortcuts to screens without a tab | `TodayViewModel` | `Today/TodayView.swift` |
 | Run (MapKit, Core Location, every run dialog) | `RunViewModel` | `Run/RunView.swift`, `Run/LocationTracker.swift`, `Map/RunMap.swift` |
 | Challenges, challenge, my courses | `ChallengeBoard/ChallengeDetail/CoursesViewModel` | `Challenge/*.swift` |
 | Clubs, club, rankings (week, season) | `Communities/CommunityDetail/RankingsViewModel` | `Community/*.swift` |
-| Progress | `ProgressViewModel` | `Progress/ProgressScreen.swift` |
+| Discover: live, upcoming, community, finished; create button | `DiscoverViewModel` | `Discover/DiscoverView.swift` |
+| Social: global distance, Pace Index, reps, rewards boards | `GlobalBoardsViewModel` | `Social/SocialView.swift` |
+| Wallet (demo builds only, mock adapters) | `WalletViewModel` | `Wallet/WalletView.swift` |
+| Profile: rank, XP gauge, metrics, badges | `ProfileViewModel` | `Profile/ProfileView.swift` |
 | Settings (incl. two-step erase) | `SettingsViewModel` | `Settings/SettingsView.swift` |
 | Bodyweight hub, consent, camera set | `ExerciseHub/ExerciseSessionViewModel` | `Exercise/*.swift` |
 
-Navigation is one `NavigationStack` driven by `Route` (`App/Navigator.swift`).
+Each tab has its own `NavigationStack` driven by `Route` (`App/Navigator.swift`).
 
 ## Platform adapters
 

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
@@ -16,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,15 +40,18 @@ import com.osiris.player.ui.community.RankingsScreen
 import com.osiris.player.ui.design.FrostBackground
 import com.osiris.player.ui.design.FrostBar
 import com.osiris.player.ui.design.FrostBarItem
+import com.osiris.player.ui.discover.DiscoverScreen
 import com.osiris.player.ui.exercise.ExerciseCameraScreen
 import com.osiris.player.ui.exercise.ExerciseHubScreen
 import com.osiris.player.ui.permission.PermissionPrimerScreen
-import com.osiris.player.ui.progress.ProgressScreen
+import com.osiris.player.ui.profile.ProfileScreen
 import com.osiris.player.ui.run.RunScreen
 import com.osiris.player.ui.session.LoginScreen
 import com.osiris.player.ui.session.OnboardingScreen
 import com.osiris.player.ui.settings.SettingsScreen
+import com.osiris.player.ui.social.SocialScreen
 import com.osiris.player.ui.today.TodayScreen
+import com.osiris.player.ui.wallet.WalletScreen
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.navigation.Destination
 import com.osiris.shared.presentation.navigation.RootState
@@ -57,6 +62,10 @@ object Routes {
     const val LOGIN = "login"
     const val ONBOARD = "onboard"
     const val TODAY = "today"
+    const val DISCOVER = "discover"
+    const val SOCIAL = "social"
+    const val WALLET = "wallet"
+    const val PROFILE = "profile"
     const val RUN = "run?challengeId={challengeId}"
     const val CHALLENGES = "challenges"
     const val CHALLENGE = "challenge/{id}"
@@ -64,7 +73,6 @@ object Routes {
     const val COMMUNITIES = "communities"
     const val COMMUNITY = "community/{slug}"
     const val RANKINGS = "rankings"
-    const val PROGRESS = "progress"
     const val SETTINGS = "settings"
     const val EXERCISE = "exercise"
     const val EXERCISE_CAMERA = "exercise/{key}"
@@ -75,14 +83,15 @@ object Routes {
     fun exerciseCamera(key: String) = "exercise/$key"
 }
 
-/** The bar's sections and the route each one opens. Wallet joins when its screen ships. */
+/** The bar's sections and the route each one opens. Wallet shows only in builds that have one. */
 private class Section(val tab: Tab, val route: String, val label: String, val icon: ImageVector)
 
-private val sections = listOf(
+private fun sections(hasWallet: Boolean) = listOfNotNull(
     Section(Tab.HOME, Routes.TODAY, "Home", Icons.Outlined.Home),
-    Section(Tab.DISCOVER, Routes.CHALLENGES, "Discover", Icons.Outlined.Explore),
-    Section(Tab.SOCIAL, Routes.RANKINGS, "Social", Icons.Outlined.Groups),
-    Section(Tab.PROFILE, Routes.PROGRESS, "Profile", Icons.Outlined.Person),
+    Section(Tab.DISCOVER, Routes.DISCOVER, "Discover", Icons.Outlined.Explore),
+    Section(Tab.SOCIAL, Routes.SOCIAL, "Social", Icons.Outlined.Groups),
+    Section(Tab.WALLET, Routes.WALLET, "Wallet", Icons.Outlined.AccountBalanceWallet).takeIf { hasWallet },
+    Section(Tab.PROFILE, Routes.PROFILE, "Profile", Icons.Outlined.Person),
 )
 
 /**
@@ -132,6 +141,7 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
+    val sections = remember(graph) { sections(graph.hasWallet) }
     LaunchedEffect(pending) {
         when (pending) {
             null -> return@LaunchedEffect
@@ -139,7 +149,7 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
             is Destination.Challenge -> nav.open(Routes.challenge(pending.id))
             is Destination.Community -> nav.open(Routes.community(pending.slug))
             // A signed-in player already has an account; the invite's challenge is on Discover.
-            is Destination.Invite, is Destination.Referral -> nav.selectTab(Routes.CHALLENGES)
+            is Destination.Invite, is Destination.Referral -> nav.selectTab(Routes.DISCOVER)
         }
         onPendingOpened()
     }
@@ -165,7 +175,17 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
             val id = entry.arguments?.getInt("challengeId")?.takeIf { it >= 0 }
             RunScreen(graph, challengeId = id, onBack = nav::popBackStack, onOpenChallenge = { nav.navigate(Routes.challenge(it)) })
         }
-        composable(Routes.CHALLENGES) { ChallengeBoardScreen(graph, onBack = null, onOpen = { nav.navigate(Routes.challenge(it)) }) }
+        composable(Routes.DISCOVER) {
+            DiscoverScreen(
+                graph,
+                onOpen = { nav.navigate(Routes.challenge(it)) },
+                onCreate = { nav.open(Routes.COURSES) },
+                onNearby = { nav.open(Routes.CHALLENGES) },
+            )
+        }
+        composable(Routes.CHALLENGES) {
+            ChallengeBoardScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.challenge(it)) })
+        }
         composable(Routes.CHALLENGE, arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
             ChallengeDetailScreen(
                 graph,
@@ -186,9 +206,13 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
                 onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
             )
         }
-        composable(Routes.RANKINGS) { RankingsScreen(graph, onBack = null, onSettings = { nav.open(Routes.SETTINGS) }) }
-        composable(Routes.PROGRESS) {
-            ProgressScreen(graph, onBack = null, actions = {
+        composable(Routes.SOCIAL) {
+            SocialScreen(graph, onLocal = { nav.open(Routes.RANKINGS) }, onCommunities = { nav.open(Routes.COMMUNITIES) })
+        }
+        composable(Routes.RANKINGS) { RankingsScreen(graph, onBack = nav::popBackStack, onSettings = { nav.open(Routes.SETTINGS) }) }
+        if (graph.hasWallet) composable(Routes.WALLET) { WalletScreen(graph) }
+        composable(Routes.PROFILE) {
+            ProfileScreen(graph, actions = {
                 IconButton(onClick = { nav.open(Routes.SETTINGS) }) { Icon(Icons.Outlined.Settings, "Settings") }
             })
         }

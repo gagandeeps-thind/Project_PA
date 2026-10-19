@@ -22,8 +22,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 
-/** A recorded request: method, path and parsed JSON body. */
-data class Call(val method: String, val path: String, val body: JsonElement?, val auth: String?)
+/** A recorded request: method, path, parsed JSON body and the encoded query string. */
+data class Call(val method: String, val path: String, val body: JsonElement?, val auth: String?, val query: String = "")
 
 /** Scripted backend for repository tests. Routes are `"POST /api/v2/runs"`; unmatched calls answer 404. */
 class FakeServer {
@@ -51,6 +51,7 @@ class FakeServer {
             request.url.encodedPath,
             text.takeIf { it.isNotBlank() }?.let { Json.parseToJsonElement(it) },
             request.headers[HttpHeaders.Authorization],
+            request.url.encodedQuery,
         )
         calls += call
         val handler = routes["${call.method} ${call.path}"] ?: return reply(404, """{"detail":"not found"}""")
