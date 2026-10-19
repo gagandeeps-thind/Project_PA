@@ -35,6 +35,12 @@ subprojects {
             jvm {
                 compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
             }
+            // Set here rather than in android-library.gradle: Groovy cannot resolve the JvmTarget class.
+            if (androidEnabled) {
+                androidTarget {
+                    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+                }
+            }
             iosArm64()
             iosSimulatorArm64()
             iosX64()
