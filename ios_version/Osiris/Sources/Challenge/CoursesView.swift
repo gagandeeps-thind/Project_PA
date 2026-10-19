@@ -18,8 +18,11 @@ struct CoursesView: View {
                 if courses.isEmpty {
                     EmptyState(
                         icon: "point.topleft.down.curvedto.point.bottomright.up",
-                        title: "No courses yet.",
-                        detail: "Finish a verified run of at least ~0.7 km and register it as a course."
+                        title: "Your first challenge starts with a run.",
+                        detail: "Challenges are raced on a route you ran yourself. Record a verified run of at least "
+                            + "0.7 km, save it as a course when it ends, then publish it here.",
+                        actionLabel: "START A RUN",
+                        action: { nav.open(.run(challengeId: nil)) }
                     )
                     .listRowBackground(Color.clear)
                 }

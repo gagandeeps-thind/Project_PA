@@ -50,7 +50,7 @@ import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.challenge.CoursesViewModel
 
 @Composable
-fun CoursesScreen(graph: AppGraph, onBack: () -> Unit, onOpenChallenge: (Int) -> Unit) {
+fun CoursesScreen(graph: AppGraph, onBack: () -> Unit, onOpenChallenge: (Int) -> Unit, onStartRun: () -> Unit) {
     val vm = rememberShared { graph.courses() }
     val s by vm.state.collectAsStateWithLifecycle()
     var publishing by remember { mutableStateOf<CourseSummary?>(null) }
@@ -70,8 +70,11 @@ fun CoursesScreen(graph: AppGraph, onBack: () -> Unit, onOpenChallenge: (Int) ->
                         item {
                             EmptyState(
                                 Icons.Outlined.Route,
-                                "No courses yet.",
-                                "Finish a verified run of at least ~0.7 km and register it as a course.",
+                                "Your first challenge starts with a run.",
+                                "Challenges are raced on a route you ran yourself. Record a verified run of at least " +
+                                    "0.7 km, save it as a course when it ends, then publish it here.",
+                                actionLabel = "START A RUN",
+                                onAction = onStartRun,
                             )
                         }
                     }

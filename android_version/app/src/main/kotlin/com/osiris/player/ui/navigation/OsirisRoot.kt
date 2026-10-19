@@ -197,7 +197,14 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
                 onRun = { nav.navigate(Routes.run(it)) },
             )
         }
-        composable(Routes.COURSES) { CoursesScreen(graph, onBack = nav::popBackStack, onOpenChallenge = { nav.navigate(Routes.challenge(it)) }) }
+        composable(Routes.COURSES) {
+            CoursesScreen(
+                graph,
+                onBack = nav::popBackStack,
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+                onStartRun = { nav.navigate(Routes.run()) },
+            )
+        }
         composable(Routes.COMMUNITIES) {
             CommunitiesScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.community(it)) })
         }
