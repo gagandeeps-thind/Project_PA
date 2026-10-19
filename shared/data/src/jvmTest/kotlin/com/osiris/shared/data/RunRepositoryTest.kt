@@ -3,6 +3,7 @@ package com.osiris.shared.data
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.data.FakeServer.Companion.reply
 import com.osiris.shared.domain.run.LocationFix
+import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,6 +13,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -25,6 +30,11 @@ class RunRepositoryTest {
         var stored = 0
         var dropResponses = 0
 
+        /** When set, a points upload signals [uploading] and waits for [release]. */
+        var hold = false
+        val uploading = CountDownLatch(1)
+        val release = CountDownLatch(1)
+
         init {
             app.server.json("POST /api/v1/auth/login") { """{"access_token":"t","role":"player","id":7}""" }
             app.server.json("GET /api/v1/users/7") { PLAYER }
@@ -32,6 +42,11 @@ class RunRepositoryTest {
             app.server.json("POST /api/v2/runs/11/start") { "{}" }
             app.server.on("GET /api/v2/runs/11") { reply(200, """{"id":11,"point_count":$stored}""") }
             app.server.on("POST /api/v2/runs/11/points") { call ->
+                if (hold) {
+                    hold = false
+                    uploading.countDown()
+                    release.await()
+                }
                 val points = call.body!!.jsonObject["points"]!!.jsonArray
                 val first = points.first().jsonObject["sequence"]!!.jsonPrimitive.int
                 if (first != stored) return@on reply(409, """{"detail":{"code":"SEQUENCE_GAP","message":"gap"}}""")
@@ -126,6 +141,26 @@ class RunRepositoryTest {
         app.walk(3)
         assertIs<AppError.Offline>(app.graph.runs.finish(t0 + 60.seconds).errorOrNull())
         assertNotNull(app.graph.runs.active.value)
+    }
+
+    @Test
+    fun `finishing during a background upload waits for it instead of reporting offline`() = test {
+        val (app, server) = signedIn()
+        app.graph.runs.start(null, t0).getOrThrow()
+        app.walk(4)
+        server.hold = true
+        coroutineScope {
+            // The fifth fix starts a background upload, which the server holds open.
+            val background = async(Dispatchers.IO) { app.walk(1) }
+            server.uploading.await()
+            val finish = async(Dispatchers.IO) { app.graph.runs.finish(t0 + 60.seconds) }
+            delay(200)
+            server.release.countDown()
+            background.await()
+            assertTrue(finish.await().getOrThrow().accepted)
+        }
+        assertEquals(5, server.stored)
+        assertNull(app.graph.runs.active.value)
     }
 
     @Test
