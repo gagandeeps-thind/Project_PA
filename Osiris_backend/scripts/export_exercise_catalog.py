@@ -1,7 +1,7 @@
 """Write (or check) the app's bundled copy of the exercise catalog.
 
 `services/exercises.py` is the source of truth. The customer app bundles
-`Osiris_customer/assets/exercise_catalog.json` so the on-device rep engine works offline and
+`shared/assets/exercise_catalog.json` so the on-device rep engine works offline and
 on first launch, before it has fetched `GET /api/v2/exercises`.
 
 Usage:
@@ -14,7 +14,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.abspath(os.path.join(HERE, ".."))
-ASSET = os.path.abspath(os.path.join(BACKEND_DIR, "..", "Osiris_customer", "assets", "exercise_catalog.json"))
+ASSET = os.path.abspath(os.path.join(BACKEND_DIR, "..", "shared", "assets", "exercise_catalog.json"))
 
 sys.path.insert(0, BACKEND_DIR)
 

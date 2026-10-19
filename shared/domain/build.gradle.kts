@@ -14,8 +14,8 @@ kotlin {
 
 // The exercise catalog the backend serves, also bundled with the apps for offline first start.
 // Tests read it from here so app, tests and server never drift apart.
-val catalogAsset = rootProject.layout.projectDirectory.file("Osiris_customer/assets/exercise_catalog.json")
-val recordingsDir = rootProject.layout.projectDirectory.dir("Osiris_customer/test/exercise/recordings")
+val catalogAsset = rootProject.layout.projectDirectory.file("shared/assets/exercise_catalog.json")
+val recordingsDir = rootProject.layout.projectDirectory.dir("shared/testdata/recordings")
 tasks.withType<Test>().configureEach {
     systemProperty("osiris.catalog", catalogAsset.asFile.absolutePath)
     systemProperty("osiris.recordings", recordingsDir.asFile.absolutePath)

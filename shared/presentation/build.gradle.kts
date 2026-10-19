@@ -28,6 +28,6 @@ kotlin {
 
 // View-model tests replay a labeled pose recording through the real rep engine.
 tasks.withType<Test>().configureEach {
-    systemProperty("osiris.catalog", rootProject.file("Osiris_customer/assets/exercise_catalog.json").absolutePath)
-    systemProperty("osiris.recordings", rootProject.file("Osiris_customer/test/exercise/recordings").absolutePath)
+    systemProperty("osiris.catalog", rootProject.file("shared/assets/exercise_catalog.json").absolutePath)
+    systemProperty("osiris.recordings", rootProject.file("shared/testdata/recordings").absolutePath)
 }

@@ -8,7 +8,7 @@ plausible under the same catalog the device used (tempo bounds, rate, totals) an
 daily XP an exercise can earn, so a forged summary is worth little.
 
 This module is the single source of truth for the catalog. The app ships a copy as
-`Osiris_customer/assets/exercise_catalog.json`; `scripts/export_exercise_catalog.py` writes
+`shared/assets/exercise_catalog.json`; `scripts/export_exercise_catalog.py` writes
 it and the exercise test suite fails when the two drift.
 
 Pure functions only: no database session, no HTTP. `exercise_api.py` owns the transaction.
@@ -37,7 +37,7 @@ MIN_LANDMARK_LIKELIHOOD = 0.5
 # genuine posture's largest tilt and the nearest cheat posture, leaving room for a phone
 # propped up to 15 degrees off level (v2; v1 limits failed genuine squats at 12 degrees).
 # "min_pose_fps" is the slowest pose stream the engine counts reliably for the exercise
-# (Osiris_customer/test/exercise/accuracy_eval_test.dart); below it the app warns the player.
+# (shared/domain AccuracyEvalTest); below it the app warns the player.
 # "ankle_spread" is the ankle distance in torso lengths (shoulder midpoint to hip midpoint),
 # taken as the median over the rep's peak frames (v2; v1 used the max over hip widths, which
 # jitter pushed over the limit for arms-only jumping jacks).

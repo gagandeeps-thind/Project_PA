@@ -32,12 +32,7 @@ ENV/
 .env.local
 .env.*.local
 
-# --- Flutter / Dart ---
-Osiris_customer/.dart_tool/
-Osiris_customer/.flutter-plugins
-Osiris_customer/.flutter-plugins-dependencies
-Osiris_customer/build/
-Osiris_customer/.idea/
+# --- Flutter / Dart (merchant app) ---
 Osiris_merchant/.dart_tool/
 Osiris_merchant/.flutter-plugins
 Osiris_merchant/.flutter-plugins-dependencies

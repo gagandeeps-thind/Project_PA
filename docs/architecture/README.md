@@ -1,9 +1,9 @@
 # Player app architecture (Kotlin Multiplatform)
 
-The player app is being moved from Flutter (`Osiris_customer/`) to Kotlin Multiplatform. Both
-phones run the same business logic from `shared/`; each platform only draws screens and adapts
-its own services (GPS, camera, share sheet, secure storage). The Flutter app stays until the
-native apps reach parity, then it is removed.
+The player app is Kotlin Multiplatform. Both phones run the same business logic from `shared/`;
+each platform only draws screens and adapts its own services (GPS, camera, share sheet, secure
+storage). The earlier Flutter app (`Osiris_customer/`) was retired on 2026-10-19 after the native
+apps reached parity; it remains in git history.
 
 ```
 config/environments/   dev | staging | prod .properties  →  GeneratedEnv (compiled into shared/core)
@@ -32,8 +32,8 @@ Dependencies only point down the list. Nothing in `shared/` imports Android, iOS
 **domain.** Plain models (kotlinx-serialization) and the repository interfaces screens depend on
 (`AuthRepository`, `PlayerRepository`, `RunRepository`, `ChallengeRepository`,
 `CommunityRepository`, `PrivacyRepository`, `ExerciseRepository`). The rep engine counts camera
-exercise reps from pose frames; it is bit-for-bit equivalent to the Dart engine
-(`tools/parity/check_engine_parity.sh`, 72/72).
+exercise reps from pose frames; it is was verified bit-for-bit against the retired Dart
+engine (72/72) before the Flutter app was removed.
 
 **data.** `ApiClient` owns the HTTP client: base URL and timeouts from `AppConfig`, the bearer
 token, JSON, and mapping every failure to an `AppError` (a 401 signs the player out). Endpoints
@@ -87,7 +87,6 @@ apps hold none, and the backend keeps its own in `Osiris_backend/.env`.
 | All shared tests (JVM) | `./gradlew :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest` |
 | iOS type-check | `./gradlew :shared:presentation:compileKotlinIosSimulatorArm64` |
 | Android build (needs SDK) | `./gradlew :android_version:app:assembleDebug` |
-| Engine parity with Dart | `tools/parity/check_engine_parity.sh` |
 
 `shared/data` tests run the real repositories against a Ktor `MockEngine` (`FakeServer`), and
 `ContractTest` checks every endpoint path and model against `Documentation/openapi.json`, so a

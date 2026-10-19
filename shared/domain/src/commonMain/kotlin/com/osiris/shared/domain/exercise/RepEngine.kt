@@ -94,8 +94,8 @@ object ReasonCodes {
  * end, session rules shared with the server flag machine-regular timing (a replayed video),
  * implausible rates and low valid ratios. Cost is O(1) per frame.
  *
- * Port of `Osiris_customer/lib/exercise/rep_engine.dart`; the Kotlin tests replay the same
- * synthetic sets and recordings, so both engines must agree rep for rep.
+ * Originally ported rep for rep from the retired Flutter app's Dart engine (72/72 parity before
+ * it was removed); the tests replay the same synthetic sets and recordings to keep that behaviour.
  */
 class RepEngine(val spec: ExerciseSpec, val catalog: ExerciseCatalog) {
 

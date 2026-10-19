@@ -39,9 +39,10 @@ setting the repo up for autonomous agent work (2026-10-12).
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
   - Acceptance: the CI job runs the suite and it passes.
 
-- [ ] [human] ci: add jobs for `Osiris_admin_web` (`npm run build`) and `Osiris_customer` (`flutter analyze`, `flutter test`)
-  - Today CI covers the backend only. Both commands pass locally.
-  - Acceptance: a pull request that touches either app runs its job, and the job passes.
+- [ ] [human] ci: add a job for `Osiris_admin_web` (`npm run build`)
+  - Today CI covers the backend only; the command passes locally. (The Flutter app this item also named was retired
+    on 2026-10-19; the KMP job is its own item below.)
+  - Acceptance: a pull request that touches the admin app runs its job, and the job passes.
 
 - [x] admin web: remove dead Vite template files
   - `index.html` loads `/src/main.tsx`; `src/main.ts`, `src/counter.ts`, `src/style.css` are only referenced by each other.

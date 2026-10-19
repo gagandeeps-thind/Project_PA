@@ -7,7 +7,7 @@ import kotlin.math.sin
 
 /*
  * Builds synthetic BlazePose-like skeletons from joint angles, so engine tests replay genuine and
- * fake movement without a camera. Port of Osiris_customer/test/exercise/pose_synth.dart.
+ * fake movement without a camera. Ported from the retired Flutter app's pose_synth.dart.
  */
 
 fun loadCatalog(): ExerciseCatalog =

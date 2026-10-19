@@ -1,13 +1,13 @@
 # Pose recordings (device QA)
 
 Each `*.json` file here is one exercise set's pose stream, labeled by the person who did it.
-`recordings_replay_test.dart` replays every file through the rep engine and checks the count
+`RecordingsReplayTest` (shared/domain jvmTest) replays every file through the rep engine and checks the count
 against the label, so a recording added after a device QA session stays a regression case.
 
 ## Recording on a phone
 
-1. Run a **debug** build (`flutter run`), or a profile build with
-   `--dart-define=OSIRIS_POSE_RECORDING=true`. Release builds cannot record.
+1. Run a dev or staging build (`features.poseRecording=true` in `config/environments/`).
+   Production builds cannot record.
 2. Open Bodyweight, pick the exercise, and tap the record icon (top right) before START.
 3. Do the set. After FINISH, enter the number of reps that *should* count (seconds of good hold
    for plank). Deliberately bad sets are useful too: half reps are labeled 0.
@@ -15,10 +15,10 @@ against the label, so a recording added after a device QA session stays a regres
 
 ## Copying a recording off the phone
 
-- Android: `adb exec-out run-as com.example.osiris_customer ls databases/pose_recordings`, then
-  `adb exec-out run-as com.example.osiris_customer cat databases/pose_recordings/<file>.json > <file>.json`
+- Android: `adb exec-out run-as com.osiris.player ls files/pose_recordings`, then
+  `adb exec-out run-as com.osiris.player cat files/pose_recordings/<file>.json > <file>.json`
 - iOS: Xcode > Window > Devices and Simulators > Osiris > Download Container, then
-  `AppData/Documents/pose_recordings/` (sqflite's databases folder).
+  `AppData/Documents/pose_recordings/`.
 
 ## Format `osiris-pose-v1`
 

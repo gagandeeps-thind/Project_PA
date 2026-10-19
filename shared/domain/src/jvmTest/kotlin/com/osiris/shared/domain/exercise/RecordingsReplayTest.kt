@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * Replays every QA landmark recording in Osiris_customer/test/exercise/recordings/ through the
+ * Replays every QA landmark recording in shared/testdata/recordings/ through the
  * rep engine and compares the result with the tester's label (port of recordings_replay_test.dart).
  */
 class RecordingsReplayTest {
