@@ -117,6 +117,21 @@ class ViewModelTest {
     }
 
     @Test
+    fun `a refused location says so instead of locating forever, and a fix clears it`() = runTest {
+        RunViewModel(FakeRuns(), FakeChallenges(), FakePlayer(), clock = FixedClock(noon), dispatcher = main()).use {
+            val vm = this
+            assertEquals("LOCATING…", vm.state.value.actionLabel)
+            vm.onLocationUnavailable(AppError.Validation("Location is off."))
+            assertEquals("Location is off.", vm.state.value.locationProblem)
+            assertEquals("LOCATION OFF", vm.state.value.actionLabel)
+            assertFalse(vm.state.value.canStart)
+            vm.onLocation(amsterdam)
+            assertNull(vm.state.value.locationProblem)
+            assertEquals("START RUN", vm.state.value.actionLabel)
+        }
+    }
+
+    @Test
     fun `starting in the dark asks first, and the player can start anyway`() = runTest {
         val runs = FakeRuns()
         RunViewModel(runs, FakeChallenges(), FakePlayer(), clock = FixedClock(midnight), dispatcher = main()).use {
