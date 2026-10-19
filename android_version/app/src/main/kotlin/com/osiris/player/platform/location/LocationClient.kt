@@ -4,7 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -45,23 +47,11 @@ class LocationClient(context: Context) {
             .build()
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                for (l in result.locations) {
-                    trySend(
-                        LocationFix(
-                            lat = l.latitude,
-                            lng = l.longitude,
-                            accuracyM = if (l.hasAccuracy()) l.accuracy.toDouble() else null,
-                            speedMps = if (l.hasSpeed()) l.speed.toDouble() else null,
-                            altitudeM = if (l.hasAltitude()) l.altitude else null,
-                        ),
-                    )
-                }
+                for (l in result.locations) trySend(l.toFix())
             }
         }
         // A fast first position from the cache, so the map centres before the first live fix.
-        runCatching { fused.lastLocation.await() }.getOrNull()?.let {
-            trySend(LocationFix(it.latitude, it.longitude, if (it.hasAccuracy()) it.accuracy.toDouble() else null))
-        }
+        runCatching { fused.lastLocation.await() }.getOrNull()?.let { trySend(it.toFix()) }
         try {
             fused.requestLocationUpdates(request, callback, Looper.getMainLooper()).await()
         } catch (e: SecurityException) {
@@ -71,6 +61,15 @@ class LocationClient(context: Context) {
         }
         awaitClose { fused.removeLocationUpdates(callback) }
     }
+
+    private fun Location.toFix() = LocationFix(
+        lat = latitude,
+        lng = longitude,
+        accuracyM = if (hasAccuracy()) accuracy.toDouble() else null,
+        speedMps = if (hasSpeed()) speed.toDouble() else null,
+        altitudeM = if (hasAltitude()) altitude else null,
+        ageMs = (SystemClock.elapsedRealtimeNanos() - elapsedRealtimeNanos) / 1_000_000,
+    )
 
     companion object {
         const val INTERVAL_MS = 1_000L

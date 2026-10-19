@@ -15,6 +15,11 @@ data class LocationFix(
     /** Negative or null when the platform has no speed. */
     val speedMps: Double? = null,
     val altitudeM: Double? = null,
+    /**
+     * How old the fix already was when it reached the app (platform fix time vs. now). Delivery is
+     * batched and jittery, so stamping points on arrival can turn a jog into an impossible speed.
+     */
+    val ageMs: Long = 0,
 ) {
     val position: LatLng get() = LatLng(lat, lng)
 }
@@ -33,6 +38,8 @@ data class ActiveRun(
     /** Last fix, to measure the next segment; kept so distance continues after a restart. */
     @SerialName("last_lat") val lastLat: Double? = null,
     @SerialName("last_lng") val lastLng: Double? = null,
+    /** Time of the last point, to keep timestamps strictly increasing. */
+    @SerialName("last_t_ms") val lastTMs: Long? = null,
 ) {
     val uploaded: Int get() = nextSequence - pending.size
 
@@ -45,13 +52,20 @@ data class ActiveRun(
     fun paceSecPerKm(now: Instant): Double? =
         if (distanceM > 50) elapsed(now).inWholeSeconds / (distanceM / 1000) else null
 
-    /** Appends a fix with the next sequence number and adds the segment to the distance. */
+    /**
+     * Appends a fix with the next sequence number and adds the segment to the distance. The point is
+     * timed when the fix was taken, not when it arrived; fixes taken before the run started (a cached
+     * last position) are ignored.
+     */
     fun withFix(fix: LocationFix, now: Instant): ActiveRun {
+        val takenMs = (now - startedAt).inWholeMilliseconds - fix.ageMs.coerceAtLeast(0)
+        if (takenMs < 0) return this
+        val tMs = if (lastTMs == null) takenMs else maxOf(takenMs, lastTMs + 1)
         val last = if (lastLat != null && lastLng != null) LatLng(lastLat, lastLng) else null
         val segment = if (last == null) 0.0 else Geo.distanceM(last, fix.position)
         val point = RoutePoint(
             sequence = nextSequence,
-            tMs = (now - startedAt).inWholeMilliseconds,
+            tMs = tMs,
             lat = fix.lat,
             lng = fix.lng,
             accuracyM = fix.accuracyM,
@@ -64,6 +78,7 @@ data class ActiveRun(
             pending = pending + point,
             lastLat = fix.lat,
             lastLng = fix.lng,
+            lastTMs = tMs,
         )
     }
 
