@@ -28,7 +28,7 @@ class ExerciseSync {
     if (fetch == null) return 0;
     try {
       final sessions = (await fetch())['sessions'] as List;
-      return store.applyServerResults([
+      return await store.applyServerResults([
         for (final raw in sessions)
           if (raw is Map<String, dynamic>)
             (
