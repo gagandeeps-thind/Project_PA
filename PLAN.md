@@ -18,7 +18,7 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: a written root cause in the commit body, plus a failing-then-passing regression test in the owning suite.
     After running all 13 CI suites, `reconcile_ledger.py --check` exits 0 for every user the suites create.
 
-- [ ] [human] data: clean the pre-existing ledger orphans out of the local dev DB
+- [ ] data: clean the pre-existing ledger orphans out of the local dev DB
   - Root cause fixed in `fix/ledger-orphan-rows`, but rows written before the fix remain in `fitness_mvp.db`
     (orphans for missing users 14, 21, 22, 23; user 6 inherited row 68 from a deleted account).
   - Acceptance: delete those rows (or recreate the dev DB with `alembic upgrade head`); `reconcile_ledger.py --check` exits 0.
