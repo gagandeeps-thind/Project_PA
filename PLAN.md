@@ -18,7 +18,7 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: a written root cause in the commit body, plus a failing-then-passing regression test in the owning suite.
     After running all 13 CI suites, `reconcile_ledger.py --check` exits 0 for every user the suites create.
 
-- [ ] [human] data: clean the pre-existing ledger orphans out of the local dev DB
+- [ : clean the pre-existing ledger orphans out of the local dev DB
   - Root cause fixed in `fix/ledger-orphan-rows`, but rows written before the fix remain in `fitness_mvp.db`
     (orphans for missing users 14, 21, 22, 23; user 6 inherited row 68 from a deleted account).
   - Acceptance: delete those rows (or recreate the dev DB with `alembic upgrade head`); `reconcile_ledger.py --check` exits 0.
@@ -33,11 +33,10 @@ setting the repo up for autonomous agent work (2026-10-12).
 - [x] backend: resolve the OpenAPI contract drift
   - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.
   - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
-    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contntended changes.
-
+    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contntended
 - [ ] [human] ci: add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
-  - Acceptance: the CI josuite and it passes.
+  - Acceptance: the CI josuite as.
 
 - [ ] [human] ci: add jobs for `Osiris_admin_web` (`npm run build`) and `Osiris_customer` (`flutter analyze`, `flutter test`)
   - Today CI covers the backend only. Both commands pass locally.
