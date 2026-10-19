@@ -14,6 +14,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Any, List, Optional
 
+from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import case
@@ -426,7 +427,10 @@ def register_player(req: RegisterRequest, db: Session = Depends(get_db), _rl: No
     until this player completes a verified run (see G2 referral rules)."""
     _validate_goal(req.goal)
     email = req.email.strip().lower()
-    if "@" not in email:
+    # The same check as the EmailStr profile responses, so no account is created that later 500s.
+    try:
+        validate_email(email, check_deliverability=False)
+    except EmailNotValidError:
         raise _api_error(422, "INVALID_EMAIL", "Enter a valid email address")
     _check_email_unique(db, email)
 

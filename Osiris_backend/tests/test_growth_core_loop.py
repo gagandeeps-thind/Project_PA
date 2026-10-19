@@ -177,6 +177,11 @@ def test_registration_is_bmi_free_and_onboarding_tracks_funnel() -> None:
         "email": f"{PREFIX}bad@example.com", "password": PASSWORD, "display_name": "Bad", "goal": "bmi",
     })
     assert r.status_code == 422
+    # Reserved domains are refused up front; the profile response would reject them later.
+    r = client.post("/api/v2/auth/register", json={
+        "email": f"{PREFIX}reserved@example.test", "password": PASSWORD, "display_name": "Res", "goal": "running",
+    })
+    assert r.status_code == 422 and "INVALID_EMAIL" in r.text, r.text
     r = client.put("/api/v2/me/profile", headers=headers, json={
         "onboarding_completed": True, "location_consent": True, "utc_offset_minutes": 60,
     })
