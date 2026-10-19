@@ -23,7 +23,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 
 /**
- * Players only: merchants and admins have their own apps and are refused here.
+ * Players only: merchants and admins have their own apps and are refused at sign-in, the only
+ * place a token is stored.
  *
  * Every account change (sign in, sign up, restore, sign out) is passed to [accountScoped], so
  * one person's queued run or exercise history never shows to the next person on the phone.
@@ -62,12 +63,7 @@ class AuthRepositoryImpl(
             return
         }
         try {
-            val user = auth.user(stored.userId)
-            if (!user.isPlayer) {
-                signOutLocally()
-                return
-            }
-            becomeSignedIn(user)
+            becomeSignedIn(auth.user(stored.userId))
         } catch (e: CancellationException) {
             throw e
         } catch (e: AppError) {

@@ -4,8 +4,7 @@ import com.osiris.shared.data.network.ApiClient
 import com.osiris.shared.domain.model.ChallengeSummary
 import com.osiris.shared.domain.model.Community
 import com.osiris.shared.domain.model.Leaderboard
-import com.osiris.shared.domain.model.LocalLeaderboard
-import com.osiris.shared.domain.model.MessageResponse
+import com.osiris.shared.domain.model.SeasonLeaderboard
 import com.osiris.shared.domain.model.Season
 import io.ktor.http.HttpMethod
 import io.ktor.http.encodeURLPathPart
@@ -18,7 +17,7 @@ class CommunityApi(private val api: ApiClient) {
 
     suspend fun community(slug: String): Community = api.get("/api/v2/communities/${slug.encoded()}")
 
-    suspend fun join(slug: String, joinCode: String?): MessageResponse =
+    suspend fun join(slug: String, joinCode: String?): Community =
         api.post(
             "/api/v2/communities/${slug.encoded()}/join",
             ApiClient.body("join_code" to joinCode?.trim()?.takeIf { it.isNotEmpty() }),
@@ -31,13 +30,13 @@ class CommunityApi(private val api: ApiClient) {
     suspend fun challenges(slug: String): List<ChallengeSummary> =
         api.get("/api/v2/communities/${slug.encoded()}/challenges")
 
-    suspend fun local(): LocalLeaderboard = api.get("/api/v2/leaderboards/local")
+    suspend fun local(): Leaderboard = api.get("/api/v2/leaderboards/local")
 
     suspend fun seasons(): List<Season> = api.get("/api/v2/seasons")
 
     suspend fun joinSeason(slug: String) = api.execute(HttpMethod.Post, "/api/v2/seasons/${slug.encoded()}/join")
 
-    suspend fun seasonLeaderboard(slug: String): Leaderboard = api.get("/api/v2/seasons/${slug.encoded()}/leaderboard")
+    suspend fun seasonLeaderboard(slug: String): SeasonLeaderboard = api.get("/api/v2/seasons/${slug.encoded()}/leaderboard")
 }
 
 /** Slugs are typed by players (join by slug); keep them inside one path segment. */

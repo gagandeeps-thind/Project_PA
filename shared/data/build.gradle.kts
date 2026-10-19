@@ -70,3 +70,8 @@ val generateBundledCatalog by tasks.registering {
     }
 }
 kotlin.sourceSets.getByName("commonMain").kotlin.srcDir(generateBundledCatalog)
+
+// The committed API contract; jvmTest checks the Kotlin models and endpoints against it.
+tasks.withType<Test>().configureEach {
+    systemProperty("osiris.openapi", rootProject.file("Documentation/openapi.json").absolutePath)
+}

@@ -6,16 +6,13 @@ import kotlinx.serialization.Serializable
 /** A signed-in session: the bearer token and whose it is. */
 data class Session(val token: String, val userId: Int)
 
-/** `POST /api/v1/auth/login`. The v1 API sends the id as `id` or `user_id`. */
+/** `POST /api/v1/auth/login`. */
 @Serializable
 data class LoginResponse(
     @SerialName("access_token") val accessToken: String,
     val role: String,
-    val id: Int? = null,
-    @SerialName("user_id") val userIdAlt: Int? = null,
-) {
-    val userId: Int get() = id ?: userIdAlt ?: error("login response has no user id")
-}
+    @SerialName("id") val userId: Int,
+)
 
 /** `POST /api/v2/auth/register`. */
 @Serializable
@@ -28,7 +25,10 @@ data class RegisterResponse(
 @Serializable
 data class TokenResponse(@SerialName("access_token") val accessToken: String)
 
-/** The legacy v1 user record (`GET /api/v1/users/{id}`). */
+/**
+ * The legacy v1 user record (`GET /api/v1/users/{id}`). It carries no role: the player-only
+ * rule is enforced at sign-in, the only place a token is stored.
+ */
 @Serializable
 data class UserProfile(
     val id: Int,
@@ -42,10 +42,7 @@ data class UserProfile(
     @SerialName("agi_stat") val agiStat: Int = 0,
     @SerialName("end_stat") val endStat: Int = 0,
     @SerialName("con_stat") val conStat: Int = 0,
-    val role: String = ROLE_PLAYER,
 ) {
-    val isPlayer: Boolean get() = role == ROLE_PLAYER
-
     companion object {
         const val ROLE_PLAYER = "player"
     }

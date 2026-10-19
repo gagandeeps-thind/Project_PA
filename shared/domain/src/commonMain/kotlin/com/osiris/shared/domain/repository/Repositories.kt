@@ -13,7 +13,7 @@ import com.osiris.shared.domain.model.CourseRoute
 import com.osiris.shared.domain.model.CourseSummary
 import com.osiris.shared.domain.model.ExerciseHistory
 import com.osiris.shared.domain.model.Leaderboard
-import com.osiris.shared.domain.model.LocalLeaderboard
+import com.osiris.shared.domain.model.SeasonLeaderboard
 import com.osiris.shared.domain.model.PlayerProfile
 import com.osiris.shared.domain.model.Progression
 import com.osiris.shared.domain.model.ReferralSummary
@@ -102,15 +102,15 @@ interface CommunityRepository {
     suspend fun discover(city: String? = null): Outcome<List<Community>>
     suspend fun mine(): Outcome<List<Community>>
     suspend fun community(slug: String): Outcome<Community>
-    /** Returns the server's welcome message. */
-    suspend fun join(slug: String, joinCode: String? = null): Outcome<String>
+    /** Joins and returns the community with the player's new role. */
+    suspend fun join(slug: String, joinCode: String? = null): Outcome<Community>
     suspend fun leave(slug: String): Outcome<Unit>
     suspend fun leaderboard(slug: String): Outcome<Leaderboard>
     suspend fun challenges(slug: String): Outcome<List<ChallengeSummary>>
-    suspend fun local(): Outcome<LocalLeaderboard>
+    suspend fun local(): Outcome<Leaderboard>
     suspend fun seasons(): Outcome<List<Season>>
     suspend fun joinSeason(slug: String): Outcome<Unit>
-    suspend fun seasonLeaderboard(slug: String): Outcome<Leaderboard>
+    suspend fun seasonLeaderboard(slug: String): Outcome<SeasonLeaderboard>
     /** Reports a community as spam; returns the server's acknowledgement. */
     suspend fun report(slug: String): Outcome<String>
 }

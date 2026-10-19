@@ -66,17 +66,20 @@ data class Leaderboard(
     @SerialName("ranked_players") val rankedPlayers: Int = 0,
 )
 
+/** A club's standing in a season: the average points of its entered members. */
 @Serializable
 data class CommunityRank(
     val rank: Int,
+    val slug: String = "",
     val name: String,
-    @SerialName("average_points") val averagePoints: Double = 0.0,
+    @SerialName("average_points") val averagePoints: Int = 0,
+    @SerialName("entered_members") val enteredMembers: Int = 0,
     @SerialName("is_mine") val isMine: Boolean = false,
 )
 
-/** `GET /api/v2/leaderboards/local`: players and clubs in the player's city. */
+/** `GET /api/v2/seasons/{slug}/leaderboard`: players and club standings for one season. */
 @Serializable
-data class LocalLeaderboard(
+data class SeasonLeaderboard(
     val players: Leaderboard = Leaderboard(),
     val communities: List<CommunityRank> = emptyList(),
 )

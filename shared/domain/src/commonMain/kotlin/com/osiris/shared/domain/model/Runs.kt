@@ -26,7 +26,7 @@ data class RoutePoint(
 /** `POST /api/v2/runs/{id}/finish`. */
 @Serializable
 data class RunResult(
-    @SerialName("verification_status") val verificationStatus: String,
+    @SerialName("verification_status") val verificationStatus: String? = null,
     @SerialName("rejection_reason") val rejectionReason: String? = null,
     @SerialName("distance_m") val distanceM: Double = 0.0,
     @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
