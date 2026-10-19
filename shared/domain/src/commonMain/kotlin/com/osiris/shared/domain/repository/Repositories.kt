@@ -28,6 +28,7 @@ import com.osiris.shared.domain.model.ReportReason
 import com.osiris.shared.domain.model.Season
 import com.osiris.shared.domain.model.SetOutcome
 import com.osiris.shared.domain.model.ShareCard
+import com.osiris.shared.domain.model.SupportMessage
 import com.osiris.shared.domain.model.TodayData
 import com.osiris.shared.domain.model.UserProfile
 import com.osiris.shared.domain.run.LatLng
@@ -35,6 +36,8 @@ import com.osiris.shared.domain.wallet.Chain
 import com.osiris.shared.domain.wallet.PaymentMethod
 import com.osiris.shared.domain.wallet.WalletOverview
 import kotlin.time.Instant
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonObject
 
@@ -143,6 +146,16 @@ interface WalletRepository {
     /** Validates and saves a payout address; a bad address is a validation error. */
     suspend fun addCryptoWallet(chain: Chain, address: String): Outcome<PaymentMethod.CryptoWallet>
     suspend fun removeMethod(id: String): Outcome<Unit>
+}
+
+/** Live support chat. */
+interface SupportChatRepository {
+    /**
+     * Opens the chat and emits each support message until the server closes it. Text sent to
+     * [outgoing] goes out while it is open. A failed or dropped connection ends the flow with an
+     * AppError, which the caller catches.
+     */
+    fun open(outgoing: ReceiveChannel<String>): Flow<SupportMessage>
 }
 
 interface PrivacyRepository {

@@ -35,6 +35,8 @@ struct ProfileView: View {
         .navigationTitle("PROFILE")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            Button { nav.open(.support) } label: { Image(systemName: "bubble.left.and.bubble.right") }
+                .accessibilityLabel("Live support")
             Button { nav.open(.settings) } label: { Image(systemName: "gearshape") }.accessibilityLabel("Settings")
         }
         .messages(model)

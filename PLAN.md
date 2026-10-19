@@ -236,6 +236,9 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
   (distance, Riegel Pace Index, reps, rewards; `GET /api/v2/leaderboards/global`), Profile (rank gauge from
   `rank_floor_xp`, metrics grid), Wallet behind `features.walletDemo` with mock adapters only (no PAN handling,
   EIP-55 / base58 address checks, never touches crystals)
-- [ ] [human] ci: add `python tests/test_growth_hub.py` after the existing suites in `.github/workflows/ci.yml`.
+- [x] support: live chat stub on Profile, `WS /api/v2/support/ws` (player token, suspended players allowed, nothing stored)
+  with the shared Ktor WebSocket client and `SupportChatViewModel`
+- [ ] [human] ci: add `python tests/test_growth_hub.py` and `python tests/test_support_chat.py` after the existing
+  suites in `.github/workflows/ci.yml`.
 - [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
   activity feed, daily steps; blocks friends, the steps board and rotating refresh tokens.

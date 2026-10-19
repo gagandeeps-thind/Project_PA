@@ -50,6 +50,7 @@ use one set of values. `Common/Frost.swift` maps them to SwiftUI: `FrostBackgrou
 | Social: global distance, Pace Index, reps, rewards boards | `GlobalBoardsViewModel` | `Social/SocialView.swift` |
 | Wallet (demo builds only, mock adapters) | `WalletViewModel` | `Wallet/WalletView.swift` |
 | Profile: rank, XP gauge, metrics, badges | `ProfileViewModel` | `Profile/ProfileView.swift` |
+| Live support chat (WebSocket stub) | `SupportChatViewModel` | `Support/SupportChatView.swift` |
 | Settings (incl. two-step erase) | `SettingsViewModel` | `Settings/SettingsView.swift` |
 | Bodyweight hub, consent, camera set | `ExerciseHub/ExerciseSessionViewModel` | `Exercise/*.swift` |
 

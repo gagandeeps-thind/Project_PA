@@ -24,6 +24,7 @@ import com.osiris.shared.presentation.session.LoginViewModel
 import com.osiris.shared.presentation.session.OnboardingViewModel
 import com.osiris.shared.presentation.settings.SettingsViewModel
 import com.osiris.shared.presentation.social.GlobalBoardsViewModel
+import com.osiris.shared.presentation.support.SupportChatViewModel
 import com.osiris.shared.presentation.today.TodayViewModel
 import com.osiris.shared.presentation.wallet.WalletViewModel
 
@@ -35,6 +36,8 @@ import com.osiris.shared.presentation.wallet.WalletViewModel
  *
  * Each screen asks it for a fresh view model and clears it when the screen goes away.
  */
+// One factory per screen is the composition root's whole job, so its function count grows with the app.
+@Suppress("TooManyFunctions")
 class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     val data = DataGraph(config, platform)
 
@@ -54,6 +57,7 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun profile() = ProfileViewModel(data.player)
     fun discover() = DiscoverViewModel(data.challenges)
     fun globalBoards() = GlobalBoardsViewModel(data.communities)
+    fun supportChat() = SupportChatViewModel(data.support)
 
     /** Whether this build has a Wallet tab; [wallet] is only valid when it does. */
     val hasWallet: Boolean get() = data.wallet != null

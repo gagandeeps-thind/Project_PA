@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SupportAgent
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +51,7 @@ import com.osiris.player.ui.session.LoginScreen
 import com.osiris.player.ui.session.OnboardingScreen
 import com.osiris.player.ui.settings.SettingsScreen
 import com.osiris.player.ui.social.SocialScreen
+import com.osiris.player.ui.support.SupportChatScreen
 import com.osiris.player.ui.today.TodayScreen
 import com.osiris.player.ui.wallet.WalletScreen
 import com.osiris.shared.presentation.AppGraph
@@ -74,6 +76,7 @@ object Routes {
     const val COMMUNITY = "community/{slug}"
     const val RANKINGS = "rankings"
     const val SETTINGS = "settings"
+    const val SUPPORT = "support"
     const val EXERCISE = "exercise"
     const val EXERCISE_CAMERA = "exercise/{key}"
 
@@ -213,9 +216,11 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
         if (graph.hasWallet) composable(Routes.WALLET) { WalletScreen(graph) }
         composable(Routes.PROFILE) {
             ProfileScreen(graph, actions = {
+                IconButton(onClick = { nav.open(Routes.SUPPORT) }) { Icon(Icons.Outlined.SupportAgent, "Live support") }
                 IconButton(onClick = { nav.open(Routes.SETTINGS) }) { Icon(Icons.Outlined.Settings, "Settings") }
             })
         }
+        composable(Routes.SUPPORT) { SupportChatScreen(graph, onBack = nav::popBackStack) }
         composable(Routes.SETTINGS) { SettingsScreen(graph, onBack = nav::popBackStack) }
         composable(Routes.EXERCISE) { ExerciseHubScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.exerciseCamera(it)) }) }
         composable(Routes.EXERCISE_CAMERA, arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
