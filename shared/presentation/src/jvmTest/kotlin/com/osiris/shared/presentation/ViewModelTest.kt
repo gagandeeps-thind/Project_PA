@@ -83,6 +83,28 @@ class ViewModelTest {
     }
 
     @Test
+    fun `a server-rejected email shows on the email field, other rejections as a message`() = runTest {
+        val auth = FakeAuth().apply {
+            registerResult = fail(AppError.Http(422, "INVALID_EMAIL", "Enter a valid email address"))
+        }
+        val vm = OnboardingViewModel(auth, FakePlayer(), dispatcher = main())
+        vm.next()
+        vm.next()
+        vm.onName("Pat")
+        vm.onEmail("pat@osiris.test")
+        vm.onPassword("secret123")
+        vm.create()
+        assertEquals(mapOf(Registration.FIELD_EMAIL to "Enter a valid email address"), vm.state.value.fieldErrors)
+        assertNull(vm.message.value)
+        assertFalse(vm.state.value.busy)
+
+        auth.registerResult = fail(AppError.Http(404, "REFERRAL_NOT_FOUND", "That invite code was not found"))
+        vm.create()
+        assertEquals(emptyMap(), vm.state.value.fieldErrors)
+        assertEquals("That invite code was not found", vm.message.value?.text)
+    }
+
+    @Test
     fun `today keeps the screen on a failed refresh and says why`() = runTest {
         val player = FakePlayer()
         val vm = TodayViewModel(player, main())

@@ -65,6 +65,7 @@ class FakeAuth : AuthRepository {
     override val state = MutableStateFlow<AuthState>(AuthState.SignedOut)
     var loginResult: Outcome<UserProfile> = ok(UserProfile(id = 7))
     val registrations = mutableListOf<Registration>()
+    var registerResult: Outcome<UserProfile> = ok(UserProfile(id = 7))
     override suspend fun restore() {
         state.value = AuthState.SignedOut
     }
@@ -73,7 +74,7 @@ class FakeAuth : AuthRepository {
     }
     override suspend fun register(registration: Registration): Outcome<UserProfile> {
         registrations += registration
-        return ok(UserProfile(id = 7))
+        return registerResult
     }
     override suspend fun signOutEverywhere() = ok(Unit)
     override suspend fun logout() {
