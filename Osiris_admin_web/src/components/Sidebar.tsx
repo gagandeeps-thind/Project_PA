@@ -1,6 +1,7 @@
 /* ───────────────────────────────────────────────────────────
  *  Sidebar Navigation
  * ─────────────────────────────────────────────────────────── */
+import { memo } from "react";
 import {
   Shield,
   LayoutDashboard,
@@ -33,7 +34,7 @@ const navItems: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] 
   { key: "bounties", label: "Bounties", icon: MapPin },
 ];
 
-export default function Sidebar({
+function Sidebar({
   activePage,
   onNavigate,
   admin,
@@ -93,3 +94,5 @@ export default function Sidebar({
     </aside>
   );
 }
+
+export default memo(Sidebar);

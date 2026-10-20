@@ -14,6 +14,7 @@ import {
   setCommunityStatus,
 } from "../api/client";
 import type { AdminCommunity, AdminReport } from "../api/types";
+import { TableSkeleton } from "../components/Skeleton";
 
 type Tab = "reports" | "communities" | "seasons";
 
@@ -143,9 +144,7 @@ export default function CommunityPage() {
       {error && <div className="error-message">{error}</div>}
       {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
       {loading && (
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-        </div>
+        <TableSkeleton />
       )}
 
       {!loading && tab === "reports" && (

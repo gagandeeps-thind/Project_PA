@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { apiErrorMessage, getFunnel } from "../api/client";
 import type { Funnel } from "../api/types";
+import { CardsSkeleton } from "../components/Skeleton";
 
 const STEP_LABELS: Record<string, string> = {
   account_created: "Account created",
@@ -58,9 +59,7 @@ export default function GrowthPage() {
 
       {error && <div className="error-message">{error}</div>}
       {loading && (
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-        </div>
+        <CardsSkeleton />
       )}
 
       {!loading && funnel && (

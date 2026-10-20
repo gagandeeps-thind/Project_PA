@@ -2,8 +2,7 @@
  *  Osiris Admin – Global Styles · Premium Glassmorphism
  * ─────────────────────────────────────────────────────────── */
 
-/* ── Google Fonts ─────────────────────────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap");
+/* Fonts load from index.html in parallel with this stylesheet, not chained behind it. */
 
 /* ── CSS Variables ────────────────────────────────────────── */
 :root {
@@ -980,4 +979,39 @@ input, button, textarea, select {
   .data-table-wrapper {
     overflow-x: auto;
   }
+}
+
+/* ── Loading Skeleton ─────────────────────────────────────── */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--border-subtle) 25%, rgba(255, 255, 255, 0.08) 50%, var(--border-subtle) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-text {
+  height: 12px;
+  margin: 4px 0;
+}
+
+.skeleton-title {
+  width: 30%;
+  height: 24px;
+  margin-bottom: 10px;
+}
+
+.skeleton-value {
+  width: 60%;
+  height: 28px;
+  margin-top: 12px;
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
 }

@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Dumbbell } from "lucide-react";
 import { apiErrorMessage, getExerciseSets, reviewExerciseSet } from "../api/client";
 import type { AdminExerciseSet } from "../api/types";
+import { TableSkeleton } from "../components/Skeleton";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 type Pending = { item: AdminExerciseSet; decision: "approve" | "reject" };
 
@@ -36,18 +38,19 @@ export default function ExerciseReviewPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const playerFilter = useDebouncedValue(player);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      setSets(await getExerciseSets(status, Number(player) || undefined));
+      setSets(await getExerciseSets(status, Number(playerFilter) || undefined));
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to load"));
     } finally {
       setLoading(false);
     }
-  }, [status, player]);
+  }, [status, playerFilter]);
 
   useEffect(() => {
     load();
@@ -106,9 +109,7 @@ export default function ExerciseReviewPage() {
       {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
 
       {loading ? (
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-        </div>
+        <TableSkeleton />
       ) : sets.length === 0 ? (
         <div className="empty-state">
           <Dumbbell size={48} />
