@@ -39,6 +39,7 @@ from main import (
     get_db,
 )
 from services import leaderboards as lb
+from services.ttl_cache import TTLCache, ttl_from_env
 
 router = APIRouter()
 
@@ -49,6 +50,11 @@ PODIUM = 3
 HubSection = Literal["live", "upcoming", "community", "finished"]
 Board = Literal["distance", "pace", "reps", "rewards"]
 Period = Literal["week", "all"]
+
+# Every board scans all verified data for its period (about 300 ms at 100k runs), and every
+# player opening the Social tab asks for one. Other players' values may lag a minute; the
+# viewer's own value is always read fresh, so a run just finished shows at once.
+BOARD_CACHE = TTLCache(ttl_from_env("OSIRIS_LEADERBOARD_CACHE_SECONDS", 60))
 
 
 class Finisher(BaseModel):
@@ -197,20 +203,29 @@ def _active_players(db: Session) -> set[int]:
     return {u for (u,) in db.query(models.User.id).filter(models.User.suspended_at.is_(None)).all()}
 
 
-def _board_values(db: Session, board: Board, start: Optional[datetime], exercise: str) -> dict[int, float]:
-    if board in ("distance", "pace"):
-        q = db.query(models.RunSession.user_id, models.RunSession.distance_m, models.RunSession.duration_seconds).filter(
+def _board_values(db: Session, board: Board, start: Optional[datetime], exercise: str,
+                  user_id: Optional[int] = None) -> dict[int, float]:
+    """Each player's value on `board` since `start`; only `user_id`'s when given."""
+    if board == "distance":
+        q = db.query(models.RunSession.user_id, func.sum(models.RunSession.distance_m)).filter(
             models.RunSession.verification_status == "accepted")
         if start is not None:
             q = q.filter(models.RunSession.finished_at >= start)
+        if user_id is not None:
+            q = q.filter(models.RunSession.user_id == user_id)
+        return {u: float(v or 0) / 1000.0 for u, v in q.group_by(models.RunSession.user_id).all()}
+    if board == "pace":
+        q = db.query(models.RunSession.user_id, models.RunSession.distance_m, models.RunSession.duration_seconds).filter(
+            models.RunSession.verification_status == "accepted",
+            models.RunSession.distance_m >= lb.PACE_MIN_DISTANCE_M, models.RunSession.duration_seconds > 0)
+        if start is not None:
+            q = q.filter(models.RunSession.finished_at >= start)
+        if user_id is not None:
+            q = q.filter(models.RunSession.user_id == user_id)
         values: dict[int, float] = {}
-        for user_id, dist, secs in q.all():
-            dist, secs = float(dist or 0), float(secs or 0)
-            if board == "distance":
-                values[user_id] = values.get(user_id, 0.0) + dist / 1000.0
-            elif dist >= lb.PACE_MIN_DISTANCE_M and secs > 0:
-                t = lb.riegel_seconds(secs, dist)
-                values[user_id] = min(values.get(user_id, t), t)
+        for uid, dist, secs in q.all():
+            t = lb.riegel_seconds(float(secs), float(dist))
+            values[uid] = min(values.get(uid, t), t)
         return values
     if board == "reps":
         metric = models.ExerciseSession.hold_s if exercise == "plank" else models.ExerciseSession.reps_valid
@@ -218,12 +233,21 @@ def _board_values(db: Session, board: Board, start: Optional[datetime], exercise
             models.ExerciseSession.status == "verified", models.ExerciseSession.exercise_key == exercise)
         if start is not None:
             q = q.filter(models.ExerciseSession.created_at >= start)
+        if user_id is not None:
+            q = q.filter(models.ExerciseSession.user_id == user_id)
         return {u: float(v or 0) for u, v in q.group_by(models.ExerciseSession.user_id).all()}
     q = db.query(models.ChallengeAttempt.user_id, func.sum(models.ChallengeAttempt.xp_awarded)).filter(
         models.ChallengeAttempt.outcome == "won")
     if start is not None:
         q = q.filter(models.ChallengeAttempt.decided_at >= start)
+    if user_id is not None:
+        q = q.filter(models.ChallengeAttempt.user_id == user_id)
     return {u: float(v or 0) for u, v in q.group_by(models.ChallengeAttempt.user_id).all()}
+
+
+def _active_board_values(db: Session, board: Board, start: Optional[datetime], exercise: str) -> dict[int, float]:
+    allowed = _active_players(db)
+    return {u: v for u, v in _board_values(db, board, start, exercise).items() if u in allowed}
 
 
 BOARD_META = {
@@ -243,9 +267,12 @@ def global_leaderboard(
     token_data: dict = Depends(get_active_player),
 ):
     uid = token_data["id"]
-    allowed = _active_players(db)
-    values = {u: v for u, v in _board_values(db, board, _period_start(period, _now_naive_utc()), exercise).items()
-              if u in allowed}
+    start = _period_start(period, _now_naive_utc())
+    values = dict(BOARD_CACHE.get_or_compute(
+        (board, start, exercise), lambda: _active_board_values(db, board, start, exercise)))
+    # The viewer is active (get_active_player), so their fresh value can always stand in.
+    values.pop(uid, None)
+    values.update(_board_values(db, board, start, exercise, user_id=uid))
     ascending = board == "pace"
     ranked = lb.rank_values(values, ascending=ascending)
     shown = ranked[:LEADERBOARD_LIMIT]

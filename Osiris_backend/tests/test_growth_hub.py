@@ -302,6 +302,54 @@ def test_responses_are_compressed_and_revalidated():
     print("PASS test_responses_are_compressed_and_revalidated")
 
 
+def test_board_cache_serves_others_stale_and_the_viewer_fresh():
+    """Performance audit 2026-10-19: every Social tab open rescanned all verified runs (~300 ms at 100k runs)."""
+    from growth_hub import BOARD_CACHE
+    url = "/api/v2/leaderboards/global?board=distance&period=all"
+    uncached = _queries(url, ben_h)
+    BOARD_CACHE.ttl_seconds = 60
+    BOARD_CACHE.clear()
+    try:
+        assert _queries(url, ben_h) < uncached
+        before = board("distance", period="all")
+        ana_before = next(r["value"] for r in before["rows"] if r["name"] == "Ana")
+        db = Session()
+        run(db, ana, 5000, 1500)
+        run(db, ben, 2000, 600)
+        db.commit()
+        db.close()
+        cached = board("distance", period="all")
+        assert next(r["value"] for r in cached["rows"] if r["name"] == "Ana") == ana_before  # others lag
+        assert cached["my_row"]["value"] == before["my_row"]["value"] + 2.0  # the viewer's run shows at once
+        assert next(r for r in cached["rows"] if r["is_me"])["value"] == cached["my_row"]["value"]
+        BOARD_CACHE.clear()
+        fresh = board("distance", period="all")
+        assert next(r["value"] for r in fresh["rows"] if r["name"] == "Ana") == round(ana_before + 5.0, 1)
+    finally:
+        BOARD_CACHE.ttl_seconds = 0
+        BOARD_CACHE.clear()
+    print("PASS test_board_cache_serves_others_stale_and_the_viewer_fresh")
+
+
+def test_ttl_cache_expires_and_evicts():
+    from services.ttl_cache import TTLCache
+    clock = [100.0]
+    calls = []
+    cache = TTLCache(ttl_seconds=10, max_entries=2, clock=lambda: clock[0])
+
+    def get(key):
+        return cache.get_or_compute(key, lambda: calls.append(key) or f"v{len(calls)}")
+
+    assert get("a") == "v1" and get("a") == "v1"
+    clock[0] = 111.0
+    assert get("a") == "v2"  # expired
+    get("b")
+    get("c")  # evicts "a", the least recently used
+    assert get("b") == "v3" and get("a") == "v5"
+    assert TTLCache(ttl_seconds=0).get_or_compute("k", lambda: calls.append("off") or "x") == "x" and calls[-1] == "off"
+    print("PASS test_ttl_cache_expires_and_evicts")
+
+
 if __name__ == "__main__":
     test_hub_sections()
     test_blocked_creators_are_hidden()
@@ -312,3 +360,5 @@ if __name__ == "__main__":
     test_progression_counts_for_the_profile()
     test_list_endpoints_run_a_fixed_number_of_queries()  # last: it adds challenges the tests above count
     test_responses_are_compressed_and_revalidated()
+    test_board_cache_serves_others_stale_and_the_viewer_fresh()
+    test_ttl_cache_expires_and_evicts()
