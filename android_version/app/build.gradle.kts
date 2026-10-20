@@ -37,6 +37,10 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // ML Kit's pose library is ~20 MB per ABI and made up 77 MB of the 87 MB release APK.
+            // Phones are ARM; x86 builds only serve emulators and ChromeOS, which run ARM code too.
+            // Debug keeps every ABI for fast emulator runs; a Play bundle splits per device anyway.
+            ndk { abiFilters += setOf("arm64-v8a", "armeabi-v7a") }
         }
     }
 
@@ -53,6 +57,11 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/INDEX.LIST", "/META-INF/io.netty.versions.properties")
     }
+}
+
+extensions.configure<org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension> {
+    stabilityConfigurationFiles.add(layout.projectDirectory.file("compose-stability.conf"))
+    providers.gradleProperty("osiris.composeReports").orNull?.let { reportsDestination.set(layout.buildDirectory.dir(it)) }
 }
 
 extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension> {
