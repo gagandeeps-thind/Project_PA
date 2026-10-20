@@ -2,7 +2,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build
 # The API is then reachable only through the gateway, which is why it may trust the gateway's
 # X-Forwarded-For (the rate limiter keys on the client IP). Scaling out needs PostgreSQL first;
-# see Documentation/Enterprise/18_performance_audit.md ("Scaling out").
+# see Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19.md ("Scaling out").
 services:
   backend:
     ports: !reset []

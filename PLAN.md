@@ -245,7 +245,7 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
   activity feed, daily steps; blocks friends, the steps board and rotating refresh tokens.
 
 ## Performance pass (2026-10-19)
-Audit report: `Documentation/Enterprise/18_performance_audit.md`. Branch `perf/optimization-pass`.
+Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19.md`. Branch `perf/optimization-pass`.
 
 - [x] retire the Flutter player app (`Osiris_customer/`) now the KMP app has parity; shared assets move to `shared/`
 - [x] backend: list endpoints run a fixed number of queries however many rows they return (challenges, hub,
@@ -260,3 +260,10 @@ Audit report: `Documentation/Enterprise/18_performance_audit.md`. Branch `perf/o
   `CREATE INDEX ix_run_sessions_verified_finished ON run_sessions (verification_status, finished_at, user_id, distance_m, duration_seconds);`
   and `ix_run_sessions_user_verified ON run_sessions (user_id, verification_status, finished_at)` for per-player totals.
   - Acceptance: an Alembic revision with both indexes (and `models.py` `Index(...)` entries) passes the gate.
+- [x] admin web: per-page chunks and long-lived library chunks, skeletons, debounced filters, non-blocking fonts
+- [x] android: ARM-only release APK (87 -> 47 MB), Compose stability config (90 -> 2 unstable params), loading skeleton
+- [x] infra: nginx gateway / load balancer config and compose override; `OSIRIS_RUN_SCHEDULER`
+- [ ] [human] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`);
+  before more than one replica: PostgreSQL, one scheduler, a shared rate limiter (report 17, section 4).
+- [ ] app: fetch Today once at start (it is fetched before and again after the first location fix)
+  - Acceptance: a presentation test shows one `/api/v2/me/today` request when the location arrives within 2 s.
