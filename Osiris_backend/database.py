@@ -40,16 +40,32 @@ def _sqlite_pragmas(dbapi_connection, _record):
     """Endpoints run concurrently in FastAPI's thread pool. In SQLite's default rollback
     journal a reader blocks the writer's commit, and the writer's retry back-off produced
     second-long tail latencies on write endpoints. WAL lets readers and the single writer
-    proceed together; busy_timeout bounds the wait instead of failing fast."""
+    proceed together; busy_timeout bounds the wait instead of failing fast.
+
+    `optimize=0x10002` refreshes planner statistics where they are missing or stale. Without
+    them SQLite picked the index on verification_status (nearly every run is "accepted") over
+    the one on user_id, so one player's run totals scanned every run: 15 ms -> 0.05 ms at 100k
+    runs. SQLite before 3.46 ignores the 0x10000 bit and this is a no-op."""
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA optimize=0x10002")
     cursor.close()
 
 
 if _IS_SQLITE:
     event.listen(engine, "connect", _sqlite_pragmas)
+
+def optimize(bind=None) -> None:
+    """Refresh SQLite planner statistics; pooled connections live for days, so the API runs this
+    nightly as well as on connect. Other databases keep their own statistics."""
+    target = bind if bind is not None else engine
+    if target.dialect.name != "sqlite":
+        return
+    with target.connect() as conn:
+        conn.exec_driver_sql("PRAGMA optimize")
+
 
 # SessionLocal is what we will use to actually talk to the database in our API endpoints
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

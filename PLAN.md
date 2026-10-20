@@ -243,3 +243,20 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
   suites in `.github/workflows/ci.yml`.
 - [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
   activity feed, daily steps; blocks friends, the steps board and rotating refresh tokens.
+
+## Performance pass (2026-10-19)
+Audit report: `Documentation/Enterprise/18_performance_audit.md`. Branch `perf/optimization-pass`.
+
+- [x] retire the Flutter player app (`Osiris_customer/`) now the KMP app has parity; shared assets move to `shared/`
+- [x] backend: list endpoints run a fixed number of queries however many rows they return (challenges, hub,
+  courses, communities, seasons, invites, blocks, admin queues); `test_growth_hub` asserts it
+- [x] backend: gzip (>= 1 KB), weak ETags with 304 on `If-None-Match`, `Cache-Control: private, no-cache`;
+  the KMP client installs Ktor `HttpCache`
+- [x] backend: PostgreSQL pool settings (`OSIRIS_DB_POOL_*`); SQLite planner statistics on connect and nightly
+- [x] backend: global leaderboards cached 60 s per board (`OSIRIS_LEADERBOARD_CACHE_SECONDS`), viewer row always fresh
+- [x] backend: `limit`/`offset` paging on long lists, `before_id` on audit events
+- [ ] [human] migrations: add a covering index for the global boards and team goals (board query 40 -> 25 ms at
+  100k runs, measured on a scratch copy):
+  `CREATE INDEX ix_run_sessions_verified_finished ON run_sessions (verification_status, finished_at, user_id, distance_m, duration_seconds);`
+  and `ix_run_sessions_user_verified ON run_sessions (user_id, verification_status, finished_at)` for per-player totals.
+  - Acceptance: an Alembic revision with both indexes (and `models.py` `Index(...)` entries) passes the gate.

@@ -422,6 +422,33 @@ def test_ttl_cache_expires_and_evicts():
     print("PASS test_ttl_cache_expires_and_evicts")
 
 
+def test_sqlite_connections_keep_planner_statistics():
+    """Performance audit 2026-10-19: with no statistics SQLite chose the verification_status index (every
+    row "accepted") over user_id, so a single player's totals scanned every run."""
+    import tempfile
+
+    import database
+    from sqlalchemy import event
+
+    path = os.path.join(tempfile.mkdtemp(), "planner.sqlite3")
+    eng = create_engine(f"sqlite:///{path}")
+    event.listen(eng, "connect", database._sqlite_pragmas)
+    with eng.begin() as conn:
+        conn.exec_driver_sql("CREATE TABLE runs (id INTEGER PRIMARY KEY, user_id INTEGER, status TEXT, metres REAL)")
+        conn.exec_driver_sql("CREATE INDEX ix_runs_user_id ON runs (user_id)")
+        conn.exec_driver_sql("CREATE INDEX ix_runs_status ON runs (status)")
+        conn.exec_driver_sql("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 5000) "
+                             "INSERT INTO runs (user_id, status, metres) SELECT i % 500, 'accepted', 1000 FROM n")
+    eng.dispose()  # the next connection is a new one, as after a restart
+    database.optimize(eng)
+    with eng.connect() as conn:
+        plan = " ".join(r[3] for r in conn.exec_driver_sql(
+            "EXPLAIN QUERY PLAN SELECT sum(metres) FROM runs WHERE status = 'accepted' AND user_id = 7"))
+    eng.dispose()
+    assert "ix_runs_user_id" in plan, plan
+    print("PASS test_sqlite_connections_keep_planner_statistics")
+
+
 if __name__ == "__main__":
     test_hub_sections()
     test_blocked_creators_are_hidden()
@@ -436,3 +463,4 @@ if __name__ == "__main__":
     test_responses_are_compressed_and_revalidated()
     test_board_cache_serves_others_stale_and_the_viewer_fresh()
     test_ttl_cache_expires_and_evicts()
+    test_sqlite_connections_keep_planner_statistics()

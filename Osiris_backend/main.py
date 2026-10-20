@@ -75,6 +75,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)
     scheduler.add_job(process_challenge_settlement, 'interval', hours=1)
     scheduler.add_job(process_route_point_ttl, 'interval', hours=24)
+    scheduler.add_job(database.optimize, 'interval', hours=24)
     scheduler.start()
     try:
         yield
