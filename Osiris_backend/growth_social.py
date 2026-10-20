@@ -23,6 +23,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
@@ -357,17 +358,19 @@ def my_invites(db: Session = Depends(get_db), token_data: dict = Depends(get_act
         p for (p,) in db.query(models.PlayerProfile.user_id)
         .filter(models.PlayerProfile.referred_by_user_id == uid).all()
     ]
-    out = []
-    for invite in db.query(models.ChallengeInvite).filter(models.ChallengeInvite.inviter_id == uid).all():
-        ch = db.query(models.Challenge).filter(models.Challenge.id == invite.challenge_id).first()
-        joins = db.query(models.ChallengeAttempt).filter(
-            models.ChallengeAttempt.challenge_id == invite.challenge_id,
-            models.ChallengeAttempt.user_id.in_(referred or [-1]),
-        ).count()
-        out.append(InviteStats(token=invite.token, challenge_id=invite.challenge_id,
-                               challenge_title=ch.title if ch else "", opens=invite.opens or 0,
-                               signups=invite.signups or 0, joins=joins))
-    return out
+    invites = db.query(models.ChallengeInvite).filter(models.ChallengeInvite.inviter_id == uid).order_by(
+        models.ChallengeInvite.id.asc()).limit(200).all()
+    challenge_ids = [i.challenge_id for i in invites] or [-1]
+    titles = {cid: title for cid, title in db.query(models.Challenge.id, models.Challenge.title).filter(
+        models.Challenge.id.in_(challenge_ids))}
+    joins = {cid: n for cid, n in db.query(models.ChallengeAttempt.challenge_id, func.count(models.ChallengeAttempt.id))
+             .filter(models.ChallengeAttempt.challenge_id.in_(challenge_ids),
+                     models.ChallengeAttempt.user_id.in_(referred or [-1]))
+             .group_by(models.ChallengeAttempt.challenge_id).all()}
+    return [InviteStats(token=invite.token, challenge_id=invite.challenge_id,
+                        challenge_title=titles.get(invite.challenge_id, ""), opens=invite.opens or 0,
+                        signups=invite.signups or 0, joins=joins.get(invite.challenge_id, 0))
+            for invite in invites]
 
 
 @router.get("/api/v2/me/referrals", response_model=ReferralSummary)

@@ -21,8 +21,9 @@ import secrets
 from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
@@ -262,21 +263,28 @@ def block_player(req: BlockCreate, db: Session = Depends(get_db),
         db.flush()
         _audit(db, actor_type="player", actor_id=uid, action="block.created", entity_type="user", entity_id=target)
     db.commit()
-    return BlockOut(id=block.id, name=_blocked_name(db, block, 1), created_at=block.created_at)
+    return BlockOut(id=block.id, name=_blocked_names(db, [block])[block.id], created_at=block.created_at)
 
 
-def _blocked_name(db: Session, block: models.UserBlock, n: int) -> str:
-    p = db.query(models.PlayerProfile).filter(models.PlayerProfile.user_id == block.blocked_id).first()
-    if p is not None and (p.public_profile or p.leaderboard_opt_in):
-        return p.display_name
-    return f"Blocked runner {n}"
+def _blocked_names(db: Session, blocks: list[models.UserBlock], first: int = 1) -> dict[int, str]:
+    """block id -> the blocked player's name if they show it publicly, else "Blocked runner <n>"."""
+    profiles = {p.user_id: p for p in db.query(models.PlayerProfile).filter(
+        models.PlayerProfile.user_id.in_([b.blocked_id for b in blocks] or [-1]))}
+    out = {}
+    for n, b in enumerate(blocks, first):
+        p = profiles.get(b.blocked_id)
+        shown = p is not None and (p.public_profile or p.leaderboard_opt_in)
+        out[b.id] = p.display_name if shown else f"Blocked runner {n}"
+    return out
 
 
 @router.get("/api/v2/me/blocks", response_model=List[BlockOut])
-def my_blocks(db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def my_blocks(limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+              db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     rows = db.query(models.UserBlock).filter(models.UserBlock.blocker_id == token_data["id"]).order_by(
-        models.UserBlock.created_at.asc()).all()
-    return [BlockOut(id=b.id, name=_blocked_name(db, b, i), created_at=b.created_at) for i, b in enumerate(rows, 1)]
+        models.UserBlock.created_at.asc(), models.UserBlock.id.asc()).offset(offset).limit(limit).all()
+    names = _blocked_names(db, rows, first=offset + 1)
+    return [BlockOut(id=b.id, name=names[b.id], created_at=b.created_at) for b in rows]
 
 
 @router.delete("/api/v2/blocks/{block_id}", status_code=204)
@@ -471,32 +479,50 @@ def rules():
 
 # --- admin abuse review ----------------------------------------------------------------
 
-def _target_summary(db: Session, target_type: str, target_id: int) -> str:
-    if target_type == "challenge":
-        ch = db.query(models.Challenge).filter(models.Challenge.id == target_id).first()
-        return f"Challenge #{target_id}: {ch.title} ({ch.status})" if ch else f"Challenge #{target_id}"
-    if target_type == "user":
-        p = db.query(models.PlayerProfile).filter(models.PlayerProfile.user_id == target_id).first()
-        return f"Player #{target_id}: {p.display_name}" if p else f"Player #{target_id}"
-    if target_type == "community":
-        c = db.query(models.Community).filter(models.Community.id == target_id).first()
-        return f"Community #{target_id}: {c.name} ({c.status})" if c else f"Community #{target_id}"
-    card = db.query(models.ShareCard).filter(models.ShareCard.id == target_id).first()
-    return f"Share card #{target_id}: {card.headline}" if card else f"Share card #{target_id}"
+_TARGET_LABELS = {"challenge": "Challenge", "user": "Player", "community": "Community", "share_card": "Share card"}
+
+
+def _target_kind(target_type: str) -> str:
+    return target_type if target_type in ("challenge", "user", "community") else "share_card"
+
+
+def _target_summaries(db: Session, reports: list[models.Report]) -> dict[tuple[str, int], str]:
+    """(target type, id) -> a one-line description of what was reported, one query per kind of target."""
+    ids: dict[str, set[int]] = {kind: set() for kind in _TARGET_LABELS}
+    for r in reports:
+        ids[_target_kind(r.target_type)].add(r.target_id)
+    found: dict[tuple[str, int], str] = {}
+    for ch in db.query(models.Challenge).filter(models.Challenge.id.in_(ids["challenge"] or {-1})):
+        found["challenge", ch.id] = f"Challenge #{ch.id}: {ch.title} ({ch.status})"
+    for p in db.query(models.PlayerProfile).filter(models.PlayerProfile.user_id.in_(ids["user"] or {-1})):
+        found["user", p.user_id] = f"Player #{p.user_id}: {p.display_name}"
+    for c in db.query(models.Community).filter(models.Community.id.in_(ids["community"] or {-1})):
+        found["community", c.id] = f"Community #{c.id}: {c.name} ({c.status})"
+    for card in db.query(models.ShareCard).filter(models.ShareCard.id.in_(ids["share_card"] or {-1})):
+        found["share_card", card.id] = f"Share card #{card.id}: {card.headline}"
+    out = {}
+    for r in reports:
+        kind = _target_kind(r.target_type)
+        out[r.target_type, r.target_id] = found.get((kind, r.target_id), f"{_TARGET_LABELS[kind]} #{r.target_id}")
+    return out
 
 
 @router.get("/api/v2/admin/reports", response_model=List[AdminReportItem])
-def admin_reports(status: str = "open", db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
+def admin_reports(status: str = "open", limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                  db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
     rows = db.query(models.Report).filter(models.Report.status == status).order_by(
-        models.Report.created_at.asc()).limit(500).all()
+        models.Report.created_at.asc(), models.Report.id.asc()).offset(offset).limit(limit).all()
+    open_counts = {(t, i): n for t, i, n in db.query(
+        models.Report.target_type, models.Report.target_id, func.count(models.Report.id)).filter(
+        models.Report.status == "open", models.Report.target_id.in_({r.target_id for r in rows} or {-1}),
+    ).group_by(models.Report.target_type, models.Report.target_id).all()}
+    summaries = _target_summaries(db, rows)
     out = []
     for r in rows:
-        open_count = db.query(models.Report).filter(
-            models.Report.target_type == r.target_type, models.Report.target_id == r.target_id,
-            models.Report.status == "open").count()
+        open_count = open_counts.get((r.target_type, r.target_id), 0)
         out.append(AdminReportItem(
             id=r.id, target_type=r.target_type, target_id=r.target_id,
-            target_summary=_target_summary(db, r.target_type, r.target_id), reason=r.reason,
+            target_summary=summaries[r.target_type, r.target_id], reason=r.reason,
             details=r.details, status=r.status, open_reports_on_target=open_count, created_at=r.created_at))
     return out
 

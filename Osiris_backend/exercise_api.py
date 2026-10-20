@@ -11,7 +11,7 @@ import json
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -292,7 +292,7 @@ def _xp_if_approved(
 
 @router.get("/api/v2/admin/exercise-sessions", response_model=List[AdminExerciseItem])
 def admin_exercise_sessions(
-    status: str = REVIEWABLE, user_id: Optional[int] = None, limit: int = 100,
+    status: str = REVIEWABLE, user_id: Optional[int] = None, limit: int = 100, offset: int = Query(0, ge=0),
     db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin),
 ):
     """Sets the server re-check flagged (or any status), oldest first, with the evidence a
@@ -301,7 +301,7 @@ def admin_exercise_sessions(
     q = db.query(models.ExerciseSession).filter(models.ExerciseSession.status == status)
     if user_id is not None:
         q = q.filter(models.ExerciseSession.user_id == user_id)
-    rows = q.order_by(models.ExerciseSession.id.asc()).limit(max(1, min(limit, 500))).all()
+    rows = q.order_by(models.ExerciseSession.id.asc()).offset(offset).limit(max(1, min(limit, 500))).all()
     user_ids = {r.user_id for r in rows} or {-1}
     names: dict[int, str] = {uid: name for uid, name in db.query(
         models.PlayerProfile.user_id, models.PlayerProfile.display_name).filter(

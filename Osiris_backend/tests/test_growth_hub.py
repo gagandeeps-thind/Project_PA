@@ -248,15 +248,20 @@ def _queries(url, headers):
     return len(seen)
 
 
+def admin_headers(email):
+    db = Session()
+    admin = models.Admin(email=email, hashed_password="x", name="Hub Admin")
+    db.add(admin)
+    db.commit()
+    headers = {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin.id), 'role': 'admin'})}"}
+    db.close()
+    return headers
+
+
 def test_list_endpoints_run_a_fixed_number_of_queries():
     """Performance audit 2026-10-19: list endpoints ran 1-3 queries per challenge shown (the nearby map
     ran 51 queries for 24 challenges). Adding challenges must not add queries."""
-    db = Session()
-    admin = models.Admin(email="hub_admin@example.com", hashed_password="x", name="Hub Admin")
-    db.add(admin)
-    db.commit()
-    admin_h = {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin.id), 'role': 'admin'})}"}
-    db.close()
+    admin_h = admin_headers("hub_admin@example.com")
     urls = [(f"/api/v2/challenge-hub?section={s}", ben_h) for s in ("live", "upcoming", "community", "finished")]
     urls += [("/api/v2/challenges/nearby?lat=0&lng=0&radius_km=5", ben_h), ("/api/v2/communities/hub-club/challenges", ben_h),
              ("/api/v2/admin/challenges", admin_h)]
@@ -278,6 +283,73 @@ def test_list_endpoints_run_a_fixed_number_of_queries():
     assert after == before, {u: (before[u], after[u]) for u in before if before[u] != after[u]}
     assert len(section("live")) >= 7 and len(section("finished")) >= 7
     print("PASS test_list_endpoints_run_a_fixed_number_of_queries")
+
+
+def test_other_lists_run_a_fixed_number_of_queries():
+    """Performance audit 2026-10-19: courses, communities, seasons, invites, blocks, reports and the admin
+    queues ran one or more queries per row. Adding rows must not add queries."""
+    admin_h = admin_headers("hub_admin2@example.com")
+    urls = [("/api/v2/courses", ana_h), ("/api/v2/communities", ben_h), ("/api/v2/me/communities", ben_h),
+            ("/api/v2/seasons", ben_h), ("/api/v2/me/invites", ana_h), ("/api/v2/me/blocks", ben_h),
+            ("/api/v2/admin/reports", admin_h), ("/api/v2/admin/communities", admin_h),
+            ("/api/v2/admin/review-queue", admin_h)]
+
+    def add_rows(tag):
+        db = Session()
+        for i in range(3):
+            key = f"{tag}{i}"
+            ch = challenge(db, ana, f"Rows {key}", NOW - timedelta(hours=1), NOW + timedelta(days=2))
+            db.add(models.ChallengeInvite(token=f"inv-{key}", challenge_id=ch.id, inviter_id=ana))
+            db.add(models.ChallengeAttempt(challenge_id=ch.id, user_id=ben, status="review_required",
+                                           terms_hash=ch.terms_hash, submitted_at=NOW))
+            db.add(models.Report(reporter_id=ben, target_type="challenge", target_id=ch.id, reason="spam"))
+            other = models.User(email=f"hub_rows_{key}@example.com", hashed_password="x")
+            db.add(other)
+            db.flush()
+            db.add(models.PlayerProfile(user_id=other.id, display_name=f"Rows {key}", leaderboard_opt_in=True,
+                                        referral_code=f"ROWS{key.upper()}"))
+            db.add(models.UserBlock(blocker_id=ben, blocked_id=other.id))
+            db.add(models.Report(reporter_id=ben, target_type="user", target_id=other.id, reason="spam"))
+            club = models.Community(slug=f"rows-{key}", name=f"Rows {key}", kind="running_club", owner_user_id=ana)
+            db.add(club)
+            db.flush()
+            db.add_all([models.CommunityMember(community_id=club.id, user_id=ana, role="owner"),
+                        models.CommunityMember(community_id=club.id, user_id=ben)])
+            db.add(models.Report(reporter_id=cy, target_type="community", target_id=club.id, reason="spam"))
+            season = models.Season(slug=f"rows-{key}", name=f"Rows {key}", city="halifax",
+                                   starts_at=NOW - timedelta(days=1), ends_at=NOW + timedelta(days=9))
+            db.add(season)
+            db.flush()
+            db.add(models.SeasonEntry(season_id=season.id, user_id=ben))
+        db.commit()
+        db.close()
+
+    add_rows("a")  # one of each first, so "before" already takes every per-row branch
+    before = {u: _queries(u, h) for u, h in urls}
+    add_rows("b")
+    after = {u: _queries(u, h) for u, h in urls}
+    assert after == before, {u: (before[u], after[u]) for u in before if before[u] != after[u]}
+    assert len(client.get("/api/v2/me/blocks", headers=ben_h).json()) >= 6
+    print("PASS test_other_lists_run_a_fixed_number_of_queries")
+
+
+def test_long_lists_page():
+    admin_h = admin_headers("hub_admin3@example.com")
+    for url, h in [("/api/v2/courses", ana_h), ("/api/v2/me/blocks", ben_h), ("/api/v2/admin/reports", admin_h),
+                   ("/api/v2/admin/communities", admin_h), ("/api/v2/admin/challenges", admin_h),
+                   ("/api/v2/admin/review-queue", admin_h)]:
+        everything = client.get(url, headers=h).json()
+        assert len(everything) >= 4, url
+        first = client.get(f"{url}?limit=2", headers=h).json()
+        second = client.get(f"{url}?limit=2&offset=2", headers=h).json()
+        assert first + second == everything[:4], url
+        assert client.get(f"{url}?limit=0", headers=h).status_code == 422, url
+    names = [b["name"] for b in client.get("/api/v2/me/blocks", headers=ben_h).json()]
+    assert [b["name"] for b in client.get("/api/v2/me/blocks?limit=2&offset=2", headers=ben_h).json()] == names[2:4]
+    events = client.get("/api/v2/admin/audit-events?limit=4", headers=admin_h).json()
+    older = client.get(f"/api/v2/admin/audit-events?limit=2&before_id={events[1]['id']}", headers=admin_h).json()
+    assert [e["id"] for e in older] == [e["id"] for e in events[2:4]]
+    print("PASS test_long_lists_page")
 
 
 def test_responses_are_compressed_and_revalidated():
@@ -359,6 +431,8 @@ if __name__ == "__main__":
     test_riegel_and_ranking_rules()
     test_progression_counts_for_the_profile()
     test_list_endpoints_run_a_fixed_number_of_queries()  # last: it adds challenges the tests above count
+    test_other_lists_run_a_fixed_number_of_queries()
+    test_long_lists_page()
     test_responses_are_compressed_and_revalidated()
     test_board_cache_serves_others_stale_and_the_viewer_fresh()
     test_ttl_cache_expires_and_evicts()

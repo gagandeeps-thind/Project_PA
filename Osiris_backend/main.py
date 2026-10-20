@@ -1,6 +1,6 @@
 # --- Library Imports ---
 # FastAPI: The core web framework. HTTPException: Used to return errors (like 404 Not Found). Depends: Used to inject database sessions.
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 # Pydantic: Used for validating the shape of JSON data coming in and going out of our API.
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
@@ -1765,17 +1765,25 @@ def _course_route(course: models.Course) -> "list[tuple[float, float]]":
     return [(p[0], p[1]) for p in json.loads(course.route_json)]
 
 
-def _course_summary(db: Session, course: models.Course) -> CourseSummary:
-    open_ch = db.query(models.Challenge).filter(
-        models.Challenge.course_id == course.id, models.Challenge.status == "open",
-    ).first()
+def _open_challenge_ids(db: Session, course_ids: list[int]) -> dict[int, int]:
+    """course id -> the id of one open challenge on it, for many courses in one query."""
+    rows = db.query(models.Challenge.course_id, func.min(models.Challenge.id)).filter(
+        models.Challenge.course_id.in_(course_ids or [-1]), models.Challenge.status == "open",
+    ).group_by(models.Challenge.course_id).all()
+    return {course_id: challenge_id for course_id, challenge_id in rows}
+
+
+def _course_summary(db: Session, course: models.Course,
+                    open_ids: Optional[dict[int, int]] = None) -> CourseSummary:
+    if open_ids is None:
+        open_ids = _open_challenge_ids(db, [course.id])
     return CourseSummary(
         id=course.id, name=course.name, status=course.status, version=course.version,
         rules_version=course.rules_version, distance_m=round(course.distance_m, 2),
         benchmark_seconds=round(course.benchmark_seconds, 2), is_loop=bool(course.is_loop),
         public_lat=course.public_lat, public_lng=course.public_lng,
         route=[list(p) for p in _course_route(course)],
-        open_challenge_id=open_ch.id if open_ch else None, created_at=course.created_at,
+        open_challenge_id=open_ids.get(course.id), created_at=course.created_at,
     )
 
 
@@ -1967,16 +1975,21 @@ def register_course(
 
 @app.get("/api/v2/courses", response_model=List[CourseSummary])
 def list_my_courses(
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
+    """The player's courses, newest first, a page at a time."""
     courses = (
         db.query(models.Course)
         .filter(models.Course.owner_id == token_data["id"])
-        .order_by(models.Course.created_at.desc())
+        .order_by(models.Course.created_at.desc(), models.Course.id.desc())
+        .offset(offset).limit(limit)
         .all()
     )
-    return [_course_summary(db, c) for c in courses]
+    open_ids = _open_challenge_ids(db, [c.id for c in courses])
+    return [_course_summary(db, c, open_ids) for c in courses]
 
 
 @app.post("/api/v2/challenges", response_model=ChallengePublic, status_code=201)
@@ -2395,6 +2408,8 @@ def _admin_challenge_item(db: Session, ch: models.Challenge,
 
 @app.get("/api/v2/admin/review-queue", response_model=List[ReviewQueueItem])
 def admin_review_queue(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
@@ -2402,7 +2417,8 @@ def admin_review_queue(
         db.query(models.ChallengeAttempt, models.Challenge)
         .join(models.Challenge, models.Challenge.id == models.ChallengeAttempt.challenge_id)
         .filter(models.ChallengeAttempt.status == "review_required")
-        .order_by(models.ChallengeAttempt.submitted_at.asc())
+        .order_by(models.ChallengeAttempt.submitted_at.asc(), models.ChallengeAttempt.id.asc())
+        .offset(offset).limit(limit)
         .all()
     )
     return [
@@ -2453,13 +2469,16 @@ def admin_review_attempt(
 @app.get("/api/v2/admin/challenges", response_model=List[AdminChallengeItem])
 def admin_list_challenges(
     status: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
     q = db.query(models.Challenge)
     if status:
         q = q.filter(models.Challenge.status == status)
-    challenges = q.order_by(models.Challenge.created_at.desc()).limit(200).all()
+    challenges = q.order_by(models.Challenge.created_at.desc(), models.Challenge.id.desc()).offset(offset).limit(
+        limit).all()
     counts = _admin_attempt_counts(db, [ch.id for ch in challenges])
     return [_admin_challenge_item(db, ch, counts) for ch in challenges]
 
@@ -2571,10 +2590,14 @@ def admin_audit_events(
     entity_id: Optional[int] = None,
     action: Optional[str] = None,
     limit: int = 100,
+    before_id: Optional[int] = None,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
+    """Newest first. For the next page pass the last id shown as `before_id`."""
     q = db.query(models.AuditEvent)
+    if before_id is not None:
+        q = q.filter(models.AuditEvent.id < before_id)
     if entity_type:
         q = q.filter(models.AuditEvent.entity_type == entity_type)
     if entity_id is not None:
