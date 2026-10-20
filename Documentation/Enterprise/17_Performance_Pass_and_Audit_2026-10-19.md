@@ -90,7 +90,7 @@ The release build is correctly refused by the dev API: release forbids cleartext
 | Debounce input handlers | Done where input triggers requests: admin audit entity-id and exercise player-id filters (350 ms). The app has no such inputs: city and name save on the dialog's button. | `useDebouncedValue.ts` |
 | Reduce unnecessary re-renders | Done: stability config for shared models in Compose (90 → 2 unstable params); memoised admin sidebar with stable handlers | `compose-stability.conf`, `App.tsx` |
 | Compress images | Nothing to gain: the only images are launcher PNGs of 0.4–1.4 KB and two small SVGs | — |
-| Remove unused dependencies | Done: the Flutter player app (`Osiris_customer/`, 186 files, 4.3 GB of build output) retired now that the KMP app has parity | commit `e23d347` |
+| Remove unused dependencies | Done: the Flutter player app (`Osiris_customer/`, 186 files, 4.3 GB of build output) retired now that the KMP app has parity; the unused Flutter merchant app (`Osiris_merchant/`, 141 files, 1.1 GB) removed. The backend merchant endpoints stay: the admin Merchants and Bounties pages use them | commits `e23d347`, merchant removal |
 | Performance audit | This document | — |
 
 Bug found and fixed on the way: typing in the admin audit Entity ID field reloaded the list on every keystroke.
@@ -104,7 +104,6 @@ The filter row only rendered while not loading, so it unmounted and the input lo
 | Today is fetched twice at app start (before and after the first location fix) | One extra request per launch | Wait for the fix, or a short timeout, before the first fetch |
 | Ranking a cached board still sorts every player per request (~40 ms at 10k players) | Board latency at scale | Cache the sorted list and insert the viewer by binary search |
 | Release APK is 47 MB, of which ML Kit's native pose library is ~37 MB | Download size | Ship an App Bundle (per-device ABI, ~25 MB); the bundled vs Play-services model question is already a `[human]` item |
-| `Osiris_merchant/` remains in the repository | Disk and confusion; not in the player release | Product decision on whether it is kept |
 | Container configs (gateway, admin nginx) were not run here | Unverified | Run `docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build` once on a machine with Docker |
 
 ## 4. Scaling out

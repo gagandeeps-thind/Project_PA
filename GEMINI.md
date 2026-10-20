@@ -39,7 +39,6 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 - `Osiris_backend/alembic/versions/` — migrations. `scripts/` — ops (reconcile, OpenAPI export/drift, seeding).
 - `Osiris_backend/tests/` — standalone test scripts, one per release/feature suite.
 - `Osiris_admin_web/src/` — `api/client.ts` + `types.ts`, `pages/*Page.tsx`, `components/`. Entry `main.tsx`.
-- `Osiris_merchant/` — future partner app, not part of the first player release.
 - `Documentation/openapi.json` — committed API contract, checked for drift in CI.
 
 ## Conventions

@@ -6,7 +6,6 @@ This project consists of a player mobile app (Android + iOS), an admin console, 
 - `Osiris_backend/`: FastAPI backend server. Handles core logic, payments, and connects to the SQLite db (`fitness_mvp.db`).
 - `Osiris_admin_web/`: Vite/React admin panel for managing the ecosystem.
 - `shared/`, `android_version/`, `ios_version/`: Kotlin Multiplatform player app (verified runs, quests, courses, challenges, communities, exercises, progression). See `docs/architecture/README.md`.
-- `Osiris_merchant/`: Future partner app retained for sponsor/merchant functionality; it is not required for the first player release.
 
 ## Prerequisites
 - Node.js & npm (for Admin Web)

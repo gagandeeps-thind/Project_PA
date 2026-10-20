@@ -94,8 +94,8 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: approved design; then migration + verifier + app work can be planned as agent items.
 
 - [ ] [human] product: retire or gate the legacy v1 game endpoints (domains, vault, sieges, bounties, coupons)
-  - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages and the parked
-    merchant app. Retiring them is a product decision.
+  - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages (the parked
+    Flutter merchant app was removed on 2026-10-19). Retiring them is a product decision.
   - Acceptance: decision recorded; if retired, the endpoints, their tests, client screens and contract entries are
     removed in agent items.
 

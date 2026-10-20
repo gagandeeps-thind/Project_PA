@@ -33,11 +33,6 @@ ENV/
 .env.*.local
 
 # --- Flutter / Dart (merchant app) ---
-Osiris_merchant/.dart_tool/
-Osiris_merchant/.flutter-plugins
-Osiris_merchant/.flutter-plugins-dependencies
-Osiris_merchant/build/
-Osiris_merchant/.idea/
 
 # --- React Admin Web ---
 Osiris_admin_web/node_modules/
