@@ -6,6 +6,7 @@ import com.osiris.shared.core.logging.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.cache.HttpCache
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
@@ -64,6 +65,10 @@ class ApiClient(
     private val http = HttpClient(engine) {
         expectSuccess = false
         install(ContentNegotiation) { json(json) }
+        // The backend tags JSON GETs with an ETag and `no-cache`; this keeps the last body in memory and
+        // revalidates with If-None-Match, so an unchanged screen costs a 304 instead of the payload.
+        // Gzip is negotiated by the platform engines (OkHttp, NSURLSession) without a plugin.
+        install(HttpCache)
         // Pings keep an idle chat inside the socket timeout below.
         install(WebSockets) { pingIntervalMillis = config.requestTimeoutMs / 2 }
         install(HttpTimeout) {

@@ -14,10 +14,26 @@ SQLALCHEMY_DATABASE_URL = settings.database_url(f"sqlite:///{os.path.join(BASE_D
 
 # The engine is the actual connection to the database.
 # (check_same_thread=False is a specific requirement just for SQLite in FastAPI)
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {},
-)
+_IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+
+
+def _pool_options() -> dict:
+    """Connection pool for a server database. FastAPI runs sync endpoints on a 40-thread pool,
+    so the default 5 + 10 overflow makes requests queue for a connection under load. Pre-ping
+    drops connections the server or a proxy closed while idle; recycle stays under typical
+    idle timeouts. SQLite keeps SQLAlchemy's own per-file pool."""
+    if _IS_SQLITE:
+        return {"connect_args": {"check_same_thread": False}}
+    return {
+        "pool_size": int(os.environ.get("OSIRIS_DB_POOL_SIZE", "20")),
+        "max_overflow": int(os.environ.get("OSIRIS_DB_MAX_OVERFLOW", "20")),
+        "pool_timeout": int(os.environ.get("OSIRIS_DB_POOL_TIMEOUT", "10")),
+        "pool_recycle": int(os.environ.get("OSIRIS_DB_POOL_RECYCLE", "1800")),
+        "pool_pre_ping": True,
+    }
+
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **_pool_options())
 
 
 def _sqlite_pragmas(dbapi_connection, _record):
@@ -32,7 +48,7 @@ def _sqlite_pragmas(dbapi_connection, _record):
     cursor.close()
 
 
-if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+if _IS_SQLITE:
     event.listen(engine, "connect", _sqlite_pragmas)
 
 # SessionLocal is what we will use to actually talk to the database in our API endpoints

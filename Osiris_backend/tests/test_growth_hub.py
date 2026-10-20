@@ -280,6 +280,28 @@ def test_list_endpoints_run_a_fixed_number_of_queries():
     print("PASS test_list_endpoints_run_a_fixed_number_of_queries")
 
 
+def test_responses_are_compressed_and_revalidated():
+    """Performance audit 2026-10-19: list payloads went uncompressed and every poll re-sent the full body."""
+    url = "/api/v2/challenge-hub?section=live"
+    full = client.get(url, headers=ben_h)
+    assert full.status_code == 200 and len(full.content) > 1000
+    assert full.headers.get("content-encoding") == "gzip"
+    assert full.headers["cache-control"] == "private, no-cache"
+    tag = full.headers["etag"]
+    assert client.get(url, headers=ben_h).headers["etag"] == tag  # stable while nothing changes
+    same = client.get(url, headers={**ben_h, "If-None-Match": tag})
+    assert same.status_code == 304 and same.content == b""
+    assert same.headers["cache-control"] == "private, no-cache" and same.headers["etag"] == tag  # clients key on these
+    stale = client.get(url, headers={**ben_h, "If-None-Match": 'W/"stale"'})
+    assert stale.status_code == 200 and stale.json() == full.json()
+    small = client.get("/api/v2/me/blocks", headers=ben_h)
+    assert small.status_code == 200 and "content-encoding" not in small.headers  # not worth compressing
+    rules = client.get("/api/v2/rules")
+    assert rules.headers["cache-control"] == "public, max-age=300"
+    assert client.post("/api/v2/challenges/999999/join", headers=ben_h).headers.get("etag") is None
+    print("PASS test_responses_are_compressed_and_revalidated")
+
+
 if __name__ == "__main__":
     test_hub_sections()
     test_blocked_creators_are_hidden()
@@ -289,3 +311,4 @@ if __name__ == "__main__":
     test_riegel_and_ranking_rules()
     test_progression_counts_for_the_profile()
     test_list_endpoints_run_a_fixed_number_of_queries()  # last: it adds challenges the tests above count
+    test_responses_are_compressed_and_revalidated()

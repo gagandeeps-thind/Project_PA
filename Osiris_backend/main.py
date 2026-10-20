@@ -31,12 +31,14 @@ import bcrypt
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from jwt.exceptions import InvalidTokenError
 
 # Import our newly created database connection and models
 import database
+from http_cache import ConditionalGetMiddleware
 import models
 import settings
 import spatial_utils
@@ -144,6 +146,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Both sit inside the access log, so a 304 is logged as a 304. GZip wraps the ETag layer, so the tag
+# hashes the plain body; it must also sit inside the access log, whose call_next re-chunks the body
+# and would defeat the small-body threshold. Small bodies are not worth the CPU.
+app.add_middleware(ConditionalGetMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # --- Phase 0: per-request structured access log + request id -------------------
