@@ -90,7 +90,8 @@ val today = TodayData(today = quest(completed = true), tomorrow = quest().copy(t
 class FakePlayer : PlayerRepository {
     val events = mutableListOf<Pair<String, Map<String, String>>>()
     var todayResult: Outcome<TodayData> = ok(today)
-    override suspend fun today(position: LatLng?) = todayResult
+    val todayPositions = mutableListOf<LatLng?>()
+    override suspend fun today(position: LatLng?) = todayResult.also { todayPositions += position }
     override suspend fun profile() = ok(PlayerProfile(userId = 7, identity = "athlete"))
     override suspend fun updateProfile(changes: JsonObject) = ok(PlayerProfile(userId = 7))
     var progressionResult: Outcome<Progression> = ok(Progression(xp = 120, nextRankXp = 200))

@@ -265,5 +265,5 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
 - [x] infra: nginx gateway / load balancer config and compose override; `OSIRIS_RUN_SCHEDULER`
 - [ ] [human] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`);
   before more than one replica: PostgreSQL, one scheduler, a shared rate limiter (report 17, section 4).
-- [ ] app: fetch Today once at start (it is fetched before and again after the first location fix)
+- [x] app: fetch Today once at start (it is fetched before and again after the first location fix)
   - Acceptance: a presentation test shows one `/api/v2/me/today` request when the location arrives within 2 s.

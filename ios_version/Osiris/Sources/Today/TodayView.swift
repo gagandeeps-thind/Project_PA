@@ -26,7 +26,13 @@ struct TodayView: View {
         }
         .messages(model)
         // One position for the nearby starter challenge; without permission the suggestion is skipped.
-        .task { if let p = await location.currentPosition(askIfNeeded: false) { model.vm.onPosition(position: p) } }
+        .task {
+            if let p = await location.currentPosition(askIfNeeded: false) {
+                model.vm.onPosition(position: p)
+            } else {
+                model.vm.onNoPosition()
+            }
+        }
         // Back from a run or another screen: the quest progress may have moved.
         .onReturn { model.vm.refresh() }
     }

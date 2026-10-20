@@ -85,7 +85,8 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
 
     // One position for the nearby starter challenge; without permission the suggestion is skipped.
     LaunchedEffect(Unit) {
-        if (location.hasPermission()) runCatching { location.fixes().firstOrNull() }.getOrNull()?.let { vm.onPosition(it.position) }
+        val fix = if (location.hasPermission()) runCatching { location.fixes().firstOrNull() }.getOrNull() else null
+        if (fix != null) vm.onPosition(fix.position) else vm.onNoPosition()
     }
 
     OsirisScaffold(

@@ -32,6 +32,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import com.osiris.shared.domain.run.LatLng
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 
 class ViewModelTest {
@@ -108,12 +110,37 @@ class ViewModelTest {
     fun `today keeps the screen on a failed refresh and says why`() = runTest {
         val player = FakePlayer()
         val vm = TodayViewModel(player, main())
+        vm.onNoPosition()
         assertIs<Loadable.Ready<*>>(vm.state.value)
         player.todayResult = fail(AppError.Offline())
         vm.refresh()
         assertIs<Loadable.Ready<*>>(vm.state.value)
         assertEquals(UiMessage.Kind.ERROR, vm.message.value?.kind)
         assertEquals("app_opened", player.events.first().first)
+    }
+
+    @Test
+    fun `opening the app asks for today once, with the position when it comes in time`() = runTest {
+        val home = LatLng(52.37, 4.89)
+        val player = FakePlayer()
+        val vm = TodayViewModel(player, main())
+        assertIs<Loadable.Loading>(vm.state.value)
+        advanceTimeBy(TodayViewModel.POSITION_GRACE_MS / 2)
+        vm.onPosition(home)
+        assertIs<Loadable.Ready<*>>(vm.state.value)
+        advanceTimeBy(TodayViewModel.POSITION_GRACE_MS * 2)
+        assertEquals(listOf<LatLng?>(home), player.todayPositions)
+
+        val late = FakePlayer()
+        val slow = TodayViewModel(late, main())
+        advanceTimeBy(TodayViewModel.POSITION_GRACE_MS + 1)
+        assertIs<Loadable.Ready<*>>(slow.state.value) // no fix in time: loads without one
+        slow.onPosition(home) // a late fix still brings the nearby suggestion
+        assertEquals(listOf(null, home), late.todayPositions)
+
+        val denied = FakePlayer()
+        TodayViewModel(denied, main()).onNoPosition()
+        assertEquals(listOf<LatLng?>(null), denied.todayPositions) // no permission: no wait
     }
 
     @Test
