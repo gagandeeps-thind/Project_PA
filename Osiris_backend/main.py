@@ -2290,11 +2290,12 @@ def my_progression(
         .filter(models.Challenge.creator_id == player_id, models.ChallengeAttempt.outcome == "lost")
         .count()
     )
-    outcomes = dict(
+    outcomes: dict[str, int] = {
+        outcome: n for outcome, n in
         db.query(models.ChallengeAttempt.outcome, func.count(models.ChallengeAttempt.id))
         .filter(models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome.in_(("won", "lost")))
         .group_by(models.ChallengeAttempt.outcome).all()
-    )
+    }
     lifetime_m = db.query(func.sum(models.RunSession.distance_m)).filter(
         models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted").scalar()
     # Competition rank: one more than the number of active players with strictly more XP.

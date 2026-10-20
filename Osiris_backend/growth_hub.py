@@ -137,17 +137,17 @@ def challenge_hub(
     else:
         open_now = q.filter(models.Challenge.status == "open", models.Challenge.closes_at > now)
         if section == "live":
-            challenges = open_now.filter(models.Challenge.opens_at <= now).order_by(models.Challenge.closes_at.asc())
+            shown = open_now.filter(models.Challenge.opens_at <= now).order_by(models.Challenge.closes_at.asc())
         elif section == "upcoming":
-            challenges = open_now.filter(models.Challenge.opens_at > now).order_by(models.Challenge.opens_at.asc())
+            shown = open_now.filter(models.Challenge.opens_at > now).order_by(models.Challenge.opens_at.asc())
         else:
             featured = db.query(models.CommunityChallenge.challenge_id, models.Community.name).join(
                 models.Community, models.Community.id == models.CommunityChallenge.community_id,
             ).filter(models.Community.status == "active", models.Community.visibility == "public").all()
             community_of = {cid: name for cid, name in featured}
-            challenges = open_now.filter(models.Challenge.id.in_(list(community_of) or [-1])).order_by(
+            shown = open_now.filter(models.Challenge.id.in_(list(community_of) or [-1])).order_by(
                 models.Challenge.closes_at.asc())
-        challenges = challenges.limit(HUB_LIMIT).all()
+        challenges = shown.limit(HUB_LIMIT).all()
 
     # Settling a challenge is committed after the response is built: committing first expires every
     # loaded challenge, and each one is then re-fetched while it is serialised.
@@ -215,15 +215,16 @@ def _board_values(db: Session, board: Board, start: Optional[datetime], exercise
             q = q.filter(models.RunSession.user_id == user_id)
         return {u: float(v or 0) / 1000.0 for u, v in q.group_by(models.RunSession.user_id).all()}
     if board == "pace":
-        q = db.query(models.RunSession.user_id, models.RunSession.distance_m, models.RunSession.duration_seconds).filter(
+        runs = db.query(models.RunSession.user_id, models.RunSession.distance_m,
+                        models.RunSession.duration_seconds).filter(
             models.RunSession.verification_status == "accepted",
             models.RunSession.distance_m >= lb.PACE_MIN_DISTANCE_M, models.RunSession.duration_seconds > 0)
         if start is not None:
-            q = q.filter(models.RunSession.finished_at >= start)
+            runs = runs.filter(models.RunSession.finished_at >= start)
         if user_id is not None:
-            q = q.filter(models.RunSession.user_id == user_id)
+            runs = runs.filter(models.RunSession.user_id == user_id)
         values: dict[int, float] = {}
-        for uid, dist, secs in q.all():
+        for uid, dist, secs in runs.all():
             t = lb.riegel_seconds(float(secs), float(dist))
             values[uid] = min(values.get(uid, t), t)
         return values
@@ -236,13 +237,13 @@ def _board_values(db: Session, board: Board, start: Optional[datetime], exercise
         if user_id is not None:
             q = q.filter(models.ExerciseSession.user_id == user_id)
         return {u: float(v or 0) for u, v in q.group_by(models.ExerciseSession.user_id).all()}
-    q = db.query(models.ChallengeAttempt.user_id, func.sum(models.ChallengeAttempt.xp_awarded)).filter(
+    wins = db.query(models.ChallengeAttempt.user_id, func.sum(models.ChallengeAttempt.xp_awarded)).filter(
         models.ChallengeAttempt.outcome == "won")
     if start is not None:
-        q = q.filter(models.ChallengeAttempt.decided_at >= start)
+        wins = wins.filter(models.ChallengeAttempt.decided_at >= start)
     if user_id is not None:
-        q = q.filter(models.ChallengeAttempt.user_id == user_id)
-    return {u: float(v or 0) for u, v in q.group_by(models.ChallengeAttempt.user_id).all()}
+        wins = wins.filter(models.ChallengeAttempt.user_id == user_id)
+    return {u: float(v or 0) for u, v in wins.group_by(models.ChallengeAttempt.user_id).all()}
 
 
 def _active_board_values(db: Session, board: Board, start: Optional[datetime], exercise: str) -> dict[int, float]:

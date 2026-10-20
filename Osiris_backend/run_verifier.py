@@ -9,7 +9,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Sequence
 
 
 # Sustained speed, measured over at least SPEED_WINDOW_SECONDS so GPS noise between 1 s fixes
@@ -42,7 +42,7 @@ def _distance_m(a: dict, b: dict) -> float:
     return 2 * radius * math.asin(min(1.0, math.sqrt(hav)))
 
 
-def _max_sustained_speed_kmh(timestamps: list[int], cumulative: list[float]) -> float:
+def _max_sustained_speed_kmh(timestamps: Sequence[float], cumulative: list[float]) -> float:
     """Highest average speed over any stretch of at least SPEED_WINDOW_SECONDS, ending at each
     point and starting at the latest point that still makes the stretch that long. A route
     shorter than the window is measured end to end."""
