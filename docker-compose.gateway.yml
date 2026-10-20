@@ -1,0 +1,21 @@
+# Local stack behind a reverse proxy / load balancer on :8000.
+#   docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build
+# The API is then reachable only through the gateway, which is why it may trust the gateway's
+# X-Forwarded-For (the rate limiter keys on the client IP). Scaling out needs PostgreSQL first;
+# see Documentation/Enterprise/18_performance_audit.md ("Scaling out").
+services:
+  backend:
+    ports: !reset []
+    expose:
+      - "8000"
+    environment:
+      FORWARDED_ALLOW_IPS: "*"
+
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./infrastructure/docker/api-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend

@@ -39,3 +39,9 @@ def is_dev_env() -> bool:
 
 def database_url(default: str) -> str:
     return secret("OSIRIS_DATABASE_URL") or default
+
+
+def run_scheduler() -> bool:
+    """Whether this process runs the background jobs (decay, settlement, retention). Behind a load
+    balancer exactly one replica should, or every job runs once per replica."""
+    return os.environ.get("OSIRIS_RUN_SCHEDULER", "1").lower() not in ("0", "false", "no")

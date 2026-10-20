@@ -69,7 +69,11 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan handler — replaces the deprecated @app.on_event("startup"/"shutdown")
     pattern. Background jobs are wired up on startup and torn down cleanly on shutdown.
     The job functions are defined later in the module; that's fine because lifespan only
-    runs once the server starts (after full module import)."""
+    runs once the server starts (after full module import).
+    OSIRIS_RUN_SCHEDULER=0 serves requests without the jobs (extra replicas behind a balancer)."""
+    if not settings.run_scheduler():
+        yield
+        return
     scheduler.add_job(process_daily_decay, 'interval', hours=24)
     # v2.11 telemetry retention: nightly cleanup of raw sample blobs older than TTL.
     scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)

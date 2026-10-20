@@ -82,9 +82,35 @@ def test_database_url_override():
     print("PASS test_database_url_override")
 
 
+def test_only_one_replica_runs_the_scheduler():
+    """Behind a load balancer, OSIRIS_RUN_SCHEDULER=0 replicas serve requests but run no jobs."""
+    from fastapi.testclient import TestClient
+
+    # A scratch database, so importing the app does not create tables in the dev one.
+    os.environ.setdefault("OSIRIS_DATABASE_URL", f"sqlite:///{os.path.join(tempfile.mkdtemp(), 'settings.sqlite3')}")
+    os.environ.setdefault("OSIRIS_JWT_SECRET", "settings-test-secret-aaaaaaaaaaaaaaaaaaaaaaaa")
+    import main
+
+    previous = os.environ.get("OSIRIS_RUN_SCHEDULER")
+    try:
+        os.environ["OSIRIS_RUN_SCHEDULER"] = "0"
+        assert not settings.run_scheduler()
+        with TestClient(main.app) as client:
+            assert client.get("/healthz").status_code in (200, 503)
+            assert not main.scheduler.running
+        os.environ.pop("OSIRIS_RUN_SCHEDULER")
+        assert settings.run_scheduler()
+    finally:
+        os.environ.pop("OSIRIS_RUN_SCHEDULER", None)
+        if previous is not None:
+            os.environ["OSIRIS_RUN_SCHEDULER"] = previous
+    print("PASS test_only_one_replica_runs_the_scheduler")
+
+
 if __name__ == "__main__":
     test_env_value_wins_over_file()
     test_file_value_is_read_and_trimmed()
     test_missing_secret_is_none_and_unreadable_file_fails_loudly()
     test_unknown_env_is_production()
     test_database_url_override()
+    test_only_one_replica_runs_the_scheduler()
