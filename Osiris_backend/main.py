@@ -1808,17 +1808,39 @@ def _refresh_challenge_status(db: Session, ch: models.Challenge, now: Optional[d
     return changed
 
 
+class ChallengeStats:
+    """Per-challenge attempt counts and the viewer's own attempts, loaded for a whole list at once.
+
+    Serialising a list one challenge at a time cost two queries per challenge (the nearby map
+    ran 51 queries for 24 challenges); this loads them in two queries for any list size."""
+
+    def __init__(self, attempt_counts: dict[int, int], mine: dict[int, models.ChallengeAttempt]):
+        self.attempt_counts = attempt_counts
+        self.mine = mine
+
+    @classmethod
+    def load(cls, db: Session, challenge_ids: "list[int]", viewer_id: int) -> "ChallengeStats":
+        ids = list(challenge_ids) or [-1]
+        counts = db.query(models.ChallengeAttempt.challenge_id, func.count(models.ChallengeAttempt.id)).filter(
+            models.ChallengeAttempt.challenge_id.in_(ids),
+            models.ChallengeAttempt.run_session_id.isnot(None),
+        ).group_by(models.ChallengeAttempt.challenge_id).all()
+        mine = db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id.in_(ids), models.ChallengeAttempt.user_id == viewer_id,
+        ).all()
+        return cls({cid: n for cid, n in counts}, {a.challenge_id: a for a in mine})
+
+
 def _challenge_public(
     db: Session, ch: models.Challenge, course: models.Course, viewer_id: int,
-    distance_km: Optional[float] = None,
+    distance_km: Optional[float] = None, stats: Optional[ChallengeStats] = None,
 ) -> ChallengePublic:
-    attempt_count = db.query(models.ChallengeAttempt).filter(
-        models.ChallengeAttempt.challenge_id == ch.id,
-        models.ChallengeAttempt.run_session_id.isnot(None),
-    ).count()
-    mine = db.query(models.ChallengeAttempt).filter(
-        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == viewer_id,
-    ).first()
+    """Serialise one challenge. List endpoints pass `stats` from ChallengeStats.load so the
+    attempt figures cost no extra queries per challenge."""
+    if stats is None:
+        stats = ChallengeStats.load(db, [ch.id], viewer_id)
+    attempt_count = stats.attempt_counts.get(ch.id, 0)
+    mine = stats.mine.get(ch.id)
     return ChallengePublic(
         id=ch.id, title=ch.title, status=ch.status, rules_version=ch.rules_version,
         terms_hash=ch.terms_hash, course_distance_m=round(course.distance_m, 2),
@@ -2048,6 +2070,7 @@ def nearby_challenges(
     changed = False
     out: List[ChallengePublic] = []
     hidden = player_safety.blocked_user_ids(db, token_data["id"])
+    shown = []
     for ch, course in rows:
         changed |= _refresh_challenge_status(db, ch, now)
         if ch.status != "open" or ch.creator_id in hidden:
@@ -2055,7 +2078,10 @@ def nearby_challenges(
         dist = spatial_utils.haversine_distance(lat, lng, course.public_lat, course.public_lng)
         if dist > radius_km:
             continue
-        out.append(_challenge_public(db, ch, course, token_data["id"], distance_km=round(dist, 1)))
+        shown.append((ch, course, dist))
+    stats = ChallengeStats.load(db, [ch.id for ch, _, _ in shown], token_data["id"])
+    for ch, course, dist in shown:
+        out.append(_challenge_public(db, ch, course, token_data["id"], distance_km=round(dist, 1), stats=stats))
     if changed:
         db.commit()
     out.sort(key=lambda c: c.distance_km or 0.0)
@@ -2341,12 +2367,21 @@ class AuditEventOut(BaseModel):
     created_at: datetime
 
 
-def _admin_challenge_item(db: Session, ch: models.Challenge) -> AdminChallengeItem:
+def _admin_attempt_counts(db: Session, challenge_ids: "list[int]") -> dict[int, int]:
+    rows = db.query(models.ChallengeAttempt.challenge_id, func.count(models.ChallengeAttempt.id)).filter(
+        models.ChallengeAttempt.challenge_id.in_(list(challenge_ids) or [-1]),
+    ).group_by(models.ChallengeAttempt.challenge_id).all()
+    return {cid: n for cid, n in rows}
+
+
+def _admin_challenge_item(db: Session, ch: models.Challenge,
+                          attempt_counts: Optional[dict[int, int]] = None) -> AdminChallengeItem:
+    if attempt_counts is None:
+        attempt_counts = _admin_attempt_counts(db, [ch.id])
     return AdminChallengeItem(
         id=ch.id, title=ch.title, status=ch.status, status_reason=ch.status_reason,
         creator_id=ch.creator_id, course_id=ch.course_id,
-        attempt_count=db.query(models.ChallengeAttempt).filter(
-            models.ChallengeAttempt.challenge_id == ch.id).count(),
+        attempt_count=attempt_counts.get(ch.id, 0),
         closes_at=ch.closes_at, created_at=ch.created_at,
     )
 
@@ -2417,7 +2452,9 @@ def admin_list_challenges(
     q = db.query(models.Challenge)
     if status:
         q = q.filter(models.Challenge.status == status)
-    return [_admin_challenge_item(db, ch) for ch in q.order_by(models.Challenge.created_at.desc()).limit(200).all()]
+    challenges = q.order_by(models.Challenge.created_at.desc()).limit(200).all()
+    counts = _admin_attempt_counts(db, [ch.id for ch in challenges])
+    return [_admin_challenge_item(db, ch, counts) for ch in challenges]
 
 
 @app.post("/api/v2/admin/challenges/{challenge_id}/status", response_model=AdminChallengeItem)

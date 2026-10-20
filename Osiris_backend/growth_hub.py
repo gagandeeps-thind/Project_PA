@@ -30,6 +30,7 @@ import models
 from growth_communities import LEADERBOARD_LIMIT, PRIVATE_NAME, _week_window
 from main import (
     ChallengePublic,
+    ChallengeStats,
     _challenge_public,
     _now_naive_utc,
     _refresh_challenge_status,
@@ -105,9 +106,10 @@ def _participants(db: Session, challenge_ids: list[int]) -> dict[int, int]:
     return {cid: n for cid, n in rows}
 
 
-def _item(db: Session, ch: models.Challenge, viewer_id: int, participants: dict[int, int]) -> HubChallenge:
-    course = db.query(models.Course).filter(models.Course.id == ch.course_id).first()
-    return HubChallenge(challenge=_challenge_public(db, ch, course, viewer_id), participants=participants.get(ch.id, 0))
+def _item(ch: models.Challenge, course: models.Course, db: Session, viewer_id: int,
+          participants: dict[int, int], stats: ChallengeStats) -> HubChallenge:
+    return HubChallenge(challenge=_challenge_public(db, ch, course, viewer_id, stats=stats),
+                        participants=participants.get(ch.id, 0))
 
 
 @router.get("/api/v2/challenge-hub", response_model=HubSectionOut)
@@ -141,30 +143,50 @@ def challenge_hub(
                 models.Challenge.closes_at.asc())
         challenges = challenges.limit(HUB_LIMIT).all()
 
-    if any(_refresh_challenge_status(db, ch, now) for ch in challenges):
-        db.commit()
-    participants = _participants(db, [ch.id for ch in challenges])
+    # Settling a challenge is committed after the response is built: committing first expires every
+    # loaded challenge, and each one is then re-fetched while it is serialised.
+    changed = any([_refresh_challenge_status(db, ch, now) for ch in challenges])
+    # Everything a section shows is loaded per list, not per challenge (a fixed number of queries
+    # for any HUB_LIMIT; the per-challenge version ran 3 queries for every challenge).
+    ids = [ch.id for ch in challenges]
+    participants = _participants(db, ids)
+    stats = ChallengeStats.load(db, ids, uid)
+    courses = {c.id: c for c in db.query(models.Course).filter(
+        models.Course.id.in_([ch.course_id for ch in challenges] or [-1])).all()}
+    results = _results(db, ids, uid) if section == "finished" else {}
     items = []
     for ch in challenges:
-        item = _item(db, ch, uid, participants)
+        item = _item(ch, courses[ch.course_id], db, uid, participants, stats)
         if section == "upcoming":
             item.starts_in_seconds = max(0, int((ch.opens_at - now).total_seconds()))
         elif section == "community":
             item.community_name = community_of.get(ch.id)
         elif section == "finished":
-            _add_results(db, ch, uid, item)
+            item.xp_paid, item.winners = results.get(ch.id, (0, []))
         items.append(item)
+    if changed:
+        db.commit()
     return HubSectionOut(section=section, items=items)
 
 
-def _add_results(db: Session, ch: models.Challenge, viewer_id: int, item: HubChallenge) -> None:
-    attempts = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id == ch.id).all()
-    item.xp_paid = sum((a.xp_awarded or 0) for a in attempts) + sum((a.defender_xp_awarded or 0) for a in attempts)
-    won = sorted((a for a in attempts if a.outcome == "won" and a.elapsed_seconds is not None),
-                 key=lambda a: (a.elapsed_seconds, a.id))[:PODIUM]
-    names = _names(db, [a.user_id for a in won], viewer_id)
-    item.winners = [Finisher(rank=i, name=names[a.user_id], elapsed_seconds=round(a.elapsed_seconds, 1))
-                    for i, a in enumerate(won, start=1)]
+def _results(db: Session, challenge_ids: list[int], viewer_id: int) -> dict[int, tuple[int, list[Finisher]]]:
+    """XP paid out and the podium for each finished challenge, in two queries for the whole list."""
+    by_challenge: dict[int, list[models.ChallengeAttempt]] = {cid: [] for cid in challenge_ids}
+    for a in db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id.in_(challenge_ids or [-1])):
+        by_challenge[a.challenge_id].append(a)
+    podiums = {
+        cid: sorted((a for a in attempts if a.outcome == "won" and a.elapsed_seconds is not None),
+                    key=lambda a: (a.elapsed_seconds, a.id))[:PODIUM]
+        for cid, attempts in by_challenge.items()
+    }
+    names = _names(db, sorted({a.user_id for won in podiums.values() for a in won}), viewer_id)
+    out = {}
+    for cid, attempts in by_challenge.items():
+        xp_paid = sum((a.xp_awarded or 0) for a in attempts) + sum((a.defender_xp_awarded or 0) for a in attempts)
+        winners = [Finisher(rank=i, name=names[a.user_id], elapsed_seconds=round(a.elapsed_seconds, 1))
+                   for i, a in enumerate(podiums[cid], start=1)]
+        out[cid] = (xp_paid, winners)
+    return out
 
 
 def _period_start(period: Period, now: datetime) -> Optional[datetime]:

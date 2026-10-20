@@ -28,6 +28,7 @@ from main import (
     ChallengePublic,
     _api_error,
     _audit,
+    ChallengeStats,
     _challenge_public,
     _now_naive_utc,
     _refresh_challenge_status,
@@ -452,12 +453,14 @@ def community_challenges(slug: str, db: Session = Depends(get_db),
             .join(models.CommunityChallenge, models.CommunityChallenge.challenge_id == models.Challenge.id)
             .join(models.Course, models.Course.id == models.Challenge.course_id)
             .filter(models.CommunityChallenge.community_id == c.id).all())
-    out = []
     now = _now_naive_utc()
+    shown = []
     for ch, course in rows:
         _refresh_challenge_status(db, ch, now)
         if ch.status == "open" and course.status == "active":
-            out.append(_challenge_public(db, ch, course, token_data["id"]))
+            shown.append((ch, course))
+    stats = ChallengeStats.load(db, [ch.id for ch, _ in shown], token_data["id"])
+    out = [_challenge_public(db, ch, course, token_data["id"], stats=stats) for ch, course in shown]
     db.commit()
     return out
 

@@ -231,6 +231,55 @@ def test_progression_counts_for_the_profile():
     print("PASS test_progression_counts_for_the_profile")
 
 
+def _queries(url, headers):
+    """SQL statements one GET runs (after a warm-up call, so lazy settlement is already done)."""
+    from sqlalchemy import event
+    client.get(url, headers=headers)
+    seen = []
+
+    def _count(*_args, **_kwargs):
+        seen.append(1)
+
+    event.listen(engine, "before_cursor_execute", _count)
+    try:
+        assert client.get(url, headers=headers).status_code == 200
+    finally:
+        event.remove(engine, "before_cursor_execute", _count)
+    return len(seen)
+
+
+def test_list_endpoints_run_a_fixed_number_of_queries():
+    """Performance audit 2026-10-19: list endpoints ran 1-3 queries per challenge shown (the nearby map
+    ran 51 queries for 24 challenges). Adding challenges must not add queries."""
+    db = Session()
+    admin = models.Admin(email="hub_admin@example.com", hashed_password="x", name="Hub Admin")
+    db.add(admin)
+    db.commit()
+    admin_h = {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin.id), 'role': 'admin'})}"}
+    db.close()
+    urls = [(f"/api/v2/challenge-hub?section={s}", ben_h) for s in ("live", "upcoming", "community", "finished")]
+    urls += [("/api/v2/challenges/nearby?lat=0&lng=0&radius_km=5", ben_h), ("/api/v2/communities/hub-club/challenges", ben_h),
+             ("/api/v2/admin/challenges", admin_h)]
+    before = {u: _queries(u, h) for u, h in urls}
+    db = Session()
+    club_id = db.query(models.Community.id).filter(models.Community.slug == "hub-club").scalar()
+    for i in range(6):
+        live_more = challenge(db, ana, f"Live {i}", NOW - timedelta(hours=1), NOW + timedelta(days=2))
+        attempt(db, live_more, ben)
+        attempt(db, live_more, cy)
+        challenge(db, ana, f"Upcoming {i}", NOW + timedelta(hours=2), NOW + timedelta(days=3))
+        done = challenge(db, ana, f"Finished {i}", NOW - timedelta(days=3), NOW - timedelta(days=1), status="closed")
+        attempt(db, done, ben, "won", 590.0 + i, xp=100)
+        attempt(db, done, cy, "lost", 700.0, xp=10)
+        db.add(models.CommunityChallenge(community_id=club_id, challenge_id=live_more.id, added_by_user_id=ana))
+    db.commit()
+    db.close()
+    after = {u: _queries(u, h) for u, h in urls}
+    assert after == before, {u: (before[u], after[u]) for u in before if before[u] != after[u]}
+    assert len(section("live")) >= 7 and len(section("finished")) >= 7
+    print("PASS test_list_endpoints_run_a_fixed_number_of_queries")
+
+
 if __name__ == "__main__":
     test_hub_sections()
     test_blocked_creators_are_hidden()
@@ -239,3 +288,4 @@ if __name__ == "__main__":
     test_reps_and_rewards_boards()
     test_riegel_and_ranking_rules()
     test_progression_counts_for_the_profile()
+    test_list_endpoints_run_a_fixed_number_of_queries()  # last: it adds challenges the tests above count
