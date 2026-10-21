@@ -59,5 +59,8 @@
       "c:\\Folder D\\Project_PA\\.git",
       "\\tmp"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
