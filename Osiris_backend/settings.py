@@ -45,3 +45,9 @@ def run_scheduler() -> bool:
     """Whether this process runs the background jobs (decay, settlement, retention). Behind a load
     balancer exactly one replica should, or every job runs once per replica."""
     return os.environ.get("OSIRIS_RUN_SCHEDULER", "1").lower() not in ("0", "false", "no")
+
+
+def public_base_url() -> str | None:
+    """Origin used in share and invite links (`OSIRIS_PUBLIC_BASE_URL`), without a trailing slash."""
+    value = os.environ.get("OSIRIS_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    return value or None

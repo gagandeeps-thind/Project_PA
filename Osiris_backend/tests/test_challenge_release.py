@@ -212,6 +212,12 @@ def test_terms_hash_is_stable_and_sensitive() -> None:
     assert terms["entry_crystals"] == 0 and terms["reward_policy"] == "xp_badge"
     changed = dict(terms, target_seconds=399.0)
     assert rules.terms_hash(changed) != rules.terms_hash(terms)
+    try:
+        rules.terms_hash(dict(terms, extra=1))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("terms with an unknown field must not hash")
 
 
 def test_segment_timing_matches_benchmark_distance() -> None:
