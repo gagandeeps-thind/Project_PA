@@ -22,6 +22,12 @@ targets:
         UILaunchScreen: {}
         NSLocationWhenInUseUsageDescription: Osiris uses your location while you record a run, to verify the distance. Your route is never shown to other players.
         NSCameraUsageDescription: Osiris counts exercise reps with the camera. Images are analysed on this phone and never saved or uploaded.
+        NSMotionUsageDescription: Osiris reads your step count and motion activity to check that runs and step challenges were done on foot.
+        # osiris://challenge/<id>, osiris://invite/<token> (DeepLinkParser). Universal links for the
+        # https invite pages need the Associated Domains entitlement, which needs the Apple team id.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.osiris.player
+            CFBundleURLSchemes: [osiris]
         UIBackgroundModes: [location]
         # Portrait only: the camera set and the run map are laid out for it, as on Android phones.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

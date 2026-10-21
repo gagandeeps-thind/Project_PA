@@ -11,6 +11,7 @@ import com.osiris.shared.data.network.api.MeApi
 import com.osiris.shared.data.network.api.RunApi
 import com.osiris.shared.data.repository.AuthRepositoryImpl
 import com.osiris.shared.data.repository.ChallengeRepositoryImpl
+import com.osiris.shared.data.repository.DeviceSetupRepositoryImpl
 import com.osiris.shared.data.repository.CommunityRepositoryImpl
 import com.osiris.shared.data.repository.InstallId
 import com.osiris.shared.data.repository.PlayerRepositoryImpl
@@ -21,6 +22,7 @@ import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.domain.repository.AuthRepository
 import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.repository.CommunityRepository
+import com.osiris.shared.domain.repository.DeviceSetupRepository
 import com.osiris.shared.domain.repository.ExerciseRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.PrivacyRepository
@@ -89,6 +91,7 @@ class DataGraph(
     val challenges: ChallengeRepository = ChallengeRepositoryImpl(challengeApi)
     val communities: CommunityRepository = CommunityRepositoryImpl(CommunityApi(api), challengeApi)
     val privacy: PrivacyRepository = PrivacyRepositoryImpl(me, authImpl)
+    val deviceSetup: DeviceSetupRepository = DeviceSetupRepositoryImpl(platform.settings)
 
     fun close() {
         scope.cancel()

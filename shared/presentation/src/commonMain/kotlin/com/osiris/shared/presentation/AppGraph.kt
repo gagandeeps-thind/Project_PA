@@ -5,6 +5,7 @@ import com.osiris.shared.data.DataGraph
 import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.domain.exercise.ExerciseCatalog
 import com.osiris.shared.domain.exercise.ExerciseSpec
+import com.osiris.shared.domain.repository.DevicePermission
 import com.osiris.shared.presentation.challenge.ChallengeBoardViewModel
 import com.osiris.shared.presentation.challenge.ChallengeDetailViewModel
 import com.osiris.shared.presentation.challenge.CoursesViewModel
@@ -13,11 +14,13 @@ import com.osiris.shared.presentation.community.CommunityDetailViewModel
 import com.osiris.shared.presentation.community.RankingsViewModel
 import com.osiris.shared.presentation.exercise.ExerciseHubViewModel
 import com.osiris.shared.presentation.exercise.ExerciseSessionViewModel
+import com.osiris.shared.presentation.navigation.AppNavigatorViewModel
+import com.osiris.shared.presentation.navigation.DeepLinkParser
+import com.osiris.shared.presentation.permission.PermissionPrimerViewModel
 import com.osiris.shared.presentation.progress.ProgressViewModel
 import com.osiris.shared.presentation.run.RunViewModel
 import com.osiris.shared.presentation.session.LoginViewModel
 import com.osiris.shared.presentation.session.OnboardingViewModel
-import com.osiris.shared.presentation.session.SessionViewModel
 import com.osiris.shared.presentation.settings.SettingsViewModel
 import com.osiris.shared.presentation.today.TodayViewModel
 
@@ -32,7 +35,8 @@ import com.osiris.shared.presentation.today.TodayViewModel
 class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     val data = DataGraph(config, platform)
 
-    fun session() = SessionViewModel(data.auth)
+    fun navigator() = AppNavigatorViewModel(data.auth, data.deviceSetup, DeepLinkParser(config.webLinkHost))
+    fun permissionPrimer(available: Set<DevicePermission>) = PermissionPrimerViewModel(data.deviceSetup, available)
     fun login() = LoginViewModel(data.auth)
     fun onboarding(inviteToken: String? = null, referralCode: String? = null) =
         OnboardingViewModel(data.auth, data.player, inviteToken, referralCode)

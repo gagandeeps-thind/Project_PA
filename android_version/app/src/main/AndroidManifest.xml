@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Camera-verified exercises: pose estimation runs on the device; frames never leave it. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Step sensor and activity classification for the anti-cheat cross-check. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
@@ -33,6 +35,22 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- osiris://challenge/<id>, osiris://invite/<token>, ... (DeepLinkParser). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="osiris" />
+            </intent-filter>
+            <!-- Invite and referral pages of the public site. Verified App Links need
+                 https://<host>/.well-known/assetlinks.json listing this app's signing key. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${webLinkHost}" android:pathPrefix="/i/" />
+                <data android:scheme="https" android:host="${webLinkHost}" android:pathPrefix="/join/" />
             </intent-filter>
         </activity>
 

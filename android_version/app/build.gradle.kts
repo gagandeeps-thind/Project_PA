@@ -6,6 +6,13 @@
 //          ./gradlew :android_version:app:assembleRelease -Posiris.env=prod
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// The same environment file the shared core compiles in (see :shared:core:generateEnv).
+val osirisEnv = java.util.Properties().apply {
+    val name = providers.gradleProperty("osiris.env").getOrElse("dev")
+    rootProject.file("config/environments/$name.properties").inputStream().use { load(it) }
+    rootProject.file("config/environments/local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+
 apply(plugin = "com.android.application")
 apply(plugin = "org.jetbrains.kotlin.android")
 apply(plugin = "org.jetbrains.kotlin.plugin.compose")
@@ -22,6 +29,7 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["webLinkHost"] = osirisEnv.getProperty("links.webHost")
     }
 
     buildTypes {
@@ -81,6 +89,7 @@ dependencies {
     "implementation"(libs.mlkit.pose.detection)
     "implementation"(libs.play.services.location)
     "implementation"(libs.osmdroid)
+    "implementation"(libs.haze)
 
     "testImplementation"(libs.junit)
     "androidTestImplementation"(platform(libs.compose.bom))

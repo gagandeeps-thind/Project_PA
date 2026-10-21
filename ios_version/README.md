@@ -20,6 +20,12 @@ open Osiris.xcodeproj               # Run builds OsirisShared through Gradle fir
 The dev environment points the simulator at `http://localhost:8000`. Choose another with
 `-Posiris.env=staging` (see `config/environments/`).
 
+## Design system
+
+FrostMatte tokens (colors, blur, radii, spacing) come from the shared core (`FrostMatte`), so both apps
+use one set of values. `Common/Frost.swift` maps them to SwiftUI: `FrostBackground` and `.frostCard()`
+(system `.ultraThinMaterial` blur plus the token fill, hairline and shadow).
+
 ## How Swift talks to the shared code
 
 - `AppGraph` is created once in `OsirisApp`; screens call `graph.login()`, `graph.today()`, …
@@ -32,6 +38,8 @@ The dev environment points the simulator at `http://localhost:8000`. Choose anot
 
 | Screen | Shared view model | iOS |
 |---|---|---|
+| Root: primer, sign-in or tabs; `osiris://` links | `AppNavigatorViewModel` | `App/RootView.swift` |
+| Permission primer (before sign-in, each one optional) | `PermissionPrimerViewModel` | `Permission/PermissionPrimerView.swift` |
 | Sign-in | `LoginViewModel` | `Session/LoginView.swift` |
 | Onboarding (goal, location, account) | `OnboardingViewModel` | `Session/OnboardingView.swift` |
 | Today, with the way to every screen | `TodayViewModel` | `Today/TodayView.swift` |
