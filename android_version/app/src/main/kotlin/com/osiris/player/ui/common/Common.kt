@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,7 +37,13 @@ import kotlinx.coroutines.delay
 
 /** An empty list: an icon, a line saying so, and what to do about it. */
 @Composable
-fun EmptyState(icon: ImageVector, title: String, body: String? = null) {
+fun EmptyState(
+    icon: ImageVector,
+    title: String,
+    body: String? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, Modifier.size(56.dp), tint = Color.White.copy(alpha = 0.38f))
         Spacer(Modifier.height(12.dp))
@@ -44,6 +51,10 @@ fun EmptyState(icon: ImageVector, title: String, body: String? = null) {
         if (body != null) {
             Spacer(Modifier.height(8.dp))
             Text(body, textAlign = TextAlign.Center, color = OsirisColors.Faint)
+        }
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onAction) { Text(actionLabel) }
         }
     }
 }

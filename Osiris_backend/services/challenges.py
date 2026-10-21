@@ -343,6 +343,11 @@ def performance_rank(xp: int) -> str:
     return "Bronze"
 
 
+def rank_floor(xp: int) -> int:
+    """XP at which the player's current rank starts."""
+    return max((t for t, _ in RANK_LADDER if t <= xp), default=0)
+
+
 def next_rank_threshold(xp: int) -> int | None:
     higher = [t for t, _ in RANK_LADDER if t > xp]
     return min(higher) if higher else None

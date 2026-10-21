@@ -26,6 +26,11 @@ kotlin {
             implementation(libs.ktor.client.cio)
             implementation(libs.sqldelight.jvm.driver)
         }
+        jvmTest.dependencies {
+            // A real WebSocket server for the support chat test; MockEngine has no WebSockets.
+            implementation(libs.ktor.server.cio)
+            implementation(libs.ktor.server.websockets)
+        }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)

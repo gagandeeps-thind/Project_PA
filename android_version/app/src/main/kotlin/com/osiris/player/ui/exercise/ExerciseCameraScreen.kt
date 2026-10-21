@@ -1,9 +1,6 @@
 package com.osiris.player.ui.exercise
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -51,11 +48,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.BuildConfig
 import com.osiris.player.platform.permission.PermissionStatus
 import com.osiris.player.platform.permission.granted
+import com.osiris.player.platform.permission.openAppSettings
 import com.osiris.player.platform.permission.rememberPermission
 import com.osiris.player.platform.pose.PoseAnalyzer
 import com.osiris.player.platform.pose.PoseCamera
@@ -113,11 +110,6 @@ private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalo
             PermissionStatus.REFUSED -> vm.onCameraFailed(AppError.Permission(Manifest.permission.CAMERA, "Camera access is off for Osiris. Allow it in Settings to count reps."))
             PermissionStatus.UNKNOWN -> Unit
         }
-    }
-    // Back from system Settings with the camera now allowed.
-    LifecycleResumeEffect(Unit) {
-        if (!cameraAllowed && context.granted(Manifest.permission.CAMERA)) cameraAllowed = true
-        onPauseOrDispose {}
     }
     // Leaving mid-set finishes it, so the reps done so far are kept.
     BackHandler(enabled = s.phase == ExerciseSessionState.Phase.COUNTING) { vm.finish(perf(analyzer)) }
@@ -182,12 +174,7 @@ private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalo
                     Text(error, color = OsirisColors.Error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = {
-                            context.startActivity(
-                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        },
+                        onClick = context::openAppSettings,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                     ) { Text("OPEN SETTINGS") }
                 } else {

@@ -6,6 +6,7 @@ import com.osiris.shared.domain.model.ChallengeDraft
 import com.osiris.shared.domain.model.ChallengeSummary
 import com.osiris.shared.domain.model.CourseRoute
 import com.osiris.shared.domain.model.CourseSummary
+import com.osiris.shared.domain.model.HubSectionData
 import com.osiris.shared.domain.model.InviteLink
 import com.osiris.shared.domain.model.MessageResponse
 import io.ktor.http.HttpMethod
@@ -28,6 +29,8 @@ class ChallengeApi(private val api: ApiClient) {
 
     suspend fun submitAttempt(challengeId: Int, runId: Int): AttemptSummary =
         api.post("/api/v2/challenges/$challengeId/attempts", ApiClient.body("run_id" to runId))
+
+    suspend fun hub(section: String): HubSectionData = api.get("/api/v2/challenge-hub", mapOf("section" to section))
 
     suspend fun myCourses(): List<CourseSummary> = api.get("/api/v2/courses")
 

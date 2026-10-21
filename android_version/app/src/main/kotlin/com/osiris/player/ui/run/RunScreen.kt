@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +47,7 @@ import com.osiris.player.platform.location.LocationClient
 import com.osiris.player.platform.location.LocationUnavailable
 import com.osiris.player.platform.location.RunTrackingService
 import com.osiris.player.platform.permission.PermissionStatus
+import com.osiris.player.platform.permission.openAppSettings
 import com.osiris.player.platform.permission.rememberPermission
 import com.osiris.player.platform.share.share
 import com.osiris.player.ui.common.ConfirmDialog
@@ -99,7 +101,10 @@ fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChal
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            if (s.locating && s.position == null) {
+            val problem = s.locationProblem
+            if (problem != null && s.position == null) {
+                LocationOff(problem, onOpenSettings = context::openAppSettings, modifier = Modifier.align(Alignment.Center))
+            } else if (s.locating && s.position == null) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             } else {
                 OsmMap(
@@ -130,6 +135,18 @@ fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChal
     Dialogs(s.dialog, vm)
 }
 
+/** No position: why, and the way to fix it. Runs cannot be verified without location. */
+@Composable
+private fun LocationOff(problem: String, onOpenSettings: () -> Unit, modifier: Modifier) {
+    Column(modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(problem, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text("Runs need your location to be verified.", color = OsirisColors.Faint, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onOpenSettings) { Text("OPEN SETTINGS") }
+    }
+}
+
 @Composable
 private fun Metrics(s: RunState) {
     val run = s.run ?: return
@@ -154,7 +171,7 @@ private fun Metric(label: String, value: String, color: Color? = null) {
 @Composable
 private fun RunButton(s: RunState, onClick: () -> Unit, modifier: Modifier) {
     // A run cannot start before the first GPS fix.
-    val waiting = s.busy || (!s.recording && s.position == null)
+    val waiting = s.busy || (!s.recording && s.position == null && s.locationProblem == null)
     ExtendedFloatingActionButton(
         onClick = { if (!waiting) onClick() },
         containerColor = when {
@@ -170,7 +187,7 @@ private fun RunButton(s: RunState, onClick: () -> Unit, modifier: Modifier) {
                 Icon(if (s.recording) Icons.Filled.Stop else Icons.Filled.PlayArrow, null)
             }
         },
-        text = { Text(if (s.recording) "FINISH RUN" else if (s.position == null) "LOCATING…" else "START RUN") },
+        text = { Text(s.actionLabel) },
         modifier = modifier,
     )
 }

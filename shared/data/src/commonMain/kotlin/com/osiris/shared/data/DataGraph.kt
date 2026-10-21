@@ -19,6 +19,8 @@ import com.osiris.shared.data.repository.PrivacyRepositoryImpl
 import com.osiris.shared.data.repository.RunRepositoryImpl
 import com.osiris.shared.data.repository.SessionStore
 import com.osiris.shared.data.storage.PlatformDependencies
+import com.osiris.shared.data.support.SupportChatRepositoryImpl
+import com.osiris.shared.data.wallet.MockWalletRepository
 import com.osiris.shared.domain.repository.AuthRepository
 import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.repository.CommunityRepository
@@ -27,6 +29,8 @@ import com.osiris.shared.domain.repository.ExerciseRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.PrivacyRepository
 import com.osiris.shared.domain.repository.RunRepository
+import com.osiris.shared.domain.repository.SupportChatRepository
+import com.osiris.shared.domain.repository.WalletRepository
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -92,6 +96,10 @@ class DataGraph(
     val communities: CommunityRepository = CommunityRepositoryImpl(CommunityApi(api), challengeApi)
     val privacy: PrivacyRepository = PrivacyRepositoryImpl(me, authImpl)
     val deviceSetup: DeviceSetupRepository = DeviceSetupRepositoryImpl(platform.settings)
+    val support: SupportChatRepository = SupportChatRepositoryImpl(api)
+
+    /** Null when the build has no wallet (production): the app then hides the Wallet tab. */
+    val wallet: WalletRepository? = if (config.features.walletDemo) MockWalletRepository(clock) else null
 
     fun close() {
         scope.cancel()

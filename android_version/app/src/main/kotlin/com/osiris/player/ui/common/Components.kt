@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -63,9 +64,11 @@ fun OsirisScaffold(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding()) },
         // Transparent over the app-wide FrostBackground, so every screen sits on the matte backdrop.
+        // Transparent alone would make the default content colour black on the dark backdrop.
         containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         content = content,
     )
 }
