@@ -66,3 +66,6 @@ captures/
 ios_version/**/xcuserdata/
 ios_version/**/DerivedData/
 ios_version/**/*.xcworkspace/xcuserdata/
+
+# Root tooling (Supabase CLI via npm)
+/node_modules/
