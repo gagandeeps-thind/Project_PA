@@ -242,3 +242,16 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
   suites in `.github/workflows/ci.yml`.
 - [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
   activity feed, daily steps; blocks friends, the steps board and rotating refresh tokens.
+
+### Security scan (2026-10-19)
+- [x] security: share and invite links use `OSIRIS_PUBLIC_BASE_URL`, never the request's Host header outside dev;
+  outside dev, link endpoints answer 503 until it is set (`tests/test_public_base_url.py`). `terms_hash` checks its fields with an
+  explicit error instead of an `assert` that `python -O` strips.
+- [ ] [human] deps (lockfile): pip-audit finds 26 advisories in `requirements.lock.txt`. Bump `PyJWT==2.15.0`,
+  `starlette>=1.3.1` (with a `fastapi` release that allows it), `anyio==4.14.2`, `idna==3.15`, `urllib3==2.8.0`.
+  PyJWT GHSA-gvp8-978c-rx2q has no fix yet; it only bites callers that reuse an `options` dict, which `main.py` does not.
+- [ ] [human] deps (lockfile): `npm audit` finds 6 high advisories in `Osiris_admin_web/package-lock.json`
+  (`axios`, `vite` direct; `form-data`, `nanoid`, `postcss`, `source-map-js` transitive); `npm audit fix` resolves all.
+- [ ] [human] ci: add `python tests/test_public_base_url.py` after the existing suites in `.github/workflows/ci.yml`.
+- [ ] [human] deploy: add `OSIRIS_PUBLIC_BASE_URL` (the public https origin) to `DEPLOY_RUNBOOK.md` and every
+  non-dev environment; without it share, invite and referral links answer 503 instead of trusting the Host header.

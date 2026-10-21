@@ -39,3 +39,9 @@ def is_dev_env() -> bool:
 
 def database_url(default: str) -> str:
     return secret("OSIRIS_DATABASE_URL") or default
+
+
+def public_base_url() -> str | None:
+    """Origin used in share and invite links (`OSIRIS_PUBLIC_BASE_URL`), without a trailing slash."""
+    value = os.environ.get("OSIRIS_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    return value or None

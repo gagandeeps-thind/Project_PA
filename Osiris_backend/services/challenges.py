@@ -224,7 +224,9 @@ def build_terms(
 
 
 def terms_hash(terms: dict) -> str:
-    assert set(terms) == set(TERMS_FIELDS), "terms must contain exactly TERMS_FIELDS"
+    # An explicit check, not an assert: `python -O` strips asserts, and the hash fixes the terms.
+    if set(terms) != set(TERMS_FIELDS):
+        raise ValueError("terms must contain exactly TERMS_FIELDS")
     payload = json.dumps(terms, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
