@@ -1,6 +1,16 @@
 package com.osiris.player.ui.today
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.osiris.player.ui.design.HeroMetric
+import com.osiris.player.ui.theme.primaryButtonColors
+import com.osiris.shared.core.design.FrostMatte
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,11 +27,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.HealthAndSafety
@@ -31,8 +38,6 @@ import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WbTwilight
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,6 +72,7 @@ import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.navigation.Routes
 import com.osiris.player.ui.navigation.open
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.model.Quest
@@ -124,26 +130,20 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
 
 @Composable
 private fun Today(t: TodayData, onAllow: () -> Unit, onStart: () -> Unit, onChallenge: (Int) -> Unit, onOpen: (String) -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(contentPadding = PaddingValues(20.dp, 8.dp, 20.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
-            Text("Hi ${t.displayName}", style = MaterialTheme.typography.headlineSmall)
-            Text("${t.performanceRank} ${t.identity}  •  ${t.xp} XP", color = OsirisColors.Muted)
+            Text("Hi ${t.displayName}", style = MaterialTheme.typography.titleMedium, color = OsirisColors.Muted)
+            Text(
+                "${t.performanceRank} ${t.identity}  ·  ${t.xp} XP",
+                style = MaterialTheme.typography.bodySmall,
+                color = OsirisColors.Faint,
+            )
         }
         if (t.needsLocationConsent) item { ConsentBanner(onAllow) }
         item { QuestCard(t.today, onStart) }
-        item { WeekCard(t.week, t.streakWeeks) }
-        item {
-            Card {
-                ListItem(
-                    leadingContent = { Icon(Icons.Outlined.WbTwilight, null, tint = OsirisColors.Secondary) },
-                    headlineContent = { Text("Tomorrow") },
-                    supportingContent = { Text(t.tomorrow.title) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                )
-            }
-        }
+        item { WeekStrip(t.week, t.streakWeeks) }
+        item { Shortcuts(t.tomorrow.title, onOpen) }
         t.starterChallenge?.let { c -> item { StarterChallengeCard(c, onChallenge) } }
-        item { NavGrid(onOpen) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.HealthAndSafety, null, Modifier.size(18.dp), tint = OsirisColors.Faint)
@@ -155,9 +155,135 @@ private fun Today(t: TodayData, onAllow: () -> Unit, onStart: () -> Unit, onChal
     }
 }
 
+/** The screen's focal point: today's quest distance, at hero size; everything else in it recedes. */
+@Composable
+private fun QuestCard(quest: Quest, onStart: () -> Unit) {
+    FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 22.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                quest.heading.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = OsirisColors.Muted,
+                modifier = Modifier.weight(1f),
+            )
+            Text("+${quest.xp} XP", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
+        }
+        Spacer(Modifier.height(12.dp))
+        HeroMetric(Format.fixed(quest.progressM / 1000, 2), unit = "/ ${Format.km(quest.targetM.toDouble())}")
+        Spacer(Modifier.height(6.dp))
+        Text("${quest.title}. ${quest.description}", style = MaterialTheme.typography.bodyMedium, color = OsirisColors.Muted)
+        Spacer(Modifier.height(14.dp))
+        LinearProgressIndicator(
+            progress = { quest.fraction.toFloat() },
+            modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)),
+            trackColor = OsirisColors.Background,
+            gapSize = 0.dp,
+            drawStopIndicator = {},
+        )
+        Spacer(Modifier.height(16.dp))
+        if (quest.completed) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.CheckCircle, null, tint = OsirisColors.Success)
+                Spacer(Modifier.width(8.dp))
+                Text(if (quest.rewarded) "Done. +${quest.xp} XP earned." else "Done!", Modifier.weight(1f))
+                TextButton(onClick = onStart) { Text("GO AGAIN") }
+            }
+        } else {
+            Button(onClick = onStart, colors = primaryButtonColors(), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                Icon(Icons.Filled.PlayArrow, null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (quest.optional) "START (OPTIONAL)" else "START")
+            }
+        }
+    }
+}
+
+/** The week, kept quiet: day keys, a count and the streak. No card, so it never competes with the quest. */
+@Composable
+private fun WeekStrip(week: WeeklyGoal, streakWeeks: Int) {
+    val summary = if (week.completed) {
+        "Weekly goal met. Rest days never break your streak."
+    } else {
+        "${week.activeDays} of ${week.activeDaysTarget} active days this week, ${Format.km(week.distanceM)}"
+    }
+    Row(
+        Modifier.padding(horizontal = 4.dp).semantics(mergeDescendants = true) { contentDescription = summary },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(week.activeDaysTarget) { i ->
+            val shape = RoundedCornerShape(9.dp)
+            val day = Modifier.padding(end = 8.dp).size(26.dp)
+            if (i < week.activeDays) {
+                Spacer(day.background(OsirisColors.Muted, shape))
+            } else {
+                Spacer(day.border(2.dp, OsirisColors.Faint.copy(alpha = 0.5f), shape))
+            }
+        }
+        Text(
+            "${week.activeDays} of ${week.activeDaysTarget} days",
+            style = MaterialTheme.typography.titleSmall,
+            color = OsirisColors.Muted,
+            modifier = Modifier.weight(1f),
+        )
+        if (streakWeeks > 0) {
+            Text("$streakWeeks WK STREAK", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Secondary)
+        }
+    }
+}
+
+/** Asymmetric block: tomorrow's quest tall on the left, two shortcuts stacked right, two pills below. */
+@Composable
+private fun Shortcuts(tomorrow: String, onOpen: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.height(188.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FrostCard(Modifier.weight(1.15f).fillMaxHeight(), radius = FrostMatte.Radius.LARGE) {
+                Text("TOMORROW", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Outlined.WbTwilight, null, tint = OsirisColors.Faint)
+                Spacer(Modifier.height(8.dp))
+                Text(tomorrow, style = MaterialTheme.typography.headlineSmall)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Shortcut(Icons.Outlined.Groups, "Clubs", Modifier.weight(1f)) { onOpen(Routes.COMMUNITIES) }
+                Shortcut(Icons.Filled.FitnessCenter, "Bodyweight", Modifier.weight(1f)) { onOpen(Routes.EXERCISE) }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Pill(Icons.Outlined.Route, "My courses") { onOpen(Routes.COURSES) }
+            Pill(Icons.Outlined.PersonAddAlt, "Invite a friend") { onOpen(Routes.SETTINGS) }
+        }
+    }
+}
+
+@Composable
+private fun Shortcut(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    FrostCard(modifier.fillMaxWidth(), onClick = onClick, contentPadding = 16.dp) {
+        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Icon(icon, null, Modifier.size(20.dp), tint = OsirisColors.Faint)
+        }
+    }
+}
+
+/** Secondary destinations as outlined pills: an interactive border, no fill to compete with the cards. */
+@Composable
+private fun Pill(icon: ImageVector, label: String, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        border = BorderStroke(1.5.dp, OsirisColors.Faint.copy(alpha = 0.6f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = OsirisColors.Muted),
+        modifier = Modifier.height(44.dp),
+    ) {
+        Icon(icon, null, Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.titleSmall)
+    }
+}
+
 @Composable
 private fun ConsentBanner(onAllow: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = OsirisColors.Secondary.copy(alpha = 0.15f))) {
+    FrostCard(contentPadding = 0.dp, fill = OsirisColors.Secondary.copy(alpha = 0.15f)) {
         ListItem(
             leadingContent = { Icon(Icons.Outlined.LocationOn, null) },
             headlineContent = { Text("Allow location during runs") },
@@ -169,92 +295,9 @@ private fun ConsentBanner(onAllow: () -> Unit) {
 }
 
 @Composable
-private fun QuestCard(quest: Quest, onStart: () -> Unit) {
-    Card {
-        Column(Modifier.padding(16.dp)) {
-            Text(quest.heading, color = OsirisColors.Secondary, fontSize = 12.sp, letterSpacing = 1.2.sp)
-            Spacer(Modifier.height(6.dp))
-            Text(quest.title, style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(4.dp))
-            Text(quest.description, color = OsirisColors.Muted)
-            Spacer(Modifier.height(14.dp))
-            LinearProgressIndicator(
-                progress = { quest.fraction.toFloat() },
-                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(6.dp)),
-                drawStopIndicator = {},
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "${Format.km(quest.progressM)} of ${Format.km(quest.targetM.toDouble())}  •  +${quest.xp} XP",
-                color = OsirisColors.Muted,
-                fontSize = 13.sp,
-            )
-            Spacer(Modifier.height(14.dp))
-            if (quest.completed) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CheckCircle, null, tint = OsirisColors.Success)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (quest.rewarded) "Done. +${quest.xp} XP earned." else "Done!", Modifier.weight(1f))
-                    TextButton(onClick = onStart) { Text("GO AGAIN") }
-                }
-            } else {
-                Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.PlayArrow, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (quest.optional) "START (OPTIONAL)" else "START")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeekCard(week: WeeklyGoal, streakWeeks: Int) {
-    Card {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("THIS WEEK", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.weight(1f))
-                Icon(
-                    Icons.Filled.LocalFireDepartment,
-                    null,
-                    Modifier.size(18.dp),
-                    tint = if (streakWeeks > 0) OsirisColors.Warning else Color.White.copy(alpha = 0.24f),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(if (streakWeeks == 1) "1 week streak" else "$streakWeeks week streak")
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                repeat(week.activeDaysTarget) { i ->
-                    val done = i < week.activeDays
-                    Icon(
-                        if (done) Icons.Filled.Circle else Icons.Outlined.Circle,
-                        null,
-                        Modifier.padding(end = 8.dp).size(22.dp),
-                        tint = if (done) OsirisColors.Secondary else Color.White.copy(alpha = 0.38f),
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                Text(Format.km(week.distanceM), color = OsirisColors.Muted)
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (week.completed) {
-                    "Weekly goal met. Enjoy your rest days."
-                } else {
-                    "${week.activeDays} of ${week.activeDaysTarget} active days. Rest days never break your streak."
-                },
-                color = OsirisColors.Muted,
-                fontSize = 13.sp,
-            )
-        }
-    }
-}
-
-@Composable
 private fun StarterChallengeCard(c: StarterChallenge, onOpen: (Int) -> Unit) {
     val away = c.distanceKm?.let { "  •  about ${Format.fixed(it, 1)} km away" }.orEmpty()
-    Card(Modifier.clickable { onOpen(c.id) }) {
+    FrostCard(onClick = { onOpen(c.id) }, contentPadding = 0.dp) {
         ListItem(
             leadingContent = { Icon(Icons.Outlined.Flag, null, tint = OsirisColors.Primary) },
             headlineContent = { Text(c.title) },
@@ -262,35 +305,5 @@ private fun StarterChallengeCard(c: StarterChallenge, onOpen: (Int) -> Unit) {
             trailingContent = { Icon(Icons.Filled.ChevronRight, null) },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
-    }
-}
-
-private data class NavItem(val icon: ImageVector, val label: String, val route: String)
-
-private val navItems = listOf(
-    NavItem(Icons.Outlined.Groups, "Clubs", Routes.COMMUNITIES),
-    NavItem(Icons.Filled.FitnessCenter, "Bodyweight", Routes.EXERCISE),
-    NavItem(Icons.Outlined.Route, "My courses", Routes.COURSES),
-    NavItem(Icons.Outlined.PersonAddAlt, "Invite", Routes.SETTINGS),
-)
-
-/** Three tiles a row; a lazy grid inside the lazy column would need a fixed height. */
-@Composable
-private fun NavGrid(onOpen: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (row in navItems.chunked(3)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (item in row) {
-                    Card(Modifier.weight(1f).height(84.dp).clickable { onOpen(item.route) }) {
-                        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(item.icon, null, tint = OsirisColors.Secondary)
-                            Spacer(Modifier.height(6.dp))
-                            Text(item.label, fontSize = 13.sp)
-                        }
-                    }
-                }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
     }
 }

@@ -1,6 +1,5 @@
 package com.osiris.player.ui.challenge
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.TravelExplore
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -42,6 +40,7 @@ import com.osiris.player.ui.common.Notice
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberNow
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.model.ChallengeSummary
@@ -108,7 +107,7 @@ fun ChallengeBoardScreen(graph: AppGraph, onBack: (() -> Unit)?, onOpen: (Int) -
 @Composable
 fun ChallengeTile(c: ChallengeSummary, now: Instant, onClick: () -> Unit) {
     val away = c.distanceKm?.let { "~${Format.fixed(it, 1)} km away • " }.orEmpty()
-    Card(Modifier.clickable(onClick = onClick)) {
+    FrostCard(onClick = onClick, contentPadding = 0.dp) {
         ListItem(
             leadingContent = { Icon(Icons.Filled.EmojiEvents, null, Modifier.size(32.dp), tint = OsirisColors.Warning) },
             headlineContent = { Text(c.title, fontWeight = FontWeight.Bold) },

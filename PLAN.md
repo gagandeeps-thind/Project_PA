@@ -267,3 +267,14 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
   before more than one replica: PostgreSQL, one scheduler, a shared rate limiter (report 17, section 4).
 - [x] app: fetch Today once at start (it is fetched before and again after the first location fix)
   - Acceptance: a presentation test shows one `/api/v2/me/today` request when the location arrives within 2 s.
+
+## UI: Slate redesign (2026-10-21)
+Mock-up canvas: https://claude.ai/artifact/9T7qH7rsRZ32o1YXq5McMy (Today, live run, Social).
+
+- [x] android: Slate tokens (charcoal slate, lime accent, orange for streaks; no purple), Manrope + Geist Mono,
+  glass panes with a specular top rim, stepped top-left shadows and grain, floating chunky tab bar, one 72 sp
+  focal number per screen (Today quest distance, Run distance, Social rank), asymmetric Today shortcuts,
+  slate-tinted map tiles. `DesignTokensTest` checks WCAG AA text contrast.
+- [ ] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
+  target with `UIAppFonts`, and use them in `Frost.swift`; the shared colours already apply. Needs a Mac to build.
+  - Acceptance: the iOS Today screen renders the quest distance in Manrope ExtraBold at 72 pt.

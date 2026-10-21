@@ -20,8 +20,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -56,6 +54,12 @@ import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.TextInputDialog
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.map.OsmMap
+import com.osiris.player.ui.design.FrostCard
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
+import com.osiris.player.ui.theme.color
+import com.osiris.shared.core.design.FrostMatte
+import com.osiris.player.ui.design.HeroMetric
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.presentation.AppGraph
@@ -119,7 +123,7 @@ fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChal
             }
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 if (s.challengeId != null && !s.recording) {
-                    Card(colors = CardDefaults.cardColors(containerColor = OsirisColors.Surface)) {
+                    FrostCard(contentPadding = 0.dp) {
                         Text(
                             "Go to the green start zone, then tap START. Finish inside the red zone. " +
                                 "Run safely: obey traffic rules and stop if you feel unwell.",
@@ -147,14 +151,18 @@ private fun LocationOff(problem: String, onOpenSettings: () -> Unit, modifier: M
     }
 }
 
+/** Distance is the run screen's one focal number; time, pace and sync sit below it, small and muted. */
 @Composable
 private fun Metrics(s: RunState) {
     val run = s.run ?: return
-    Card(colors = CardDefaults.cardColors(containerColor = OsirisColors.Surface.copy(alpha = 0.92f))) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceAround) {
+    val value = s.distance.substringBeforeLast(' ')
+    val unit = s.distance.substringAfterLast(' ', "")
+    FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 20.dp) {
+        HeroMetric(value, unit = unit.ifEmpty { null }, label = "Distance")
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Metric("TIME", s.elapsed)
-            Metric("DISTANCE", s.distance)
-            Metric("PACE /km", s.pace?.removeSuffix(" /km") ?: "--")
+            Metric("PACE /KM", s.pace?.removeSuffix(" /km") ?: "--")
             Metric(if (s.offline) "OFFLINE" else "SYNCED", "${run.uploaded}/${run.nextSequence}", if (s.offline) OsirisColors.Warning else null)
         }
     }
@@ -162,9 +170,9 @@ private fun Metrics(s: RunState) {
 
 @Composable
 private fun Metric(label: String, value: String, color: Color? = null) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color ?: Color.White)
-        Text(label, fontSize = 11.sp, color = color ?: OsirisColors.Faint)
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color ?: OsirisColors.Faint)
+        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color ?: OsirisColors.Muted)
     }
 }
 
@@ -179,10 +187,10 @@ private fun RunButton(s: RunState, onClick: () -> Unit, modifier: Modifier) {
             s.position == null -> OsirisColors.Surface
             else -> OsirisColors.Primary
         },
-        contentColor = Color.White,
+        contentColor = if (s.recording || s.position == null) Color.White else FrostMatte.dark.onAccent.color(),
         icon = {
             if (waiting) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
             } else {
                 Icon(if (s.recording) Icons.Filled.Stop else Icons.Filled.PlayArrow, null)
             }

@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
@@ -42,6 +41,7 @@ import com.osiris.player.ui.common.ListSpacing
 import com.osiris.player.ui.common.LoadableContent
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.model.ChallengeDraft
@@ -95,7 +95,7 @@ fun CoursesScreen(graph: AppGraph, onBack: () -> Unit, onOpenChallenge: (Int) ->
 
 @Composable
 private fun CourseTile(c: CourseSummary, onPublish: () -> Unit, onView: (Int) -> Unit) {
-    Card {
+    FrostCard(contentPadding = 0.dp) {
         ListItem(
             leadingContent = { Icon(if (c.isLoop) Icons.Filled.Loop else Icons.Outlined.Route, null, tint = OsirisColors.Secondary) },
             headlineContent = { Text(c.name, fontWeight = FontWeight.Bold) },
