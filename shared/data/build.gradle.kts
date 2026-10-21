@@ -26,6 +26,11 @@ kotlin {
             implementation(libs.ktor.client.cio)
             implementation(libs.sqldelight.jvm.driver)
         }
+        jvmTest.dependencies {
+            // A real WebSocket server for the support chat test; MockEngine has no WebSockets.
+            implementation(libs.ktor.server.cio)
+            implementation(libs.ktor.server.websockets)
+        }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
@@ -48,8 +53,8 @@ extensions.configure<app.cash.sqldelight.gradle.SqlDelightExtension> {
 }
 
 // The bundled exercise catalog ships inside the shared code so both apps start offline with the
-// same rules. Source of truth: Osiris_backend services/exercises.py, exported to the Flutter asset.
-val catalogAsset = rootProject.layout.projectDirectory.file("Osiris_customer/assets/exercise_catalog.json")
+// same rules. Source of truth: Osiris_backend services/exercises.py, exported to shared/assets/exercise_catalog.json.
+val catalogAsset = rootProject.layout.projectDirectory.file("shared/assets/exercise_catalog.json")
 val bundledDir = layout.buildDirectory.dir("generated/osirisCatalog/commonMain/kotlin")
 val generateBundledCatalog by tasks.registering {
     inputs.file(catalogAsset)
@@ -61,7 +66,7 @@ val generateBundledCatalog by tasks.registering {
         val out = bundledDir.get().file("com/osiris/shared/data/exercise/BundledCatalog.kt").asFile
         out.parentFile.mkdirs()
         out.writeText(
-            "// Generated from Osiris_customer/assets/exercise_catalog.json by :shared:data:generateBundledCatalog. Do not edit.\n" +
+            "// Generated from shared/assets/exercise_catalog.json by :shared:data:generateBundledCatalog. Do not edit.\n" +
                 "package com.osiris.shared.data.exercise\n\n" +
                 "internal object BundledCatalog {\n" +
                 "    const val JSON: String = \"\"\"" + json.replace("$", "\${'$'}") + "\"\"\"\n" +

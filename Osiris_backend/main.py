@@ -1,6 +1,6 @@
 # --- Library Imports ---
 # FastAPI: The core web framework. HTTPException: Used to return errors (like 404 Not Found). Depends: Used to inject database sessions.
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 # Pydantic: Used for validating the shape of JSON data coming in and going out of our API.
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from datetime import datetime, timedelta, timezone
@@ -22,6 +22,7 @@ load_dotenv(override=False)
 
 logger = logging.getLogger(__name__)
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 # bcrypt: Used to securely scramble (hash) passwords so they aren't saved as plain text.
@@ -30,13 +31,16 @@ import bcrypt
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from jwt.exceptions import InvalidTokenError
 
 # Import our newly created database connection and models
 import database
+from http_cache import ConditionalGetMiddleware
 import models
+import settings
 import spatial_utils
 import ml_referee
 import run_verifier
@@ -65,12 +69,17 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan handler — replaces the deprecated @app.on_event("startup"/"shutdown")
     pattern. Background jobs are wired up on startup and torn down cleanly on shutdown.
     The job functions are defined later in the module; that's fine because lifespan only
-    runs once the server starts (after full module import)."""
+    runs once the server starts (after full module import).
+    OSIRIS_RUN_SCHEDULER=0 serves requests without the jobs (extra replicas behind a balancer)."""
+    if not settings.run_scheduler():
+        yield
+        return
     scheduler.add_job(process_daily_decay, 'interval', hours=24)
     # v2.11 telemetry retention: nightly cleanup of raw sample blobs older than TTL.
     scheduler.add_job(process_telemetry_ttl, 'interval', hours=24)
     scheduler.add_job(process_challenge_settlement, 'interval', hours=1)
     scheduler.add_job(process_route_point_ttl, 'interval', hours=24)
+    scheduler.add_job(database.optimize, 'interval', hours=24)
     scheduler.start()
     try:
         yield
@@ -142,6 +151,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Both sit inside the access log, so a 304 is logged as a 304. GZip wraps the ETag layer, so the tag
+# hashes the plain body; it must also sit inside the access log, whose call_next re-chunks the body
+# and would defeat the small-body threshold. Small bodies are not worth the CPU.
+app.add_middleware(ConditionalGetMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # --- Phase 0: per-request structured access log + request id -------------------
@@ -187,7 +201,7 @@ def prometheus_metrics(request: Request):
     deploy never exposes traffic patterns by accident."""
     from fastapi.responses import PlainTextResponse
 
-    expected = os.environ.get("OSIRIS_METRICS_TOKEN")
+    expected = settings.secret("OSIRIS_METRICS_TOKEN")
     if expected:
         supplied = request.headers.get("Authorization", "")
         if not hmac.compare_digest(supplied, f"Bearer {expected}"):
@@ -248,7 +262,7 @@ def _alembic_head_revision() -> Optional[str]:
 # Set OSIRIS_JWT_SECRET in any non-dev environment. Deployment must use a 32+ byte secret
 # (HS256 minimum per RFC 7518 § 3.2). Setting OSIRIS_ENV=production makes a missing secret
 # fatal at boot — that's the production-safety check.
-_jwt_secret_from_env = os.environ.get("OSIRIS_JWT_SECRET")
+_jwt_secret_from_env = settings.secret("OSIRIS_JWT_SECRET")
 if _jwt_secret_from_env:
     SECRET_KEY = _jwt_secret_from_env
 elif os.environ.get("OSIRIS_ENV", "").lower() == "production":
@@ -319,9 +333,9 @@ def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
 # must refuse to boot — the old behavior (fail open whenever the secret was unset, only
 # fail-fast when OSIRIS_ENV was *explicitly* "production") meant a deploy that forgot the env
 # var served a wide-open, forgeable payment webhook. Inverted here.
-_DEV_ENVS = {"dev", "development", "test", "testing", "local"}
-_IS_DEV_ENV = os.environ.get("OSIRIS_ENV", "").lower() in _DEV_ENVS
-_WEBHOOK_SECRET = os.environ.get("OSIRIS_WEBHOOK_SECRET")
+_DEV_ENVS = settings.DEV_ENVS
+_IS_DEV_ENV = settings.is_dev_env()
+_WEBHOOK_SECRET = settings.secret("OSIRIS_WEBHOOK_SECRET")
 if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
     raise RuntimeError(
         "OSIRIS_WEBHOOK_SECRET is required unless OSIRIS_ENV is one of "
@@ -1729,10 +1743,15 @@ class ProgressionResponse(BaseModel):
     xp: int
     performance_rank: str
     rank_ladder_version: str
+    rank_floor_xp: int = 0                   # where the current rank starts, for the progress gauge
     next_rank_xp: Optional[int] = None
     verified_runs: int
     courses: int
     challenges_won: int
+    challenges_lost: int = 0
+    challenges_played: int = 0
+    lifetime_distance_km: float = 0.0
+    global_rank: Optional[int] = None        # by XP among active players; None until the first XP
     defenses: int
     badges: List[BadgeOut]
 
@@ -1751,17 +1770,25 @@ def _course_route(course: models.Course) -> "list[tuple[float, float]]":
     return [(p[0], p[1]) for p in json.loads(course.route_json)]
 
 
-def _course_summary(db: Session, course: models.Course) -> CourseSummary:
-    open_ch = db.query(models.Challenge).filter(
-        models.Challenge.course_id == course.id, models.Challenge.status == "open",
-    ).first()
+def _open_challenge_ids(db: Session, course_ids: list[int]) -> dict[int, int]:
+    """course id -> the id of one open challenge on it, for many courses in one query."""
+    rows = db.query(models.Challenge.course_id, func.min(models.Challenge.id)).filter(
+        models.Challenge.course_id.in_(course_ids or [-1]), models.Challenge.status == "open",
+    ).group_by(models.Challenge.course_id).all()
+    return {course_id: challenge_id for course_id, challenge_id in rows}
+
+
+def _course_summary(db: Session, course: models.Course,
+                    open_ids: Optional[dict[int, int]] = None) -> CourseSummary:
+    if open_ids is None:
+        open_ids = _open_challenge_ids(db, [course.id])
     return CourseSummary(
         id=course.id, name=course.name, status=course.status, version=course.version,
         rules_version=course.rules_version, distance_m=round(course.distance_m, 2),
         benchmark_seconds=round(course.benchmark_seconds, 2), is_loop=bool(course.is_loop),
         public_lat=course.public_lat, public_lng=course.public_lng,
         route=[list(p) for p in _course_route(course)],
-        open_challenge_id=open_ch.id if open_ch else None, created_at=course.created_at,
+        open_challenge_id=open_ids.get(course.id), created_at=course.created_at,
     )
 
 
@@ -1801,17 +1828,39 @@ def _refresh_challenge_status(db: Session, ch: models.Challenge, now: Optional[d
     return changed
 
 
+class ChallengeStats:
+    """Per-challenge attempt counts and the viewer's own attempts, loaded for a whole list at once.
+
+    Serialising a list one challenge at a time cost two queries per challenge (the nearby map
+    ran 51 queries for 24 challenges); this loads them in two queries for any list size."""
+
+    def __init__(self, attempt_counts: dict[int, int], mine: dict[int, models.ChallengeAttempt]):
+        self.attempt_counts = attempt_counts
+        self.mine = mine
+
+    @classmethod
+    def load(cls, db: Session, challenge_ids: "list[int]", viewer_id: int) -> "ChallengeStats":
+        ids = list(challenge_ids) or [-1]
+        counts = db.query(models.ChallengeAttempt.challenge_id, func.count(models.ChallengeAttempt.id)).filter(
+            models.ChallengeAttempt.challenge_id.in_(ids),
+            models.ChallengeAttempt.run_session_id.isnot(None),
+        ).group_by(models.ChallengeAttempt.challenge_id).all()
+        mine = db.query(models.ChallengeAttempt).filter(
+            models.ChallengeAttempt.challenge_id.in_(ids), models.ChallengeAttempt.user_id == viewer_id,
+        ).all()
+        return cls({cid: n for cid, n in counts}, {a.challenge_id: a for a in mine})
+
+
 def _challenge_public(
     db: Session, ch: models.Challenge, course: models.Course, viewer_id: int,
-    distance_km: Optional[float] = None,
+    distance_km: Optional[float] = None, stats: Optional[ChallengeStats] = None,
 ) -> ChallengePublic:
-    attempt_count = db.query(models.ChallengeAttempt).filter(
-        models.ChallengeAttempt.challenge_id == ch.id,
-        models.ChallengeAttempt.run_session_id.isnot(None),
-    ).count()
-    mine = db.query(models.ChallengeAttempt).filter(
-        models.ChallengeAttempt.challenge_id == ch.id, models.ChallengeAttempt.user_id == viewer_id,
-    ).first()
+    """Serialise one challenge. List endpoints pass `stats` from ChallengeStats.load so the
+    attempt figures cost no extra queries per challenge."""
+    if stats is None:
+        stats = ChallengeStats.load(db, [ch.id], viewer_id)
+    attempt_count = stats.attempt_counts.get(ch.id, 0)
+    mine = stats.mine.get(ch.id)
     return ChallengePublic(
         id=ch.id, title=ch.title, status=ch.status, rules_version=ch.rules_version,
         terms_hash=ch.terms_hash, course_distance_m=round(course.distance_m, 2),
@@ -1931,16 +1980,21 @@ def register_course(
 
 @app.get("/api/v2/courses", response_model=List[CourseSummary])
 def list_my_courses(
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
+    """The player's courses, newest first, a page at a time."""
     courses = (
         db.query(models.Course)
         .filter(models.Course.owner_id == token_data["id"])
-        .order_by(models.Course.created_at.desc())
+        .order_by(models.Course.created_at.desc(), models.Course.id.desc())
+        .offset(offset).limit(limit)
         .all()
     )
-    return [_course_summary(db, c) for c in courses]
+    open_ids = _open_challenge_ids(db, [c.id for c in courses])
+    return [_course_summary(db, c, open_ids) for c in courses]
 
 
 @app.post("/api/v2/challenges", response_model=ChallengePublic, status_code=201)
@@ -2041,6 +2095,7 @@ def nearby_challenges(
     changed = False
     out: List[ChallengePublic] = []
     hidden = player_safety.blocked_user_ids(db, token_data["id"])
+    shown = []
     for ch, course in rows:
         changed |= _refresh_challenge_status(db, ch, now)
         if ch.status != "open" or ch.creator_id in hidden:
@@ -2048,7 +2103,10 @@ def nearby_challenges(
         dist = spatial_utils.haversine_distance(lat, lng, course.public_lat, course.public_lng)
         if dist > radius_km:
             continue
-        out.append(_challenge_public(db, ch, course, token_data["id"], distance_km=round(dist, 1)))
+        shown.append((ch, course, dist))
+    stats = ChallengeStats.load(db, [ch.id for ch, _, _ in shown], token_data["id"])
+    for ch, course, dist in shown:
+        out.append(_challenge_public(db, ch, course, token_data["id"], distance_km=round(dist, 1), stats=stats))
     if changed:
         db.commit()
     out.sort(key=lambda c: c.distance_km or 0.0)
@@ -2236,18 +2294,32 @@ def my_progression(
         .filter(models.Challenge.creator_id == player_id, models.ChallengeAttempt.outcome == "lost")
         .count()
     )
+    outcomes: dict[str, int] = {
+        outcome: n for outcome, n in
+        db.query(models.ChallengeAttempt.outcome, func.count(models.ChallengeAttempt.id))
+        .filter(models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome.in_(("won", "lost")))
+        .group_by(models.ChallengeAttempt.outcome).all()
+    }
+    lifetime_m = db.query(func.sum(models.RunSession.distance_m)).filter(
+        models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted").scalar()
+    # Competition rank: one more than the number of active players with strictly more XP.
+    global_rank = None if xp <= 0 else 1 + db.query(models.User).filter(
+        models.User.xp > xp, models.User.suspended_at.is_(None)).count()
     return ProgressionResponse(
         xp=xp,
         performance_rank=challenge_rules.performance_rank(xp),
         rank_ladder_version=challenge_rules.RANK_LADDER_VERSION,
+        rank_floor_xp=challenge_rules.rank_floor(xp),
         next_rank_xp=challenge_rules.next_rank_threshold(xp),
         verified_runs=db.query(models.RunSession).filter(
             models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
         ).count(),
         courses=db.query(models.Course).filter(models.Course.owner_id == player_id).count(),
-        challenges_won=db.query(models.ChallengeAttempt).filter(
-            models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome == "won",
-        ).count(),
+        challenges_won=outcomes.get("won", 0),
+        challenges_lost=outcomes.get("lost", 0),
+        challenges_played=sum(outcomes.values()),
+        lifetime_distance_km=round(float(lifetime_m or 0) / 1000.0, 1),
+        global_rank=global_rank,
         defenses=defenses,
         badges=[
             BadgeOut(code=b.badge_code, label=challenge_rules.BADGES.get(b.badge_code, b.badge_code),
@@ -2321,18 +2393,29 @@ class AuditEventOut(BaseModel):
     created_at: datetime
 
 
-def _admin_challenge_item(db: Session, ch: models.Challenge) -> AdminChallengeItem:
+def _admin_attempt_counts(db: Session, challenge_ids: "list[int]") -> dict[int, int]:
+    rows = db.query(models.ChallengeAttempt.challenge_id, func.count(models.ChallengeAttempt.id)).filter(
+        models.ChallengeAttempt.challenge_id.in_(list(challenge_ids) or [-1]),
+    ).group_by(models.ChallengeAttempt.challenge_id).all()
+    return {cid: n for cid, n in rows}
+
+
+def _admin_challenge_item(db: Session, ch: models.Challenge,
+                          attempt_counts: Optional[dict[int, int]] = None) -> AdminChallengeItem:
+    if attempt_counts is None:
+        attempt_counts = _admin_attempt_counts(db, [ch.id])
     return AdminChallengeItem(
         id=ch.id, title=ch.title, status=ch.status, status_reason=ch.status_reason,
         creator_id=ch.creator_id, course_id=ch.course_id,
-        attempt_count=db.query(models.ChallengeAttempt).filter(
-            models.ChallengeAttempt.challenge_id == ch.id).count(),
+        attempt_count=attempt_counts.get(ch.id, 0),
         closes_at=ch.closes_at, created_at=ch.created_at,
     )
 
 
 @app.get("/api/v2/admin/review-queue", response_model=List[ReviewQueueItem])
 def admin_review_queue(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
@@ -2340,7 +2423,8 @@ def admin_review_queue(
         db.query(models.ChallengeAttempt, models.Challenge)
         .join(models.Challenge, models.Challenge.id == models.ChallengeAttempt.challenge_id)
         .filter(models.ChallengeAttempt.status == "review_required")
-        .order_by(models.ChallengeAttempt.submitted_at.asc())
+        .order_by(models.ChallengeAttempt.submitted_at.asc(), models.ChallengeAttempt.id.asc())
+        .offset(offset).limit(limit)
         .all()
     )
     return [
@@ -2391,13 +2475,18 @@ def admin_review_attempt(
 @app.get("/api/v2/admin/challenges", response_model=List[AdminChallengeItem])
 def admin_list_challenges(
     status: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
     q = db.query(models.Challenge)
     if status:
         q = q.filter(models.Challenge.status == status)
-    return [_admin_challenge_item(db, ch) for ch in q.order_by(models.Challenge.created_at.desc()).limit(200).all()]
+    challenges = q.order_by(models.Challenge.created_at.desc(), models.Challenge.id.desc()).offset(offset).limit(
+        limit).all()
+    counts = _admin_attempt_counts(db, [ch.id for ch in challenges])
+    return [_admin_challenge_item(db, ch, counts) for ch in challenges]
 
 
 @app.post("/api/v2/admin/challenges/{challenge_id}/status", response_model=AdminChallengeItem)
@@ -2507,10 +2596,14 @@ def admin_audit_events(
     entity_id: Optional[int] = None,
     action: Optional[str] = None,
     limit: int = 100,
+    before_id: Optional[int] = None,
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_current_admin),
 ):
+    """Newest first. For the next page pass the last id shown as `before_id`."""
     q = db.query(models.AuditEvent)
+    if before_id is not None:
+        q = q.filter(models.AuditEvent.id < before_id)
     if entity_type:
         q = q.filter(models.AuditEvent.entity_type == entity_type)
     if entity_id is not None:

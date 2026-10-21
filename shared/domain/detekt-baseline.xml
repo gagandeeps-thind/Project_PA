@@ -1,0 +1,100 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:RepEngine.kt$RepEngine$a != null &amp;&amp; b != null &amp;&amp; c != null &amp;&amp; angleDeg(a, b, c) &lt; rule.min</ID>
+    <ID>ComplexCondition:RepEngine.kt$RepEngine$pv == null || pt == null || tMs &lt;= pt || v == pv</ID>
+    <ID>ComplexCondition:RepEngine.kt$RepEngine$t != null &amp;&amp; a != null &amp;&amp; b != null &amp;&amp; c != null &amp;&amp; spec.sides == Metric.SIDES_BEST</ID>
+    <ID>CyclomaticComplexMethod:AccuracyEvalTest.kt$AccuracyEvalTest$@Test fun genuineRepsAreCountedAtEverySupportedFrameRate()</ID>
+    <ID>CyclomaticComplexMethod:RepEngine.kt$RepEngine$fun addFrame(frame: PoseFrame): EngineUpdate</ID>
+    <ID>CyclomaticComplexMethod:RepEngine.kt$RepEngine$fun finish(): SessionSummary</ID>
+    <ID>CyclomaticComplexMethod:RepEngine.kt$RepEngine$private fun accumulate(f: PoseFrame, v: Double)</ID>
+    <ID>CyclomaticComplexMethod:RepEngine.kt$RepEngine$private fun finishRep(tMs: Long): RepResult?</ID>
+    <ID>CyclomaticComplexMethod:RepEngine.kt$RepEngine$private fun hold(f: PoseFrame, v: Double)</ID>
+    <ID>LongMethod:RepEngine.kt$RepEngine$fun addFrame(frame: PoseFrame): EngineUpdate</ID>
+    <ID>LongMethod:RepEngine.kt$RepEngine$fun finish(): SessionSummary</ID>
+    <ID>LoopWithTooManyJumpStatements:AccuracyEvalTest.kt$AccuracyEvalTest$for</ID>
+    <ID>LoopWithTooManyJumpStatements:RepEngine.kt$RepEngine$for</ID>
+    <ID>MagicNumber:Account.kt$Registration$30</ID>
+    <ID>MagicNumber:Account.kt$Registration$8</ID>
+    <ID>MagicNumber:ActiveRun.kt$ActiveRun$1000</ID>
+    <ID>MagicNumber:ActiveRun.kt$ActiveRun$50</ID>
+    <ID>MagicNumber:Challenges.kt$ChallengeDraft$14</ID>
+    <ID>MagicNumber:Challenges.kt$ChallengeDraft$24</ID>
+    <ID>MagicNumber:Challenges.kt$ChallengeDraft$3</ID>
+    <ID>MagicNumber:Challenges.kt$ChallengeSummary$24</ID>
+    <ID>MagicNumber:Challenges.kt$ChallengeSummary$60</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.000075</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.000907</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.00148</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.001868</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.002697</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.006758</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.006918</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.014615</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.032077</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.040849</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.070257</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$0.399912</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$12</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$180</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$229.18</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$24</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$3</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$3600.0</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$365</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$4</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$60</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$60.0</ID>
+    <ID>MagicNumber:Daylight.kt$Daylight$90</ID>
+    <ID>MagicNumber:Format.kt$Format$10</ID>
+    <ID>MagicNumber:Format.kt$Format$1000</ID>
+    <ID>MagicNumber:Format.kt$Format$3600</ID>
+    <ID>MagicNumber:Format.kt$Format$60</ID>
+    <ID>MagicNumber:FrameRate.kt$PoseStats$1000.0</ID>
+    <ID>MagicNumber:FrameRate.kt$SlowTrackingDetector$1.2</ID>
+    <ID>MagicNumber:Geo.kt$Geo$180</ID>
+    <ID>MagicNumber:Pose.kt$180</ID>
+    <ID>MagicNumber:RepEngine.kt$0.5</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$0.15</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$10</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$1000.0</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$1500</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$3</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$60.0</ID>
+    <ID>MagicNumber:RepEngine.kt$RepEngine$90</ID>
+    <ID>MaxLineLength:AccuracyEvalTest.kt$AccuracyEvalTest$"lying knee pulls" to Movement(700, 60, 20) { p, _ -&gt; sideBody(torsoDeg = 180.0, hip = swing(p, 178.0, 95.0), knee = swing(p, 178.0, 90.0)) }</ID>
+    <ID>MaxLineLength:AccuracyEvalTest.kt$AccuracyEvalTest$"lying leg bends" to Movement(2200, 300, 10) { p, _ -&gt; sideBody(torsoDeg = 180.0, knee = swing(p, 175.0, 80.0), hip = swing(p, 175.0, 95.0)) }</ID>
+    <ID>MaxLineLength:AccuracyEvalTest.kt$AccuracyEvalTest$"standing curls" to Movement(1600, 300, 10) { p, _ -&gt; sideBody(torsoDeg = -90.0, elbow = swing(p, 170.0, 80.0), shoulder = 80.0) }</ID>
+    <ID>MaxLineLength:AccuracyEvalTest.kt$AccuracyEvalTest$engine.addFrame(PoseFrame(t, distort(sideBody(torsoDeg = 190.0, knee = 178.0, hip = 176.0, shoulder = 80.0, elbow = 90.0), c, rnd)))</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$(2000L until 32000L step step).map { PoseFrame(it, sideBody(torsoDeg = 190.0, knee = 178.0, hip = 176.0, shoulder = 80.0, elbow = 90.0, noise = plankNoise)) }</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$add("jumping jack ${fps}fps ${px}px", "jumping_jack", cycles(humanTempo(15, 900, seed), fps = fps, pauseMs = 100) { p, _ -&gt; frontBody(arm = swing(p, 20.0, 165.0), spread = swing(p, 1.0, 2.2), noise = jn) })</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$add("pushup full ${fps}fps ${px}px", "pushup", cycles(humanTempo(10, 1600, seed), fps = fps) { p, _ -&gt; sideBody(torsoDeg = 190.0, elbow = swing(p, 170.0, 80.0), shoulder = 80.0, noise = pn) })</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$add("pushup half ${fps}fps ${px}px", "pushup", cycles(humanTempo(8, 1400, seed), fps = fps) { p, _ -&gt; sideBody(torsoDeg = 190.0, elbow = swing(p, 170.0, 118.0), shoulder = 80.0, noise = hn) })</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$add("situp ${fps}fps ${px}px", "situp", cycles(humanTempo(10, 2400, seed), fps = fps) { p, _ -&gt; sideBody(thighDeg = -40.0, knee = 70.0, hip = swing(p, 140.0, 55.0), noise = un) })</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$add("squat ${fps}fps ${px}px", "squat", cycles(humanTempo(10, 2200, seed), fps = fps) { p, _ -&gt; sideBody(torsoDeg = -90 + swing(p, 0.0, 40.0), knee = swing(p, 175.0, 80.0), hip = swing(p, 175.0, 85.0), noise = sn) })</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$if (i % 2 == 0) sideBody(hip = lift, knee = knee, farHip = 178.0, farKnee = 178.0, noise = kn) else sideBody(hip = 178.0, knee = 178.0, farHip = lift, farKnee = knee, noise = kn)</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$if (leg % 2 == 0) sideBody(knee = knee, hip = hip, farKnee = 172.0, farHip = 175.0, noise = ln) else sideBody(knee = 172.0, hip = 175.0, farKnee = knee, farHip = hip, noise = ln)</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$println("PARITY exported ${results.size} cases; verdicts ${results.groupingBy { (it as JsonObject)["verdict"].toString() }.eachCount()}")</ID>
+    <ID>MaxLineLength:EngineParityExportTest.kt$EngineParityExportTest$val</ID>
+    <ID>MaxLineLength:PoseSynth.kt$sideChain("right", torsoDeg, thighDeg, farHip ?: hip, farKnee ?: knee, shoulder, elbow, ox = 204.0, likelihood = farLikelihood, noise = noise)</ID>
+    <ID>MaxLineLength:RecordingsReplayTest.kt$RecordingsReplayTest$val frames = cycles(humanTempo(8, 1600)) { p, _ -&gt; sideBody(torsoDeg = 190.0, elbow = swing(p, 170.0, 80.0), shoulder = 80.0, noise = noise) }</ID>
+    <ID>MaxLineLength:RepEngineTest.kt$RepEngineTest$frames += PoseFrame(t, sideBody(torsoDeg = 190.0, knee = 178.0, hip = 176.0, shoulder = 80.0, elbow = 90.0, noise = noise))</ID>
+    <ID>MaxLineLength:RepEngineTest.kt$RepEngineTest$val body = sideBody(torsoDeg = torsoDeg, elbow = swing(p, top, bottom), shoulder = 80.0, hip = hip, noise = noise).toMutableMap()</ID>
+    <ID>MaxLineLength:RepEngineTest.kt$RepEngineTest$val frames = cycles(List(6) { 1500 }, fps = 7, pauseMs = 400) { p, _ -&gt; sideBody(torsoDeg = 190.0, elbow = swing(p, 170.0, 80.0), shoulder = 80.0) }</ID>
+    <ID>MaxLineLength:RepEngineTest.kt$RepEngineTest$val frames = cycles(humanTempo(10, 1600)) { p, _ -&gt; sideBody(torsoDeg = 190.0, elbow = swing(p, 170.0, 118.0), shoulder = 80.0, noise = noise) }</ID>
+    <ID>MaxLineLength:RepEngineTest.kt$RepEngineTest$val frames = cycles(humanTempo(10, 2400)) { p, _ -&gt; sideBody(thighDeg = -40.0, knee = 70.0, hip = swing(p, 140.0, 55.0), noise = noise) }</ID>
+    <ID>NestedBlockDepth:AccuracyEvalTest.kt$AccuracyEvalTest$@Test fun cheatRepsAreNeverCounted()</ID>
+    <ID>NestedBlockDepth:AccuracyEvalTest.kt$AccuracyEvalTest$@Test fun genuineRepsAreCountedAtEverySupportedFrameRate()</ID>
+    <ID>NestedBlockDepth:AccuracyEvalTest.kt$AccuracyEvalTest$@Test fun plankHoldsAreCreditedAtEverySupportedFrameRate()</ID>
+    <ID>NestedBlockDepth:RepEngine.kt$RepEngine$fun finish(): SessionSummary</ID>
+    <ID>ReturnCount:Challenges.kt$ChallengeSummary$fun closesIn(now: Instant): String</ID>
+    <ID>ReturnCount:RepEngine.kt$RepEngine$fun addFrame(frame: PoseFrame): EngineUpdate</ID>
+    <ID>ReturnCount:RepEngine.kt$RepEngine$private fun ankleSpread(f: PoseFrame): Double?</ID>
+    <ID>ReturnCount:RepEngine.kt$RepEngine$private fun finishRep(tMs: Long): RepResult?</ID>
+    <ID>ReturnCount:RepEngine.kt$RepEngine$private fun pickSide(f: PoseFrame, leftOk: Boolean, rightOk: Boolean): String?</ID>
+    <ID>ReturnCount:RepEngine.kt$RepEngine$private fun sideAngle(f: PoseFrame, s: String): Double?</ID>
+    <ID>ReturnCount:RepEngine.kt$RepEngine$private fun torso(f: PoseFrame, s: String): Double?</ID>
+    <ID>ReturnCount:RepEngine.kt$fun durationCv(durations: List&lt;Double&gt;): Double</ID>
+  </CurrentIssues>
+</SmellBaseline>

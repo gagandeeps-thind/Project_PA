@@ -37,7 +37,7 @@ import com.osiris.shared.presentation.common.Loadable
 import com.osiris.shared.presentation.community.SeasonCard
 
 @Composable
-fun RankingsScreen(graph: AppGraph, onBack: () -> Unit, onSettings: () -> Unit) {
+fun RankingsScreen(graph: AppGraph, onBack: (() -> Unit)?, onSettings: () -> Unit) {
     val vm = rememberShared { graph.rankings() }
     val s by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }

@@ -1,15 +1,14 @@
 package com.osiris.player.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +27,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,11 +59,14 @@ fun OsirisScaffold(
                     }
                 },
                 actions = actions,
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = OsirisColors.Surface),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
-        snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = OsirisColors.Background,
+        snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding()) },
+        // Transparent over the app-wide FrostBackground, so every screen sits on the matte backdrop.
+        // Transparent alone would make the default content colour black on the dark backdrop.
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         content = content,
     )
 }
@@ -79,11 +82,11 @@ fun MessageEffect(vm: SharedViewModel, host: SnackbarHostState) {
     }
 }
 
-/** Loading spinner, an error with a retry button, or the content. */
+/** A loading skeleton, an error with a retry button, or the content. */
 @Composable
 fun <T> LoadableContent(state: Loadable<T>, onRetry: () -> Unit, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {
     when (state) {
-        Loadable.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        Loadable.Loading -> LoadingSkeleton(modifier)
         is Loadable.Failed -> Column(
             modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,

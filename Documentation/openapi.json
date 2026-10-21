@@ -1089,6 +1089,34 @@
         "title": "BlockOut",
         "type": "object"
       },
+      "BoardRow": {
+        "properties": {
+          "is_me": {
+            "title": "Is Me",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "rank",
+          "name",
+          "value",
+          "is_me"
+        ],
+        "title": "BoardRow",
+        "type": "object"
+      },
       "BountyCompleteRequest": {
         "properties": {
           "device_timestamp": {
@@ -2703,6 +2731,29 @@
         "title": "ExerciseSessionOut",
         "type": "object"
       },
+      "Finisher": {
+        "properties": {
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rank",
+          "name",
+          "elapsed_seconds"
+        ],
+        "title": "Finisher",
+        "type": "object"
+      },
       "FunnelResponse": {
         "properties": {
           "challenge_completion_rate": {
@@ -2809,6 +2860,73 @@
         "title": "FunnelStep",
         "type": "object"
       },
+      "GlobalBoard": {
+        "properties": {
+          "board": {
+            "title": "Board",
+            "type": "string"
+          },
+          "exercise": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise"
+          },
+          "explainer": {
+            "title": "Explainer",
+            "type": "string"
+          },
+          "lower_is_better": {
+            "title": "Lower Is Better",
+            "type": "boolean"
+          },
+          "my_row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoardRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "ranked_players": {
+            "title": "Ranked Players",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BoardRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "board",
+          "period",
+          "unit",
+          "lower_is_better",
+          "explainer",
+          "rows",
+          "ranked_players"
+        ],
+        "title": "GlobalBoard",
+        "type": "object"
+      },
       "GpsSample": {
         "properties": {
           "accuracy_m": {
@@ -2906,6 +3024,85 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HubChallenge": {
+        "properties": {
+          "challenge": {
+            "$ref": "#/components/schemas/ChallengePublic"
+          },
+          "community_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Community Name"
+          },
+          "participants": {
+            "title": "Participants",
+            "type": "integer"
+          },
+          "starts_in_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts In Seconds"
+          },
+          "winners": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Finisher"
+            },
+            "title": "Winners",
+            "type": "array"
+          },
+          "xp_paid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xp Paid"
+          }
+        },
+        "required": [
+          "challenge",
+          "participants"
+        ],
+        "title": "HubChallenge",
+        "type": "object"
+      },
+      "HubSectionOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HubChallenge"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "items"
+        ],
+        "title": "HubSectionOut",
         "type": "object"
       },
       "InviteOut": {
@@ -3802,6 +3999,16 @@
             "title": "Badges",
             "type": "array"
           },
+          "challenges_lost": {
+            "default": 0,
+            "title": "Challenges Lost",
+            "type": "integer"
+          },
+          "challenges_played": {
+            "default": 0,
+            "title": "Challenges Played",
+            "type": "integer"
+          },
           "challenges_won": {
             "title": "Challenges Won",
             "type": "integer"
@@ -3813,6 +4020,22 @@
           "defenses": {
             "title": "Defenses",
             "type": "integer"
+          },
+          "global_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Global Rank"
+          },
+          "lifetime_distance_km": {
+            "default": 0.0,
+            "title": "Lifetime Distance Km",
+            "type": "number"
           },
           "next_rank_xp": {
             "anyOf": [
@@ -3828,6 +4051,11 @@
           "performance_rank": {
             "title": "Performance Rank",
             "type": "string"
+          },
+          "rank_floor_xp": {
+            "default": 0,
+            "title": "Rank Floor Xp",
+            "type": "integer"
           },
           "rank_ladder_version": {
             "title": "Rank Ladder Version",
@@ -6705,6 +6933,7 @@
     },
     "/api/v2/admin/audit-events": {
       "get": {
+        "description": "Newest first. For the next page pass the last id shown as `before_id`.",
         "operationId": "admin_audit_events_api_v2_admin_audit_events_get",
         "parameters": [
           {
@@ -6764,6 +6993,22 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
           }
         ],
         "responses": {
@@ -6818,6 +7063,29 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -6913,6 +7181,31 @@
     "/api/v2/admin/communities": {
       "get": {
         "operationId": "admin_list_communities_api_v2_admin_communities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6927,6 +7220,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -7087,6 +7390,17 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -7237,6 +7551,29 @@
               "title": "Status",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -7329,6 +7666,31 @@
     "/api/v2/admin/review-queue": {
       "get": {
         "operationId": "admin_review_queue_api_v2_admin_review_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -7343,6 +7705,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -7717,6 +8089,56 @@
           }
         ],
         "summary": "Unblock Player"
+      }
+    },
+    "/api/v2/challenge-hub": {
+      "get": {
+        "operationId": "challenge_hub_api_v2_challenge_hub_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "section",
+            "required": true,
+            "schema": {
+              "enum": [
+                "live",
+                "upcoming",
+                "community",
+                "finished"
+              ],
+              "title": "Section",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubSectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Challenge Hub"
       }
     },
     "/api/v2/challenges": {
@@ -8513,7 +8935,33 @@
     },
     "/api/v2/courses": {
       "get": {
+        "description": "The player's courses, newest first, a page at a time.",
         "operationId": "list_my_courses_api_v2_courses_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -8528,6 +8976,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -8741,6 +9199,81 @@
         "summary": "Get Invite"
       }
     },
+    "/api/v2/leaderboards/global": {
+      "get": {
+        "operationId": "global_leaderboard_api_v2_leaderboards_global_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "board",
+            "required": true,
+            "schema": {
+              "enum": [
+                "distance",
+                "pace",
+                "reps",
+                "rewards"
+              ],
+              "title": "Board",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "week",
+              "enum": [
+                "week",
+                "all"
+              ],
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exercise",
+            "required": false,
+            "schema": {
+              "default": "pushup",
+              "pattern": "^(pushup|squat|pullup|plank)$",
+              "title": "Exercise",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalBoard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Global Leaderboard"
+      }
+    },
     "/api/v2/leaderboards/local": {
       "get": {
         "description": "This week's ranking among players who chose the same home city.",
@@ -8768,6 +9301,31 @@
     "/api/v2/me/blocks": {
       "get": {
         "operationId": "my_blocks_api_v2_me_blocks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -8782,6 +9340,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [

@@ -1,18 +1,20 @@
 import SwiftUI
 import OsirisShared
 
-/// The Osiris dark palette, the same values as the Android and Flutter themes.
+/// Accent colors shared by every screen, from the dark FrostMatte palette in the shared core.
+/// The app renders dark until every screen reads `FrostPalette`.
 enum OsirisColor {
-    static let background = Color(red: 0x12 / 255, green: 0x12 / 255, blue: 0x12 / 255)
-    static let surface = Color(red: 0x1E / 255, green: 0x1E / 255, blue: 0x1E / 255)
-    static let primary = Color(red: 0x9D / 255, green: 0x4E / 255, blue: 0xDD / 255)
-    static let secondary = Color(red: 0x03 / 255, green: 0xDA / 255, blue: 0xC6 / 255)
-    static let error = Color(red: 0xCF / 255, green: 0x66 / 255, blue: 0x79 / 255)
-    static let success = Color(red: 0x4C / 255, green: 0xAF / 255, blue: 0x50 / 255)
-    static let warning = Color(red: 0xFF / 255, green: 0xC1 / 255, blue: 0x07 / 255)
-    static let gold = Color(red: 0xFD / 255, green: 0xD8 / 255, blue: 0x35 / 255)
-    static let muted = Color.white.opacity(0.70)
-    static let faint = Color.white.opacity(0.60)
+    private static let tokens = FrostMatte.shared.dark
+    static let background = Color(argb: tokens.background)
+    static let surface = Color(argb: tokens.glassFallback)
+    static let primary = Color(argb: tokens.accent)
+    static let secondary = Color(argb: tokens.accentAlt)
+    static let error = Color(argb: tokens.danger)
+    static let success = Color(argb: tokens.success)
+    static let warning = Color(argb: tokens.warning)
+    static let gold = Color(argb: tokens.gold)
+    static let muted = Color(argb: tokens.textSecondary)
+    static let faint = Color(argb: tokens.textMuted)
 
     /// A club's brand colour from `#RRGGBB`, or the app colour when missing or malformed.
     static func brand(_ hex: String?) -> Color {

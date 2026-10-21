@@ -1,0 +1,41 @@
+# Local stack: API on :8000, admin console on :8080. Configure with a root .env (see .env.example).
+#   docker compose up --build
+services:
+  data-init:
+    image: busybox:1.37
+    command: ["sh", "-c", "chown -R 10001:10001 /data"]
+    volumes:
+      - backend-data:/data
+
+  backend:
+    build: ./Osiris_backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OSIRIS_ENV: ${OSIRIS_ENV:-dev}
+      OSIRIS_DATABASE_URL: ${OSIRIS_DATABASE_URL:-sqlite:////data/osiris.db}
+      OSIRIS_CORS_ORIGINS: ${OSIRIS_CORS_ORIGINS:-http://localhost:8080}
+    volumes:
+      - backend-data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+
+  admin:
+    build:
+      context: ./Osiris_admin_web
+      dockerfile: ../infrastructure/docker/admin.Dockerfile
+      additional_contexts:
+        infra: ./infrastructure/docker
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:

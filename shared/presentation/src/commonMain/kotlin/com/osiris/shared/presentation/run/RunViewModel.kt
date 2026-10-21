@@ -36,6 +36,8 @@ data class RunState(
     val challengeId: Int? = null,
     val position: LatLng? = null,
     val locating: Boolean = true,
+    /** Why there is no position (permission refused, location off); cleared by the next fix. */
+    val locationProblem: String? = null,
     val run: ActiveRun? = null,
     /** The recorded route for the map line (this session's fixes; not persisted). */
     val trace: List<LatLng> = emptyList(),
@@ -51,6 +53,12 @@ data class RunState(
     val recording: Boolean get() = run != null
     val title: String get() = if (challengeId == null) "RUN" else "CHALLENGE RUN"
     val canStart: Boolean get() = !busy && !recording && position != null
+    val actionLabel: String get() = when {
+        recording -> "FINISH RUN"
+        position != null -> "START RUN"
+        locationProblem != null -> "LOCATION OFF"
+        else -> "LOCATING…"
+    }
 }
 
 /** Dialogs the run flow asks the screen to show; each has a matching view model call. */
@@ -113,6 +121,7 @@ class RunViewModel(
             it.copy(
                 position = fix.position,
                 locating = false,
+                locationProblem = null,
                 trace = if (it.recording) it.trace + fix.position else it.trace,
             )
         }
@@ -125,8 +134,7 @@ class RunViewModel(
 
     /** The platform could not get a position (permission refused, location off). */
     fun onLocationUnavailable(error: AppError) {
-        _state.update { it.copy(locating = false) }
-        showError(error)
+        _state.update { it.copy(locating = false, locationProblem = error.userMessage) }
     }
 
     fun toggle() {

@@ -22,11 +22,9 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.HealthAndSafety
-import androidx.compose.material.icons.outlined.Leaderboard
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material.icons.outlined.Route
@@ -87,7 +85,8 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
 
     // One position for the nearby starter challenge; without permission the suggestion is skipped.
     LaunchedEffect(Unit) {
-        if (location.hasPermission()) runCatching { location.fixes().firstOrNull() }.getOrNull()?.let { vm.onPosition(it.position) }
+        val fix = if (location.hasPermission()) runCatching { location.fixes().firstOrNull() }.getOrNull() else null
+        if (fix != null) vm.onPosition(fix.position) else vm.onNoPosition()
     }
 
     OsirisScaffold(
@@ -269,12 +268,9 @@ private fun StarterChallengeCard(c: StarterChallenge, onOpen: (Int) -> Unit) {
 private data class NavItem(val icon: ImageVector, val label: String, val route: String)
 
 private val navItems = listOf(
-    NavItem(Icons.Outlined.Flag, "Challenges", Routes.CHALLENGES),
     NavItem(Icons.Outlined.Groups, "Clubs", Routes.COMMUNITIES),
-    NavItem(Icons.Outlined.Leaderboard, "Rankings", Routes.RANKINGS),
     NavItem(Icons.Filled.FitnessCenter, "Bodyweight", Routes.EXERCISE),
     NavItem(Icons.Outlined.Route, "My courses", Routes.COURSES),
-    NavItem(Icons.Outlined.EmojiEvents, "Progress", Routes.PROGRESS),
     NavItem(Icons.Outlined.PersonAddAlt, "Invite", Routes.SETTINGS),
 )
 

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { getNearbyBounties, createBounty } from "../api/client";
 import type { Bounty, CreateBountyPayload } from "../api/types";
+import { TableSkeleton } from "../components/Skeleton";
 
 /* Bedford, NS coordinates */
 const BEDFORD_LAT = 44.7309;
@@ -269,9 +270,7 @@ export default function BountiesPage() {
       {error && <div className="error-message">{error}</div>}
 
       {loading ? (
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-        </div>
+        <TableSkeleton />
       ) : bounties.length === 0 ? (
         <div className="empty-state">
           <MapPin size={48} />

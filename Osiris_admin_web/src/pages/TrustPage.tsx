@@ -16,6 +16,8 @@ import {
   unsuspendUser,
 } from "../api/client";
 import type { AdminChallenge, AuditEvent, ReviewQueueItem } from "../api/types";
+import { TableSkeleton } from "../components/Skeleton";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 type Tab = "review" | "challenges" | "users" | "audit";
 
@@ -54,6 +56,7 @@ export default function TrustPage() {
   const [auditType, setAuditType] = useState("");
   const [auditId, setAuditId] = useState("");
   const [loading, setLoading] = useState(false);
+  const auditIdFilter = useDebouncedValue(auditId);
 
   const [userId, setUserId] = useState("");
   const [userReason, setUserReason] = useState("");
@@ -72,7 +75,7 @@ export default function TrustPage() {
         setEvents(
           await getAuditEvents({
             entity_type: auditType || undefined,
-            entity_id: auditId ? Number(auditId) : undefined,
+            entity_id: auditIdFilter ? Number(auditIdFilter) : undefined,
           })
         );
       }
@@ -81,7 +84,7 @@ export default function TrustPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, challengeFilter, auditType, auditId]);
+  }, [tab, challengeFilter, auditType, auditIdFilter]);
 
   useEffect(() => {
     load();
@@ -179,11 +182,7 @@ export default function TrustPage() {
       {error && <div className="error-message">{error}</div>}
       {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
 
-      {loading && (
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-        </div>
-      )}
+      {loading && tab !== "audit" && <TableSkeleton />}
 
       {!loading && tab === "review" && (
         queue.length === 0 ? (
@@ -345,7 +344,7 @@ export default function TrustPage() {
         </div>
       )}
 
-      {!loading && tab === "audit" && (
+      {tab === "audit" && (
         <>
           <div className="form-row" style={{ marginBottom: 16 }}>
             <div className="form-group">
@@ -364,6 +363,9 @@ export default function TrustPage() {
               <input className="form-input" inputMode="numeric" value={auditId} onChange={(e) => setAuditId(e.target.value.replace(/\D/g, ""))} />
             </div>
           </div>
+          {loading ? (
+            <TableSkeleton />
+          ) : (
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
@@ -399,6 +401,7 @@ export default function TrustPage() {
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
 

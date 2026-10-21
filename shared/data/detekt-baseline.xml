@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:ContractTest.kt$ContractTest$private fun compare(d: SerialDescriptor, rawSchema: JsonObject, at: String, request: Boolean): List&lt;String&gt;</ID>
+    <ID>CyclomaticComplexMethod:NetworkErrors.kt$NetworkErrors$fun fromResponse(status: Int, body: String, json: Json): AppError</ID>
+    <ID>InstanceOfCheckForException:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e is AppError.Http</ID>
+    <ID>InstanceOfCheckForException:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e is AppError.Offline</ID>
+    <ID>InstanceOfCheckForException:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e is AppError.Timeout</ID>
+    <ID>InstanceOfCheckForException:RunRepositoryImpl.kt$RunRepositoryImpl$e is AppError.Http</ID>
+    <ID>InstanceOfCheckForException:RunRepositoryImpl.kt$RunRepositoryImpl$e is AppError.Offline</ID>
+    <ID>InstanceOfCheckForException:RunRepositoryImpl.kt$RunRepositoryImpl$e is AppError.Timeout</ID>
+    <ID>MagicNumber:AndroidPlatform.kt$KeystoreSecureStore$128</ID>
+    <ID>MagicNumber:AndroidPlatform.kt$KeystoreSecureStore$256</ID>
+    <ID>MagicNumber:ChallengeRepositoryImpl.kt$ChallengeRepositoryImpl$3</ID>
+    <ID>MagicNumber:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$429</ID>
+    <ID>MagicNumber:ExerciseStore.kt$ExerciseStore$1000.0</ID>
+    <ID>MagicNumber:InstallId.kt$InstallId$12</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$300</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$401</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$403</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$409</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$422</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$429</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$500</ID>
+    <ID>MagicNumber:NetworkErrors.kt$NetworkErrors$599</ID>
+    <ID>MagicNumber:RunRepositoryImpl.kt$RunRepositoryImpl$409</ID>
+    <ID>MagicNumber:TimeZones.kt$60</ID>
+    <ID>MaxLineLength:ContractTest.kt$ContractTest$val known = spec["paths"]!!.jsonObject.flatMap { (path, ops) -&gt; ops.jsonObject.keys.map { "${it.uppercase()} ${normalize(path)}" } }.toSet()</ID>
+    <ID>MaxLineLength:ExerciseRepositoryTest.kt$ExerciseRepositoryTest$"""{"sessions":[{"client_session_id":"$id","status":"rejected","xp_awarded":0},{"client_session_id":"other","status":"verified","xp_awarded":9}]}"""</ID>
+    <ID>NestedBlockDepth:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$internal suspend fun flush(db: ExerciseStore, userId: Int): SyncResult</ID>
+    <ID>NestedBlockDepth:RunRepositoryImpl.kt$RunRepositoryImpl$private suspend fun drain(): Boolean</ID>
+    <ID>ReturnCount:ContractTest.kt$ContractTest$private fun resolve(s: JsonObject): JsonObject</ID>
+    <ID>ReturnCount:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$internal suspend fun flush(db: ExerciseStore, userId: Int): SyncResult</ID>
+    <ID>ReturnCount:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$override suspend fun history(): ExerciseHistory</ID>
+    <ID>ReturnCount:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$override suspend fun sync(): Boolean</ID>
+    <ID>ReturnCount:RunRepositoryImpl.kt$RunRepositoryImpl$private suspend fun drain(): Boolean</ID>
+    <ID>ReturnCount:SessionStore.kt$SessionStore$private suspend fun readStored(): Session?</ID>
+    <ID>SwallowedException:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e: AppError</ID>
+    <ID>SwallowedException:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e: AppError.Storage</ID>
+    <ID>SwallowedException:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e: Throwable</ID>
+    <ID>ThrowsCount:ApiClient.kt$ApiClient$private suspend fun &lt;T&gt; decode(response: HttpResponse, deserializer: KSerializer&lt;T&gt;): T</ID>
+    <ID>ThrowsCount:RunRepositoryImpl.kt$RunRepositoryImpl$private suspend fun drain(): Boolean</ID>
+    <ID>TooGenericExceptionCaught:ApiClient.kt$ApiClient$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AuthRepositoryImpl.kt$AuthRepositoryImpl$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ExerciseRepositoryImpl.kt$ExerciseRepositoryImpl$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PlayerRepositoryImpl.kt$PlayerRepositoryImpl$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:RunRepositoryImpl.kt$RunRepositoryImpl$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SessionStore.kt$SessionStore$e: Throwable</ID>
+    <ID>UnusedPrivateProperty:ExerciseRepositoryTest.kt$ExerciseRepositoryTest$attempt</ID>
+    <ID>UseCheckOrError:Files.ios.kt$throw IllegalStateException("Cannot create $dir")</ID>
+    <ID>UseCheckOrError:Files.ios.kt$throw IllegalStateException("Cannot write $path")</ID>
+  </CurrentIssues>
+</SmellBaseline>

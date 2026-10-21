@@ -26,7 +26,13 @@ struct TodayView: View {
         }
         .messages(model)
         // One position for the nearby starter challenge; without permission the suggestion is skipped.
-        .task { if let p = await location.currentPosition(askIfNeeded: false) { model.vm.onPosition(position: p) } }
+        .task {
+            if let p = await location.currentPosition(askIfNeeded: false) {
+                model.vm.onPosition(position: p)
+            } else {
+                model.vm.onNoPosition()
+            }
+        }
         // Back from a run or another screen: the quest progress may have moved.
         .onReturn { model.vm.refresh() }
     }
@@ -156,17 +162,14 @@ struct TodayView: View {
     }
 }
 
-/// Three tiles a row: the other screens.
+/// Three tiles a row: screens without a tab of their own.
 private struct NavGrid: View {
     let open: (Route) -> Void
 
     private let items: [(icon: String, label: String, route: Route)] = [
-        ("flag", "Challenges", .challenges),
         ("person.3", "Clubs", .clubs),
-        ("chart.bar", "Rankings", .rankings),
         ("dumbbell", "Bodyweight", .exercises),
         ("point.topleft.down.curvedto.point.bottomright.up", "My courses", .courses),
-        ("trophy", "Progress", .progress),
         ("person.badge.plus", "Invite", .settings),
     ]
 

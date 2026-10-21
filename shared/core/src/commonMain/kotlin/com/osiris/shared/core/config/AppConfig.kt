@@ -7,6 +7,8 @@ import com.osiris.shared.core.platform.currentPlatform
  * Runtime configuration. Values come from `config/environments/<env>.properties`, compiled in at build
  * time (see `config/environments/README.md`), so no URL, timeout or flag is hard-coded in app code.
  * Tests and previews build their own instance.
+ *
+ * @property webLinkHost host whose https links (`/i/<invite>`, `/join/<code>`) open in the app
  */
 data class AppConfig(
     val environment: String,
@@ -15,6 +17,7 @@ data class AppConfig(
     val requestTimeoutMs: Long,
     val httpLogging: Boolean,
     val features: FeatureFlags,
+    val webLinkHost: String = "",
 ) {
     init {
         require(apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
@@ -40,7 +43,9 @@ data class AppConfig(
             features = FeatureFlags(
                 legacyGame = GeneratedEnv.FEATURE_LEGACY,
                 poseRecording = GeneratedEnv.FEATURE_POSE_RECORDING,
+                walletDemo = GeneratedEnv.FEATURE_WALLET_DEMO,
             ),
+            webLinkHost = GeneratedEnv.LINKS_WEB_HOST,
         )
     }
 }
@@ -51,8 +56,11 @@ data class AppConfig(
  * @property legacyGame bounty, vault and domain screens kept behind a flag while the product
  *   moves to the run, course and challenge loop (Backlog Phase 3).
  * @property poseRecording landmark recording for device QA; never on in production.
+ * @property walletDemo the Wallet tab backed by mock payment adapters; off in production, where
+ *   no fake balance may be shown.
  */
 data class FeatureFlags(
     val legacyGame: Boolean = false,
     val poseRecording: Boolean = false,
+    val walletDemo: Boolean = false,
 )

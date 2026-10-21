@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getPlatformRevenue, getMerchants } from "../api/client";
 import type { PlatformRevenue } from "../api/types";
+import { CardsSkeleton } from "../components/Skeleton";
 
 export default function DashboardPage() {
   const [revenue, setRevenue] = useState<PlatformRevenue | null>(null);
@@ -37,11 +38,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="spinner-wrapper">
-        <div className="spinner" />
-      </div>
-    );
+    return <CardsSkeleton />;
   }
 
   if (error) {

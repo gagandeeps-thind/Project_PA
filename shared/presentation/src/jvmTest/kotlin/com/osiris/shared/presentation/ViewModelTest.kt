@@ -32,6 +32,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import com.osiris.shared.domain.run.LatLng
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 
 class ViewModelTest {
@@ -83,15 +85,77 @@ class ViewModelTest {
     }
 
     @Test
+    fun `a server-rejected email shows on the email field, other rejections as a message`() = runTest {
+        val auth = FakeAuth().apply {
+            registerResult = fail(AppError.Http(422, "INVALID_EMAIL", "Enter a valid email address"))
+        }
+        val vm = OnboardingViewModel(auth, FakePlayer(), dispatcher = main())
+        vm.next()
+        vm.next()
+        vm.onName("Pat")
+        vm.onEmail("pat@osiris.test")
+        vm.onPassword("secret123")
+        vm.create()
+        assertEquals(mapOf(Registration.FIELD_EMAIL to "Enter a valid email address"), vm.state.value.fieldErrors)
+        assertNull(vm.message.value)
+        assertFalse(vm.state.value.busy)
+
+        auth.registerResult = fail(AppError.Http(404, "REFERRAL_NOT_FOUND", "That invite code was not found"))
+        vm.create()
+        assertEquals(emptyMap(), vm.state.value.fieldErrors)
+        assertEquals("That invite code was not found", vm.message.value?.text)
+    }
+
+    @Test
     fun `today keeps the screen on a failed refresh and says why`() = runTest {
         val player = FakePlayer()
         val vm = TodayViewModel(player, main())
+        vm.onNoPosition()
         assertIs<Loadable.Ready<*>>(vm.state.value)
         player.todayResult = fail(AppError.Offline())
         vm.refresh()
         assertIs<Loadable.Ready<*>>(vm.state.value)
         assertEquals(UiMessage.Kind.ERROR, vm.message.value?.kind)
         assertEquals("app_opened", player.events.first().first)
+    }
+
+    @Test
+    fun `opening the app asks for today once, with the position when it comes in time`() = runTest {
+        val home = LatLng(52.37, 4.89)
+        val player = FakePlayer()
+        val vm = TodayViewModel(player, main())
+        assertIs<Loadable.Loading>(vm.state.value)
+        advanceTimeBy(TodayViewModel.POSITION_GRACE_MS / 2)
+        vm.onPosition(home)
+        assertIs<Loadable.Ready<*>>(vm.state.value)
+        advanceTimeBy(TodayViewModel.POSITION_GRACE_MS * 2)
+        assertEquals(listOf<LatLng?>(home), player.todayPositions)
+
+        val late = FakePlayer()
+        val slow = TodayViewModel(late, main())
+        advanceTimeBy(TodayViewModel.POSITION_GRACE_MS + 1)
+        assertIs<Loadable.Ready<*>>(slow.state.value) // no fix in time: loads without one
+        slow.onPosition(home) // a late fix still brings the nearby suggestion
+        assertEquals(listOf(null, home), late.todayPositions)
+
+        val denied = FakePlayer()
+        TodayViewModel(denied, main()).onNoPosition()
+        assertEquals(listOf<LatLng?>(null), denied.todayPositions) // no permission: no wait
+    }
+
+    @Test
+    fun `a refused location says so instead of locating forever, and a fix clears it`() = runTest {
+        RunViewModel(FakeRuns(), FakeChallenges(), FakePlayer(), clock = FixedClock(noon), dispatcher = main()).use {
+            val vm = this
+            assertEquals("LOCATING…", vm.state.value.actionLabel)
+            vm.onLocationUnavailable(AppError.Validation("Location is off."))
+            assertEquals("Location is off.", vm.state.value.locationProblem)
+            assertEquals("LOCATION OFF", vm.state.value.actionLabel)
+            assertFalse(vm.state.value.canStart)
+            vm.onLocation(amsterdam)
+            assertNull(vm.state.value.locationProblem)
+            assertEquals("START RUN", vm.state.value.actionLabel)
+        }
     }
 
     @Test

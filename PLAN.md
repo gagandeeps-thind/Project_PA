@@ -39,9 +39,10 @@ setting the repo up for autonomous agent work (2026-10-12).
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
   - Acceptance: the CI job runs the suite and it passes.
 
-- [ ] [human] ci: add jobs for `Osiris_admin_web` (`npm run build`) and `Osiris_customer` (`flutter analyze`, `flutter test`)
-  - Today CI covers the backend only. Both commands pass locally.
-  - Acceptance: a pull request that touches either app runs its job, and the job passes.
+- [ ] [human] ci: add a job for `Osiris_admin_web` (`npm run build`)
+  - Today CI covers the backend only; the command passes locally. (The Flutter app this item also named was retired
+    on 2026-10-19; the KMP job is its own item below.)
+  - Acceptance: a pull request that touches the admin app runs its job, and the job passes.
 
 - [x] admin web: remove dead Vite template files
   - `index.html` loads `/src/main.tsx`; `src/main.ts`, `src/counter.ts`, `src/style.css` are only referenced by each other.
@@ -93,8 +94,8 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: approved design; then migration + verifier + app work can be planned as agent items.
 
 - [ ] [human] product: retire or gate the legacy v1 game endpoints (domains, vault, sieges, bounties, coupons)
-  - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages and the parked
-    merchant app. Retiring them is a product decision.
+  - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages (the parked
+    Flutter merchant app was removed on 2026-10-19). Retiring them is a product decision.
   - Acceptance: decision recorded; if retired, the endpoints, their tests, client screens and contract entries are
     removed in agent items.
 
@@ -218,3 +219,51 @@ had only been tested at 30 fps.
 - [ ] [human] device QA with recordings: record real sets on Android and iPhone (both good and deliberately
   bad sets, labeled), commit them with the person's consent to `Osiris_customer/test/exercise/recordings/`, and
   re-tune thresholds if any fail. Report 16 §1: the accuracy envelope is synthetic until then.
+
+## Next phase: FrostMatte player app (2026-10-19)
+Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per pipeline phase.
+
+- [x] scaffolding: `.env.example`, `settings.secret()` (env or secret-manager file), `OSIRIS_DATABASE_URL`,
+  `docker-compose.yml` + admin image, detekt for Kotlin with baselines, SwiftLint config, gate covers KMP
+- [ ] [human] ci: add `python tests/test_settings.py` after the existing suites in `.github/workflows/ci.yml`.
+- [ ] [human] ci: add a KMP job on `ubuntu-latest` with JDK 17 running
+  `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest :shared:presentation:compileKotlinIosSimulatorArm64`
+  for pull requests touching `shared/**`, `android_version/**`, `gradle/**`, `*.gradle.kts`, `config/**`;
+  and an Android job (`android-actions/setup-android`) running `./gradlew :android_version:app:assembleDebug detekt`.
+- [ ] [human] admin web: add `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks` and `prettier` to devDependencies
+  (`npm install -D ...` rewrites `package-lock.json`, which agents may not edit); an agent then adds the configs and a `lint` script.
+- [ ] [human] infra: pick the cloud (AWS or GCP) before Terraform is written; until then `infrastructure/` holds only images.
+- [x] tabs: Discover (live, upcoming, community, finished; `GET /api/v2/challenge-hub`), Social global boards
+  (distance, Riegel Pace Index, reps, rewards; `GET /api/v2/leaderboards/global`), Profile (rank gauge from
+  `rank_floor_xp`, metrics grid), Wallet behind `features.walletDemo` with mock adapters only (no PAN handling,
+  EIP-55 / base58 address checks, never touches crystals)
+- [x] support: live chat stub on Profile, `WS /api/v2/support/ws` (player token, suspended players allowed, nothing stored)
+  with the shared Ktor WebSocket client and `SupportChatViewModel`
+- [ ] [human] ci: add `python tests/test_growth_hub.py` and `python tests/test_support_chat.py` after the existing
+  suites in `.github/workflows/ci.yml`.
+- [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
+  activity feed, daily steps; blocks friends, the steps board and rotating refresh tokens.
+
+## Performance pass (2026-10-19)
+Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19.md`. Branch `perf/optimization-pass`.
+
+- [x] retire the Flutter player app (`Osiris_customer/`) now the KMP app has parity; shared assets move to `shared/`
+- [x] backend: list endpoints run a fixed number of queries however many rows they return (challenges, hub,
+  courses, communities, seasons, invites, blocks, admin queues); `test_growth_hub` asserts it
+- [x] backend: gzip (>= 1 KB), weak ETags with 304 on `If-None-Match`, `Cache-Control: private, no-cache`;
+  the KMP client installs Ktor `HttpCache`
+- [x] backend: PostgreSQL pool settings (`OSIRIS_DB_POOL_*`); SQLite planner statistics on connect and nightly
+- [x] backend: global leaderboards cached 60 s per board (`OSIRIS_LEADERBOARD_CACHE_SECONDS`), viewer row always fresh
+- [x] backend: `limit`/`offset` paging on long lists, `before_id` on audit events
+- [ ] [human] migrations: add a covering index for the global boards and team goals (board query 40 -> 25 ms at
+  100k runs, measured on a scratch copy):
+  `CREATE INDEX ix_run_sessions_verified_finished ON run_sessions (verification_status, finished_at, user_id, distance_m, duration_seconds);`
+  and `ix_run_sessions_user_verified ON run_sessions (user_id, verification_status, finished_at)` for per-player totals.
+  - Acceptance: an Alembic revision with both indexes (and `models.py` `Index(...)` entries) passes the gate.
+- [x] admin web: per-page chunks and long-lived library chunks, skeletons, debounced filters, non-blocking fonts
+- [x] android: ARM-only release APK (87 -> 47 MB), Compose stability config (90 -> 2 unstable params), loading skeleton
+- [x] infra: nginx gateway / load balancer config and compose override; `OSIRIS_RUN_SCHEDULER`
+- [ ] [human] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`);
+  before more than one replica: PostgreSQL, one scheduler, a shared rate limiter (report 17, section 4).
+- [x] app: fetch Today once at start (it is fetched before and again after the first location fix)
+  - Acceptance: a presentation test shows one `/api/v2/me/today` request when the location arrives within 2 s.

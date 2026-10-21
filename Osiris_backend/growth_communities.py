@@ -17,8 +17,9 @@ import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import growth_safety
@@ -28,6 +29,7 @@ from main import (
     ChallengePublic,
     _api_error,
     _audit,
+    ChallengeStats,
     _challenge_public,
     _now_naive_utc,
     _refresh_challenge_status,
@@ -254,13 +256,39 @@ def _leaderboard(
                        rows=rows, my_row=mine, ranked_players=len(standings))
 
 
-def _community_out(db: Session, c: models.Community, viewer_id: int) -> CommunityOut:
-    m = _membership(db, c.id, viewer_id)
-    members = _member_ids(db, c.id)
+def _member_counts(db: Session, community_ids: list[int]) -> dict[int, int]:
+    return {cid: n for cid, n in db.query(models.CommunityMember.community_id, func.count(models.CommunityMember.id))
+            .filter(models.CommunityMember.community_id.in_(community_ids or [-1]))
+            .group_by(models.CommunityMember.community_id).all()}
+
+
+class CommunityContext:
+    """What `_community_out` needs for many communities, in a fixed number of queries: member counts,
+    the viewer's memberships, and this week's verified distance of every member of the viewer's ones."""
+
+    def __init__(self, db: Session, communities: list[models.Community], viewer_id: int):
+        ids = [c.id for c in communities]
+        self.counts = _member_counts(db, ids)
+        self.mine = {m.community_id: m for m in db.query(models.CommunityMember).filter(
+            models.CommunityMember.community_id.in_(ids or [-1]), models.CommunityMember.user_id == viewer_id)}
+        self.members: dict[int, list[int]] = {}
+        for cid, uid in db.query(models.CommunityMember.community_id, models.CommunityMember.user_id).filter(
+                models.CommunityMember.community_id.in_(list(self.mine) or [-1])):
+            self.members.setdefault(cid, []).append(uid)
+        self.week = _week_window(_now_naive_utc())
+        everyone = sorted({u for uids in self.members.values() for u in uids})
+        self.daily = _daily_by_user(db, everyone, *self.week)
+
+
+def _community_out(db: Session, c: models.Community, viewer_id: int,
+                   ctx: Optional[CommunityContext] = None) -> CommunityOut:
+    if ctx is None:
+        ctx = CommunityContext(db, [c], viewer_id)
+    m = ctx.mine.get(c.id)
     team = None
     if m is not None:
-        start, end = _week_window(_now_naive_utc())
-        daily = _daily_by_user(db, members, start, end)
+        start, end = ctx.week
+        daily = {u: ctx.daily[u] for u in ctx.members.get(c.id, []) if u in ctx.daily}
         progress = lb.team_progress_km(daily)
         team = TeamGoal(week_start=start.date().isoformat(), goal_km=c.weekly_team_goal_km,
                         progress_km=progress, completed=progress >= c.weekly_team_goal_km,
@@ -268,7 +296,7 @@ def _community_out(db: Session, c: models.Community, viewer_id: int) -> Communit
     return CommunityOut(
         slug=c.slug, name=c.name, kind=c.kind, description=c.description, brand_color=c.brand_color,
         city=c.city, visibility=c.visibility, verified=bool(c.verified), perk_text=c.perk_text,
-        member_count=len(members), my_role=m.role if m else None,
+        member_count=ctx.counts.get(c.id, 0), my_role=m.role if m else None,
         join_code=c.join_code if m is not None and m.role in ("owner", "admin") else None,
         team_goal=team,
     )
@@ -278,14 +306,23 @@ def _season_status(s: models.Season, now: datetime) -> str:
     return "upcoming" if now < s.starts_at else ("ended" if now >= s.ends_at else "live")
 
 
-def _season_out(db: Session, s: models.Season, viewer_id: int) -> SeasonOut:
-    entered = db.query(models.SeasonEntry.id).filter(
-        models.SeasonEntry.season_id == s.id, models.SeasonEntry.user_id == viewer_id).first() is not None
+def _season_entries(db: Session, season_ids: list[int], viewer_id: int) -> tuple[dict[int, int], set[int]]:
+    """Participants per season, and the seasons the viewer entered."""
+    ids = season_ids or [-1]
+    counts = {sid: n for sid, n in db.query(models.SeasonEntry.season_id, func.count(models.SeasonEntry.id))
+              .filter(models.SeasonEntry.season_id.in_(ids)).group_by(models.SeasonEntry.season_id).all()}
+    entered = {sid for (sid,) in db.query(models.SeasonEntry.season_id).filter(
+        models.SeasonEntry.season_id.in_(ids), models.SeasonEntry.user_id == viewer_id)}
+    return counts, entered
+
+
+def _season_out(db: Session, s: models.Season, viewer_id: int,
+                entries: Optional[tuple[dict[int, int], set[int]]] = None) -> SeasonOut:
+    counts, entered = entries if entries is not None else _season_entries(db, [s.id], viewer_id)
     return SeasonOut(
         slug=s.slug, name=s.name, city=s.city, description=s.description, perk_text=s.perk_text,
         starts_at=s.starts_at, ends_at=s.ends_at, status=_season_status(s, _now_naive_utc()),
-        entered=entered,
-        participants=db.query(models.SeasonEntry).filter(models.SeasonEntry.season_id == s.id).count(),
+        entered=s.id in entered, participants=counts.get(s.id, 0),
     )
 
 
@@ -343,7 +380,8 @@ def list_communities(city: Optional[str] = None, kind: Optional[str] = None,
     if kind:
         q = q.filter(models.Community.kind == kind)
     rows = q.order_by(models.Community.verified.desc(), models.Community.name.asc()).limit(100).all()
-    return [_community_out(db, c, token_data["id"]) for c in rows]
+    ctx = CommunityContext(db, rows, token_data["id"])
+    return [_community_out(db, c, token_data["id"], ctx) for c in rows]
 
 
 @router.get("/api/v2/me/communities", response_model=List[CommunityOut])
@@ -352,7 +390,8 @@ def my_communities(db: Session = Depends(get_db), token_data: dict = Depends(get
     rows = (db.query(models.Community)
             .join(models.CommunityMember, models.CommunityMember.community_id == models.Community.id)
             .filter(models.CommunityMember.user_id == uid, models.Community.status == "active").all())
-    return [_community_out(db, c, uid) for c in rows]
+    ctx = CommunityContext(db, rows, uid)
+    return [_community_out(db, c, uid, ctx) for c in rows]
 
 
 @router.get("/api/v2/communities/{slug}", response_model=CommunityOut)
@@ -452,12 +491,14 @@ def community_challenges(slug: str, db: Session = Depends(get_db),
             .join(models.CommunityChallenge, models.CommunityChallenge.challenge_id == models.Challenge.id)
             .join(models.Course, models.Course.id == models.Challenge.course_id)
             .filter(models.CommunityChallenge.community_id == c.id).all())
-    out = []
     now = _now_naive_utc()
+    shown = []
     for ch, course in rows:
         _refresh_challenge_status(db, ch, now)
         if ch.status == "open" and course.status == "active":
-            out.append(_challenge_public(db, ch, course, token_data["id"]))
+            shown.append((ch, course))
+    stats = ChallengeStats.load(db, [ch.id for ch, _ in shown], token_data["id"])
+    out = [_challenge_public(db, ch, course, token_data["id"], stats=stats) for ch, course in shown]
     db.commit()
     return out
 
@@ -495,7 +536,9 @@ def list_seasons(city: Optional[str] = None, db: Session = Depends(get_db),
     q = db.query(models.Season).filter(models.Season.ends_at > _now_naive_utc())
     if city:
         q = q.filter(models.Season.city == lb.slugify(city))
-    return [_season_out(db, s, uid) for s in q.order_by(models.Season.starts_at.asc()).all()]
+    seasons = q.order_by(models.Season.starts_at.asc()).all()
+    entries = _season_entries(db, [s.id for s in seasons], uid)
+    return [_season_out(db, s, uid, entries) for s in seasons]
 
 
 @router.post("/api/v2/seasons/{slug}/join", response_model=SeasonOut)
@@ -562,11 +605,14 @@ def admin_create_season(req: SeasonCreate, db: Session = Depends(get_db),
 
 
 @router.get("/api/v2/admin/communities", response_model=List[AdminCommunityItem])
-def admin_list_communities(db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
-    rows = db.query(models.Community).order_by(models.Community.created_at.desc()).limit(500).all()
+def admin_list_communities(limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                           db: Session = Depends(get_db), _admin: dict = Depends(get_current_admin)):
+    rows = db.query(models.Community).order_by(models.Community.created_at.desc(), models.Community.id.desc()).offset(
+        offset).limit(limit).all()
+    counts = _member_counts(db, [c.id for c in rows])
     return [AdminCommunityItem(
         id=c.id, slug=c.slug, name=c.name, kind=c.kind, city=c.city, verified=bool(c.verified),
-        status=c.status, status_reason=c.status_reason, member_count=len(_member_ids(db, c.id)),
+        status=c.status, status_reason=c.status_reason, member_count=counts.get(c.id, 0),
         owner_user_id=c.owner_user_id, created_at=c.created_at,
     ) for c in rows]
 

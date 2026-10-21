@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Port of Osiris_customer/test/exercise/rep_engine_test.dart: same scenarios, same expectations. */
+/** Ported from the retired Flutter app's rep_engine_test.dart: same scenarios, same expectations. */
 class RepEngineTest {
     private val catalog = loadCatalog()
 

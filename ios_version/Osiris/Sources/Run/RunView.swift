@@ -18,7 +18,9 @@ struct RunView: View {
     var body: some View {
         let s = model.state
         ZStack(alignment: .top) {
-            if s.locating && s.position == nil {
+            if let problem = s.locationProblem, s.position == nil {
+                locationOff(problem)
+            } else if s.locating && s.position == nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 RunMap(
@@ -68,6 +70,17 @@ struct RunView: View {
         .modifier(RunDialogs(model: model, courseName: $courseName, shareText: $shareText))
     }
 
+    /// No position: why, and the way to fix it. Runs cannot be verified without location.
+    private func locationOff(_ problem: String) -> some View {
+        VStack(spacing: 8) {
+            Text(problem).multilineTextAlignment(.center)
+            Text("Runs need your location to be verified.").foregroundStyle(OsirisColor.faint).multilineTextAlignment(.center)
+            Button("OPEN SETTINGS", action: openAppSettings).buttonStyle(.borderedProminent).padding(.top, 8)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func metrics(_ s: RunState, _ run: ActiveRun) -> some View {
         HStack {
             metric("TIME", s.elapsed)
@@ -90,8 +103,8 @@ struct RunView: View {
 
     private func runButton(_ s: RunState) -> some View {
         // A run cannot start before the first GPS fix.
-        let waiting = s.busy || (!s.recording && s.position == nil)
-        let label = s.recording ? "FINISH RUN" : (s.position == nil ? "LOCATING…" : "START RUN")
+        let waiting = s.busy || (!s.recording && s.position == nil && s.locationProblem == nil)
+        let label = s.actionLabel
         let color = s.recording ? OsirisColor.error : (s.position == nil ? OsirisColor.surface : OsirisColor.primary)
         return Button { if !waiting { model.vm.toggle() } } label: {
             HStack(spacing: 8) {

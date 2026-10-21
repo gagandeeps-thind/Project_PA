@@ -1,17 +1,21 @@
 /* ───────────────────────────────────────────────────────────
  *  Osiris Admin – App Root
  * ─────────────────────────────────────────────────────────── */
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useCallback, useState, useEffect } from "react";
 import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
-import MerchantsPage from "./pages/MerchantsPage";
-import BountiesPage from "./pages/BountiesPage";
-import TrustPage from "./pages/TrustPage";
-import GrowthPage from "./pages/GrowthPage";
-import CommunityPage from "./pages/CommunityPage";
-import ExerciseReviewPage from "./pages/ExerciseReviewPage";
 import Sidebar, { type PageKey } from "./components/Sidebar";
+import { PageSkeleton } from "./components/Skeleton";
 import type { AdminUser } from "./api/types";
+
+/* Each page is its own chunk, fetched the first time it is opened, so signing in
+ * downloads the shell and the dashboard only. */
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const MerchantsPage = lazy(() => import("./pages/MerchantsPage"));
+const BountiesPage = lazy(() => import("./pages/BountiesPage"));
+const TrustPage = lazy(() => import("./pages/TrustPage"));
+const GrowthPage = lazy(() => import("./pages/GrowthPage"));
+const CommunityPage = lazy(() => import("./pages/CommunityPage"));
+const ExerciseReviewPage = lazy(() => import("./pages/ExerciseReviewPage"));
 
 function App() {
   const [admin, setAdmin] = useState<AdminUser | null>(null);
@@ -31,19 +35,20 @@ function App() {
     }
   }, []);
 
-  const handleLogin = (user: AdminUser, token: string) => {
+  const handleLogin = useCallback((user: AdminUser, token: string) => {
     localStorage.setItem("admin_token", token);
     localStorage.setItem("admin_data", JSON.stringify(user));
     setAdmin(user);
     setPage("dashboard");
-  };
+  }, []);
 
-  const handleLogout = () => {
+  /* Stable, so the memoised Sidebar re-renders only when the page or admin changes. */
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("admin_token");
     localStorage.removeItem("admin_data");
     setAdmin(null);
     setPage("dashboard");
-  };
+  }, []);
 
   /* ── Not authenticated → Login screen ─────────────────── */
   if (!admin) {
@@ -80,7 +85,9 @@ function App() {
         admin={admin}
         onLogout={handleLogout}
       />
-      <main className="main-content">{renderPage()}</main>
+      <main className="main-content">
+        <Suspense fallback={<PageSkeleton />}>{renderPage()}</Suspense>
+      </main>
     </div>
   );
 }

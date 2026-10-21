@@ -7,8 +7,8 @@ struct OnboardingView: View {
     @StateObject private var model: Observed<OnboardingViewModel, OnboardingState>
     @Environment(\.dismiss) private var dismiss
 
-    init(graph: AppGraph) {
-        _model = StateObject(wrappedValue: Observed(graph.onboarding(inviteToken: nil, referralCode: nil)) { $0.state })
+    init(graph: AppGraph, inviteToken: String? = nil, referralCode: String? = nil) {
+        _model = StateObject(wrappedValue: Observed(graph.onboarding(inviteToken: inviteToken, referralCode: referralCode)) { $0.state })
     }
 
     var body: some View {

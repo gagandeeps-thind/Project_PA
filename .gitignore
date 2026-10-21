@@ -32,17 +32,7 @@ ENV/
 .env.local
 .env.*.local
 
-# --- Flutter / Dart ---
-Osiris_customer/.dart_tool/
-Osiris_customer/.flutter-plugins
-Osiris_customer/.flutter-plugins-dependencies
-Osiris_customer/build/
-Osiris_customer/.idea/
-Osiris_merchant/.dart_tool/
-Osiris_merchant/.flutter-plugins
-Osiris_merchant/.flutter-plugins-dependencies
-Osiris_merchant/build/
-Osiris_merchant/.idea/
+# --- Flutter / Dart (merchant app) ---
 
 # --- React Admin Web ---
 Osiris_admin_web/node_modules/
@@ -76,3 +66,6 @@ captures/
 ios_version/**/xcuserdata/
 ios_version/**/DerivedData/
 ios_version/**/*.xcworkspace/xcuserdata/
+
+# Root tooling (Supabase CLI via npm)
+/node_modules/

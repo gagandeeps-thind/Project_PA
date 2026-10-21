@@ -18,8 +18,8 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 
 /**
- * Landmark recording for device QA (format `osiris-pose-v1`, shared with the Flutter app; see
- * `Osiris_customer/test/exercise/recordings/README.md`). Only joint positions and their
+ * Landmark recording for device QA (format `osiris-pose-v1`; see
+ * `shared/testdata/recordings/README.md`). Only joint positions and their
  * confidence are saved, never images. Builds without [com.osiris.shared.core.config.FeatureFlags.poseRecording]
  * never record.
  */

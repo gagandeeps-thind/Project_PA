@@ -1,0 +1,64 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:ExerciseCameraScreen.kt$@Composable private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalog, onDone: () -&gt; Unit)</ID>
+    <ID>CyclomaticComplexMethod:ExerciseCameraScreen.kt$@Composable private fun Skeleton(frame: () -&gt; PoseFrame?, image: PoseImage?, minLikelihood: Double)</ID>
+    <ID>CyclomaticComplexMethod:RunScreen.kt$@Composable fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -&gt; Unit, onOpenChallenge: (Int) -&gt; Unit)</ID>
+    <ID>EmptyElseBlock:SettingsScreen.kt$if (allow) vm.setExerciseConsent(true)</ID>
+    <ID>EmptyElseBlock:SettingsScreen.kt$if (it.isNotEmpty()) vm.erase(it)</ID>
+    <ID>MagicNumber:LeaderboardView.kt$0xFF000000</ID>
+    <ID>MagicNumber:LeaderboardView.kt$16</ID>
+    <ID>MagicNumber:LeaderboardView.kt$6</ID>
+    <ID>MagicNumber:OsmMap.kt$Layers$4f</ID>
+    <ID>MagicNumber:PoseAnalyzer.kt$PoseAnalyzer$1_000</ID>
+    <ID>MagicNumber:PoseAnalyzer.kt$PoseAnalyzer$270</ID>
+    <ID>MagicNumber:PoseAnalyzer.kt$PoseAnalyzer$90</ID>
+    <ID>MagicNumber:PoseAnalyzer.kt$PoseStats$0.95</ID>
+    <ID>MagicNumber:PoseAnalyzer.kt$PoseStats$1000</ID>
+    <ID>MagicNumber:PoseAnalyzer.kt$PoseStats$1000.0</ID>
+    <ID>MaxLineLength:CommunitiesScreen.kt$if (c.verified) Icon(Icons.Filled.Verified, "Verified", Modifier.padding(start = 6.dp).size(16.dp), tint = OsirisColors.Secondary)</ID>
+    <ID>MaxLineLength:CommunityDetailScreen.kt$!c.isMember -&gt; Text("Join to see the weekly leaderboard.", color = OsirisColors.Muted, modifier = Modifier.padding(top = 8.dp))</ID>
+    <ID>MaxLineLength:CommunityDetailScreen.kt$Text("GROUP CHALLENGES", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 8.dp))</ID>
+    <ID>MaxLineLength:CommunityDetailScreen.kt$supportingContent = { Text("${Format.distance(ch.courseDistanceM)} • target ${Format.duration(ch.targetSeconds)} • free") }</ID>
+    <ID>MaxLineLength:Dialogs.kt$colors = if (destructive) ButtonDefaults.buttonColors(containerColor = OsirisColors.Error) else ButtonDefaults.buttonColors()</ID>
+    <ID>MaxLineLength:ExerciseCameraScreen.kt$PermissionStatus.REFUSED -&gt; vm.onCameraFailed(AppError.Permission(Manifest.permission.CAMERA, "Camera access is off for Osiris. Allow it in Settings to count reps."))</ID>
+    <ID>MaxLineLength:ExerciseCameraScreen.kt$c.value.byKey(key)?.let { Loadable.Ready(it to c.value) } ?: Loadable.Failed("This exercise is not available.", canRetry = false)</ID>
+    <ID>MaxLineLength:ExerciseCameraScreen.kt$val box = if (img != null &amp;&amp; img.height &gt; 0) Modifier.aspectRatio(img.width.toFloat() / img.height) else Modifier.fillMaxSize()</ID>
+    <ID>MaxLineLength:ExerciseConsentSheet.kt$Icons.Outlined.CloudUpload to "Osiris keeps the exercise, your rep count, rep timings and a form score, to verify sets and award XP. This is health information."</ID>
+    <ID>MaxLineLength:ExerciseConsentSheet.kt$Icons.Outlined.PhoneAndroid to "Camera images are analysed on this phone only, to find where your joints are. They are never saved or uploaded."</ID>
+    <ID>MaxLineLength:ExerciseHubScreen.kt$Text("Reps are counted on this device. No video or photos are saved or uploaded; only your rep count and timings are.")</ID>
+    <ID>MaxLineLength:ExerciseHubScreen.kt$if (t.best == null) Icon(Icons.Filled.ChevronRight, null) else Text("Best ${t.best}", color = OsirisColors.Secondary)</ID>
+    <ID>MaxLineLength:ExerciseHubScreen.kt$item { Text("Recent sets", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)) }</ID>
+    <ID>MaxLineLength:ExerciseHubScreen.kt$trailingContent = if (s.consented) null else { { TextButton(onClick = { bannerConsent = true }) { Text("ALLOW") } } }</ID>
+    <ID>MaxLineLength:LeaderboardView.kt$headlineContent = { Text(if (r.isMe) "${r.name} (you)" else r.name, color = if (r.isMe) OsirisColors.Secondary else Color.Unspecified) }</ID>
+    <ID>MaxLineLength:OnboardingScreen.kt$colors = CardDefaults.cardColors(containerColor = if (selected) OsirisColors.Primary.copy(alpha = 0.25f) else OsirisColors.Surface)</ID>
+    <ID>MaxLineLength:OsirisRoot.kt$composable(Routes.CHALLENGES) { ChallengeBoardScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.challenge(it)) }) }</ID>
+    <ID>MaxLineLength:OsirisRoot.kt$composable(Routes.COURSES) { CoursesScreen(graph, onBack = nav::popBackStack, onOpenChallenge = { nav.navigate(Routes.challenge(it)) }) }</ID>
+    <ID>MaxLineLength:OsirisRoot.kt$composable(Routes.EXERCISE) { ExerciseHubScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.exerciseCamera(it)) }) }</ID>
+    <ID>MaxLineLength:OsmMap.kt$Layers$private val courseLine = Polyline(map).apply { outlinePaint.color = OsirisColors.Secondary.copy(alpha = 0.7f).toArgb(); outlinePaint.strokeWidth = 14f }</ID>
+    <ID>MaxLineLength:PoseAnalyzer.kt$PoseAnalyzer$val upright = if (rotation == 90 || rotation == 270) PoseImage(proxy.height, proxy.width, mirrored) else PoseImage(proxy.width, proxy.height, mirrored)</ID>
+    <ID>MaxLineLength:PoseAnalyzer.kt$PoseStats$return String.format(java.util.Locale.ROOT, "%d frames, %.1f fps, %.0f ms mean, %.0f ms p95, %d failed", n, fps, meanMs, p95Ms, failed)</ID>
+    <ID>MaxLineLength:PoseCamera.kt$val a = PoseAnalyzer(mirrored, ContextCompat.getMainExecutor(context)) { f, image -&gt; frame(f, image) }.also { analyzer = it }</ID>
+    <ID>MaxLineLength:RankingsScreen.kt$Text("CLUB STANDINGS", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 16.dp))</ID>
+    <ID>MaxLineLength:RankingsScreen.kt$items(seasons.value, key = { it.season.slug }) { card -&gt; SeasonCardView(card, onJoin = { vm.joinSeason(card.season.slug) }) }</ID>
+    <ID>MaxLineLength:RunScreen.kt$Metric(if (s.offline) "OFFLINE" else "SYNCED", "${run.uploaded}/${run.nextSequence}", if (s.offline) OsirisColors.Warning else null)</ID>
+    <ID>MaxLineLength:RunScreen.kt$val notifications = if (Build.VERSION.SDK_INT &gt;= Build.VERSION_CODES.TIRAMISU) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()</ID>
+    <ID>MaxLineLength:RunScreen.kt$val permission = rememberPermission(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, *notifications)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$Open.CITY -&gt; TextInputDialog("Home city", null, "City, e.g. Bedford NS", "SAVE", { vm.setCity(it); close() }, "CANCEL", close, initial = profile?.city.orEmpty())</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$Open.NAME -&gt; TextInputDialog("Your name", null, "Name", "SAVE", { vm.setDisplayName(it); close() }, "CANCEL", close, initial = profile?.displayName.orEmpty(), maxLength = 30)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$Text(rule, color = OsirisColors.Faint, fontSize = 12.sp, modifier = Modifier.padding(start = 72.dp, end = 16.dp, bottom = 4.dp))</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$item { Row(Icons.Outlined.LocationCity, p.city ?: "Not set", "Home city, used for local rankings (never from GPS)") { open(Open.CITY) } }</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$item { Toggle("Public achievement page", "Shows your rank, runs, and badges. Never your location.", p.publicProfile, vm::setPublicProfile) }</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$item { Toggle("Show my name on leaderboards", "When off, you appear as \"Private runner\"", p.leaderboardOptIn, vm::setLeaderboardOptIn) }</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$supportingContent = { Text("${r.value.rewarded} friends rewarded • ${r.value.pending} waiting for their first run") }</ID>
+    <ID>MaxLineLength:TodayScreen.kt$Column</ID>
+    <ID>MaxLineLength:TodayScreen.kt$Text(t.tagline, color = OsirisColors.Faint, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))</ID>
+    <ID>SpreadOperator:RunScreen.kt$(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, *notifications)</ID>
+    <ID>SwallowedException:LocationClient.kt$LocationClient$e: SecurityException</ID>
+    <ID>SwallowedException:RunTrackingService.kt$RunTrackingService$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:LocationClient.kt$LocationClient$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PoseCamera.kt$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RunTrackingService.kt$RunTrackingService$e: RuntimeException</ID>
+  </CurrentIssues>
+</SmellBaseline>

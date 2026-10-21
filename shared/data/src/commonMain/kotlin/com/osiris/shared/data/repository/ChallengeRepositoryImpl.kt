@@ -9,6 +9,8 @@ import com.osiris.shared.domain.model.ChallengeDraft
 import com.osiris.shared.domain.model.ChallengeSummary
 import com.osiris.shared.domain.model.CourseRoute
 import com.osiris.shared.domain.model.CourseSummary
+import com.osiris.shared.domain.model.HubChallenge
+import com.osiris.shared.domain.model.HubSection
 import com.osiris.shared.domain.model.ReportReason
 import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.run.LatLng
@@ -25,6 +27,8 @@ class ChallengeRepositoryImpl(private val api: ChallengeApi) : ChallengeReposito
 
     override suspend fun submitAttempt(challengeId: Int, runId: Int): Outcome<AttemptSummary> =
         outcomeOf { api.submitAttempt(challengeId, runId) }
+
+    override suspend fun hub(section: HubSection): Outcome<List<HubChallenge>> = outcomeOf { api.hub(section.wire).items }
 
     override suspend fun myCourses(): Outcome<List<CourseSummary>> = outcomeOf { api.myCourses() }
 

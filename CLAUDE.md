@@ -2,7 +2,7 @@
 
 ## Project overview
 Osiris is a location-based fitness RPG. Players complete GPS-verified runs, quests, courses,
-challenges and community rankings in a Flutter app, backed by a FastAPI + SQLAlchemy API on SQLite
+challenges and community rankings in a Kotlin Multiplatform app (Android + iOS), backed by a FastAPI + SQLAlchemy API on SQLite
 (Alembic migrations) with a Mana Crystal ledger and Stripe top-ups. An admin web console (Vite +
 React + TS) handles trust/moderation and growth. Product and architecture docs: `Documentation/Enterprise/`.
 
@@ -21,16 +21,16 @@ CI (`.github/workflows/ci.yml`) exports `OSIRIS_JWT_SECRET=ci-fixed-secret-not-f
 | OpenAPI drift | `python scripts/check_openapi_drift.py` (`--write` regenerates `Documentation/openapi.json`) | Osiris_backend |
 | Run API | `..\.venv\Scripts\uvicorn.exe main:app --reload --host 0.0.0.0` | Osiris_backend |
 | Image | `docker build -t osiris-backend:ci Osiris_backend` | repo root |
+| Local stack (API :8000, admin :8080) | `docker compose up --build` (reads root `.env`, see `.env.example`) | repo root |
 | Admin install / dev | `npm install` / `npm run dev` | Osiris_admin_web |
 | Admin typecheck + build | `npm run build` (`tsc && vite build`) | Osiris_admin_web |
-| App analyze / test | `flutter analyze` / `flutter test` | Osiris_customer |
-| App build / run | `flutter build apk --debug` / `flutter run -d emulator-5554` | Osiris_customer |
 | KMP shared tests | `./gradlew :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest` | repo root |
+| KMP static analysis | `./gradlew detekt` (baselines in `shared/*/detekt-baseline.xml`; new code must be clean) | repo root |
 | KMP iOS type-check | `./gradlew :shared:presentation:compileKotlinIosSimulatorArm64` | repo root |
-| KMP Android build / install | `./gradlew :android_version:app:assembleDebug` / `installDebug` (needs Android SDK) | repo root |
+| KMP Android build / install | `./gradlew :android_version:app:assembleDebug` / `installDebug` (needs `ANDROID_HOME`) | repo root |
 
-The gate (`.claude/hooks/gate.sh`, Stop hook) runs ruff → admin build → flutter test → migrations +
-13 CI backend suites → flutter analyze, and only re-checks components whose diff changed since the last pass.
+The gate (`.claude/hooks/gate.sh`, Stop hook) runs ruff → admin build → migrations +
+the backend suites → detekt + KMP shared tests, and only re-checks components whose diff changed since the last pass.
 No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat files wholesale.
 
 ## Architecture map
@@ -43,13 +43,11 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 - `Osiris_backend/run_verifier.py`, `ml_referee.py`, `spatial_utils.py` — run/proof verification and geo math.
 - `Osiris_backend/alembic/versions/` — migrations. `scripts/` — ops (reconcile, OpenAPI export/drift, seeding).
 - `Osiris_backend/tests/` — standalone test scripts, one per release/feature suite.
-- `Osiris_customer/lib/` — `api/` (Dio client + models), `screens/`, `services/` (location, pedometer,
-  upload queue), `providers.dart` (Riverpod), `theme.dart`. Tests in `Osiris_customer/test/`.
 - `Osiris_admin_web/src/` — `api/client.ts` + `types.ts`, `pages/*Page.tsx`, `components/`. Entry `main.tsx`.
-- `Osiris_merchant/` — future partner app, not part of the first player release.
 - `Documentation/openapi.json` — committed API contract, checked for drift in CI.
-- Kotlin Multiplatform player app (replacing `Osiris_customer` at parity): `shared/` (core, domain, data,
-  presentation), `android_version/app` (Compose), `ios_version` (SwiftUI), config in `config/environments/`.
+- Kotlin Multiplatform player app: `shared/` (core, domain, data, presentation; bundled exercise catalog in
+  `shared/assets/`, QA pose recordings in `shared/testdata/`), `android_version/app` (Compose), `ios_version` (SwiftUI),
+  config in `config/environments/`. The Flutter app (`Osiris_customer/`) was retired on 2026-10-19.
   See `docs/architecture/README.md`.
 
 ## Conventions
@@ -61,7 +59,9 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 - Every crystal movement goes through `services.ledger.apply_crystal_delta`; it does not commit,
   the endpoint owns the transaction. Challenges must never touch crystals.
 - Python: snake_case, type hints on new code, ruff rules `E`,`F` at line length 120.
-- Dart: files `snake_case_screen.dart` / `_service.dart`; lints from `flutter_lints` (`analysis_options.yaml`).
+- Backend config: read secrets with `settings.secret("NAME")` (accepts `NAME` or `NAME_FILE`), never `os.environ` directly;
+  add every new setting to `.env.example`.
+- Kotlin: detekt (`./gradlew detekt`); shared logic in `shared/`, platform code only in `android_version/` and `ios_version/`.
 - TS/React: pages `XxxPage.tsx`, API types centralised in `src/api/types.ts`.
 - API changes require regenerating `Documentation/openapi.json` with `python scripts/check_openapi_drift.py --write`.
 - Commit history uses `<Phase/Release>: <summary>` (e.g. `R2 backend: ...`). New commits use conventional

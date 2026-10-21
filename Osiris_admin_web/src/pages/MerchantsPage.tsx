@@ -9,6 +9,7 @@ import {
   deactivateMerchant,
 } from "../api/client";
 import type { Merchant } from "../api/types";
+import { TableSkeleton } from "../components/Skeleton";
 
 type FilterTab = "all" | "active" | "pending" | "declined";
 
@@ -123,9 +124,7 @@ export default function MerchantsPage() {
       {error && <div className="error-message">{error}</div>}
 
       {loading ? (
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-        </div>
+        <TableSkeleton />
       ) : merchants.length === 0 ? (
         <div className="empty-state">
           <Store size={48} />

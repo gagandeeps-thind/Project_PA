@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:SecureRandom.kt$0xff</ID>
+    <ID>MagicNumber:SecureRandom.kt$16</ID>
+    <ID>TooGenericExceptionCaught:Outcome.kt$e: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>
