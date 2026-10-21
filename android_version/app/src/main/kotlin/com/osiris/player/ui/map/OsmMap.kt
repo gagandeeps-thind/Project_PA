@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -69,7 +70,8 @@ fun OsmMap(
         }
     }
 
-    AndroidView(factory = { map }, modifier = modifier) {
+    // MapView draws outside its bounds unless clipped, which put tiles under the top bar.
+    AndroidView(factory = { map }, modifier = modifier.clipToBounds()) {
         layers.course(course)
         layers.trace(trace)
         layers.onChallenge = onChallenge
@@ -147,9 +149,18 @@ private class Layers(private val map: MapView) {
         }
         me.position = geo(position)
         if (me !in map.overlays) map.overlays += me
-        if (!centred || follow) {
+        // Re-centre when the position leaves the view too, so a stale cached first fix is not kept.
+        val offScreen = map.isLayoutOccurred && !map.boundingBox.contains(me.position)
+        if (!centred || follow || offScreen) centre()
+    }
+
+    /** Before the first layout the map has no size, so centring waits for it. */
+    private fun centre() {
+        centred = true
+        if (map.isLayoutOccurred) {
             map.controller.setCenter(me.position)
-            centred = true
+        } else {
+            map.addOnFirstLayoutListener { _, _, _, _, _ -> map.controller.setCenter(me.position) }
         }
     }
 

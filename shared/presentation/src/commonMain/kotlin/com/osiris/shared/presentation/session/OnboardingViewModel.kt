@@ -1,5 +1,6 @@
 package com.osiris.shared.presentation.session
 
+import com.osiris.shared.core.error.AppError
 import com.osiris.shared.domain.model.Goal
 import com.osiris.shared.domain.model.Registration
 import com.osiris.shared.domain.repository.AuthRepository
@@ -85,10 +86,21 @@ class OnboardingViewModel(
             _state.update { it.copy(fieldErrors = errors) }
             return
         }
-        _state.update { it.copy(busy = true) }
+        _state.update { it.copy(busy = true, fieldErrors = emptyMap()) }
         scope.launch {
-            auth.register(registration).orShow()
+            val error = auth.register(registration).errorOrNull()
+            // A rejection about one field shows on that field, where the player is looking;
+            // a snackbar can sit under the keyboard.
+            val field = (error as? AppError.Http)?.code?.let(FIELD_FOR_CODE::get)
+            when {
+                error == null -> Unit
+                field != null -> _state.update { it.copy(fieldErrors = mapOf(field to error.userMessage)) }
+                else -> showError(error)
+            }
             _state.update { it.copy(busy = false) }
         }
     }
 }
+
+/** Server error codes from `POST /api/v2/auth/register` that belong to one form field. */
+private val FIELD_FOR_CODE = mapOf("INVALID_EMAIL" to Registration.FIELD_EMAIL)

@@ -51,8 +51,11 @@ object IosSupport {
     fun closesIn(c: ChallengeSummary): String = c.closesIn(Clock.System.now())
 
     /** `2026-10-19 18:30` in the phone's time zone, or null when the challenge has no close time. */
-    fun closesAtLocal(c: ChallengeSummary): String? {
-        val t = c.closesAt?.toLocalDateTime(TimeZone.currentSystemDefault()) ?: return null
+    fun closesAtLocal(c: ChallengeSummary): String? = c.closesAt?.let(::localMinute)
+
+    /** `2026-10-19 18:30` in the phone's time zone. */
+    fun localMinute(at: Instant): String {
+        val t = at.toLocalDateTime(TimeZone.currentSystemDefault())
         fun two(v: Int) = v.toString().padStart(2, '0')
         return "${t.year}-${two(t.month.ordinal + 1)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}"
     }

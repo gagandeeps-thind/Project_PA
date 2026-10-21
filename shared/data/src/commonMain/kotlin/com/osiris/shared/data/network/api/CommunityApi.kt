@@ -3,6 +3,7 @@ package com.osiris.shared.data.network.api
 import com.osiris.shared.data.network.ApiClient
 import com.osiris.shared.domain.model.ChallengeSummary
 import com.osiris.shared.domain.model.Community
+import com.osiris.shared.domain.model.GlobalBoard
 import com.osiris.shared.domain.model.Leaderboard
 import com.osiris.shared.domain.model.SeasonLeaderboard
 import com.osiris.shared.domain.model.Season
@@ -31,6 +32,9 @@ class CommunityApi(private val api: ApiClient) {
         api.get("/api/v2/communities/${slug.encoded()}/challenges")
 
     suspend fun local(): Leaderboard = api.get("/api/v2/leaderboards/local")
+
+    suspend fun globalBoard(board: String, period: String, exercise: String): GlobalBoard =
+        api.get("/api/v2/leaderboards/global", mapOf("board" to board, "period" to period, "exercise" to exercise))
 
     suspend fun seasons(): List<Season> = api.get("/api/v2/seasons")
 

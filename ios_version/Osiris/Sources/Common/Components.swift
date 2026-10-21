@@ -29,12 +29,17 @@ struct EmptyState: View {
     let icon: String
     let title: String
     var detail: String?
+    var actionLabel: String?
+    var action: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: icon).font(.system(size: 48)).foregroundStyle(.white.opacity(0.38))
             Text(title).multilineTextAlignment(.center)
             if let detail { Text(detail).foregroundStyle(OsirisColor.faint).multilineTextAlignment(.center) }
+            if let actionLabel, let action {
+                Button(actionLabel, action: action).buttonStyle(.borderedProminent).padding(.top, 4)
+            }
         }
         .padding(32)
         .frame(maxWidth: .infinity)

@@ -22,6 +22,7 @@ load_dotenv(override=False)
 
 logger = logging.getLogger(__name__)
 # SQLAlchemy: Our ORM (Object Relational Mapper). It lets us interact with the database using Python objects instead of raw SQL.
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 # bcrypt: Used to securely scramble (hash) passwords so they aren't saved as plain text.
@@ -1730,10 +1731,15 @@ class ProgressionResponse(BaseModel):
     xp: int
     performance_rank: str
     rank_ladder_version: str
+    rank_floor_xp: int = 0                   # where the current rank starts, for the progress gauge
     next_rank_xp: Optional[int] = None
     verified_runs: int
     courses: int
     challenges_won: int
+    challenges_lost: int = 0
+    challenges_played: int = 0
+    lifetime_distance_km: float = 0.0
+    global_rank: Optional[int] = None        # by XP among active players; None until the first XP
     defenses: int
     badges: List[BadgeOut]
 
@@ -2237,18 +2243,31 @@ def my_progression(
         .filter(models.Challenge.creator_id == player_id, models.ChallengeAttempt.outcome == "lost")
         .count()
     )
+    outcomes = dict(
+        db.query(models.ChallengeAttempt.outcome, func.count(models.ChallengeAttempt.id))
+        .filter(models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome.in_(("won", "lost")))
+        .group_by(models.ChallengeAttempt.outcome).all()
+    )
+    lifetime_m = db.query(func.sum(models.RunSession.distance_m)).filter(
+        models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted").scalar()
+    # Competition rank: one more than the number of active players with strictly more XP.
+    global_rank = None if xp <= 0 else 1 + db.query(models.User).filter(
+        models.User.xp > xp, models.User.suspended_at.is_(None)).count()
     return ProgressionResponse(
         xp=xp,
         performance_rank=challenge_rules.performance_rank(xp),
         rank_ladder_version=challenge_rules.RANK_LADDER_VERSION,
+        rank_floor_xp=challenge_rules.rank_floor(xp),
         next_rank_xp=challenge_rules.next_rank_threshold(xp),
         verified_runs=db.query(models.RunSession).filter(
             models.RunSession.user_id == player_id, models.RunSession.verification_status == "accepted",
         ).count(),
         courses=db.query(models.Course).filter(models.Course.owner_id == player_id).count(),
-        challenges_won=db.query(models.ChallengeAttempt).filter(
-            models.ChallengeAttempt.user_id == player_id, models.ChallengeAttempt.outcome == "won",
-        ).count(),
+        challenges_won=outcomes.get("won", 0),
+        challenges_lost=outcomes.get("lost", 0),
+        challenges_played=sum(outcomes.values()),
+        lifetime_distance_km=round(float(lifetime_m or 0) / 1000.0, 1),
+        global_rank=global_rank,
         defenses=defenses,
         badges=[
             BadgeOut(code=b.badge_code, label=challenge_rules.BADGES.get(b.badge_code, b.badge_code),

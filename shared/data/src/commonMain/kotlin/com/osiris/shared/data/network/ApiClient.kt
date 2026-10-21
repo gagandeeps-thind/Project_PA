@@ -10,6 +10,9 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.parameter
@@ -23,6 +26,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.websocket.close
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
@@ -60,6 +64,8 @@ class ApiClient(
     private val http = HttpClient(engine) {
         expectSuccess = false
         install(ContentNegotiation) { json(json) }
+        // Pings keep an idle chat inside the socket timeout below.
+        install(WebSockets) { pingIntervalMillis = config.requestTimeoutMs / 2 }
         install(HttpTimeout) {
             connectTimeoutMillis = config.connectTimeoutMs
             requestTimeoutMillis = config.requestTimeoutMs
@@ -119,6 +125,29 @@ class ApiClient(
             throw NetworkErrors.fromThrowable(e)
         }
         return decode(response, deserializer)
+    }
+
+    /**
+     * Opens a WebSocket on [path] (`ws://` or `wss://` matching the API's scheme) with the session
+     * token, runs [block] while it is open, then closes it. Handshake failures throw an [AppError].
+     */
+    suspend fun <T> webSocket(path: String, block: suspend DefaultClientWebSocketSession.() -> T): T {
+        val token = tokens.token()
+        val session = try {
+            http.webSocketSession {
+                url(config.apiBaseUrl.replaceFirst("http", "ws") + "/" + path.trimStart('/'))
+                token?.let { bearerAuth(it) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw NetworkErrors.fromThrowable(e)
+        }
+        return try {
+            session.block()
+        } finally {
+            session.close()
+        }
     }
 
     private suspend fun HttpRequestBuilder.authorize() {

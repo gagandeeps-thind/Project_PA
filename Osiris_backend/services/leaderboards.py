@@ -98,3 +98,33 @@ def community_season_scores(
             sum(s[2] for s in entered) / n,
         )
     return out
+
+
+# --- global boards (Social tab) ------------------------------------------------------
+
+GLOBAL_BOARDS = ("distance", "pace", "reps", "rewards")
+PACE_REFERENCE_M = 5_000.0
+RIEGEL_EXPONENT = 1.06
+PACE_MIN_DISTANCE_M = 1_000.0
+REP_EXERCISES = ("pushup", "squat", "pullup", "plank")
+
+
+def riegel_seconds(seconds: float, distance_m: float, reference_m: float = PACE_REFERENCE_M) -> float:
+    """Riegel's endurance model, T2 = T1 * (D2 / D1) ** 1.06: the time this performance
+    predicts over `reference_m`. It puts a fast 2 km and a steady 10 km on one scale, so the
+    pace board ranks one number instead of trading distance against time."""
+    if seconds <= 0 or distance_m <= 0:
+        raise ValueError("seconds and distance must be positive")
+    return seconds * (reference_m / distance_m) ** RIEGEL_EXPONENT
+
+
+def rank_values(values: Mapping[int, float], *, ascending: bool) -> list[tuple[int, float, int]]:
+    """Competition ranking (1, 2, 2, 4) as (key, value, rank). Ties break by key so the order
+    is stable; zero values are left out of descending boards (nobody ranks last for nothing)."""
+    rows = [(k, v) for k, v in values.items() if ascending or v > 0]
+    rows.sort(key=lambda kv: (kv[1] if ascending else -kv[1], kv[0]))
+    out: list[tuple[int, float, int]] = []
+    for i, (key, value) in enumerate(rows, start=1):
+        position = out[-1][2] if out and out[-1][1] == value else i
+        out.append((key, value, position))
+    return out

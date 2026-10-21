@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -125,8 +126,10 @@ fun FrostCard(
             .frost(LocalHazeState.current, frostStyle(), FrostTheme.palette, shape)
             .then(clickable)
             .padding(contentPadding),
-        content = content,
-    )
+    ) {
+        // A plain Column provides no content colour, so text would fall back to black on glass.
+        CompositionLocalProvider(LocalContentColor provides FrostTheme.palette.textPrimary.color()) { content() }
+    }
 }
 
 class FrostBarItem(val label: String, val icon: ImageVector, val selected: Boolean, val onClick: () -> Unit)

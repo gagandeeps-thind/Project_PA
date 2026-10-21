@@ -12,13 +12,29 @@ data class Badge(val code: String, val label: String = code)
 data class Progression(
     val xp: Int = 0,
     @SerialName("performance_rank") val performanceRank: String = "Bronze",
+    @SerialName("rank_floor_xp") val rankFloorXp: Int = 0,
     @SerialName("next_rank_xp") val nextRankXp: Int? = null,
     @SerialName("verified_runs") val verifiedRuns: Int = 0,
     val courses: Int = 0,
     @SerialName("challenges_won") val challengesWon: Int = 0,
+    @SerialName("challenges_lost") val challengesLost: Int = 0,
+    @SerialName("challenges_played") val challengesPlayed: Int = 0,
+    @SerialName("lifetime_distance_km") val lifetimeDistanceKm: Double = 0.0,
+    @SerialName("global_rank") val globalRank: Int? = null,
     val defenses: Int = 0,
     val badges: List<Badge> = emptyList(),
-)
+) {
+    /** Progress through the current rank, 0..1; a full gauge at the top rank. */
+    val rankFraction: Double
+        get() {
+            val next = nextRankXp ?: return 1.0
+            val span = next - rankFloorXp
+            return if (span <= 0) 1.0 else ((xp - rankFloorXp).toDouble() / span).coerceIn(0.0, 1.0)
+        }
+
+    /** Share of decided challenges won, or null before the first result. */
+    val winRate: Double? get() = if (challengesPlayed == 0) null else challengesWon.toDouble() / challengesPlayed
+}
 
 @Serializable
 data class Quest(
