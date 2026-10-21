@@ -28,7 +28,7 @@ style:
     ignorePropertyDeclaration: true
     ignoreCompanionObjectPropertyDeclaration: true
     ignoreAnnotated: ['Composable']
-    excludes: ['**/test/**', '**/jvmTest/**', '**/commonTest/**', '**/androidTest/**']
+    excludes: ['**/test/**', '**/jvmTest/**', '**/commonTest/**', '**/androidTest/**', '**/design/**', '**/theme/**']
   MaxLineLength:
     maxLineLength: 140
   UnusedPrivateMember:

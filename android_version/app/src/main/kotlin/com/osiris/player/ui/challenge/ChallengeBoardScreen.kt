@@ -49,7 +49,7 @@ import com.osiris.shared.presentation.AppGraph
 import kotlin.time.Instant
 
 @Composable
-fun ChallengeBoardScreen(graph: AppGraph, onBack: () -> Unit, onOpen: (Int) -> Unit) {
+fun ChallengeBoardScreen(graph: AppGraph, onBack: (() -> Unit)?, onOpen: (Int) -> Unit) {
     val vm = rememberShared { graph.challengeBoard() }
     val s by vm.state.collectAsStateWithLifecycle()
     var unavailable by remember { mutableStateOf<String?>(null) }

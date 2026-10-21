@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,11 +60,12 @@ fun OsirisScaffold(
                     }
                 },
                 actions = actions,
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = OsirisColors.Surface),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = OsirisColors.Background,
+        // Transparent over the app-wide FrostBackground, so every screen sits on the matte backdrop.
+        containerColor = Color.Transparent,
         content = content,
     )
 }

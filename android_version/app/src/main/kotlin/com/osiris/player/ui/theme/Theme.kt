@@ -4,52 +4,87 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.osiris.shared.core.design.FrostMatte
 
-/** The Osiris dark palette, the same values as the Flutter theme. */
-object OsirisColors {
-    val Background = Color(0xFF121212)
-    val Surface = Color(0xFF1E1E1E)
-    val Primary = Color(0xFF9D4EDD)
-    val Secondary = Color(0xFF03DAC6)
-    val Error = Color(0xFFCF6679)
-    val Success = Color(0xFF4CAF50)
-    val Warning = Color(0xFFFFC107)
-    val Gold = Color(0xFFFDD835)
-    val Muted = Color(0xB3FFFFFF)
-    val Faint = Color(0x99FFFFFF)
+fun Long.color() = Color(this)
+
+/** The active FrostMatte palette; screens read it through [FrostTheme.palette]. */
+val LocalFrostPalette = staticCompositionLocalOf { FrostMatte.dark }
+
+object FrostTheme {
+    val palette: FrostMatte.Palette
+        @Composable get() = LocalFrostPalette.current
 }
 
-private val scheme = darkColorScheme(
-    primary = OsirisColors.Primary,
-    onPrimary = Color.White,
-    secondary = OsirisColors.Secondary,
-    onSecondary = Color.Black,
-    background = OsirisColors.Background,
-    onBackground = Color.White,
-    surface = OsirisColors.Surface,
-    onSurface = Color.White,
-    surfaceContainer = OsirisColors.Surface,
-    error = OsirisColors.Error,
-    onError = Color.Black,
+/**
+ * Accent colors shared by every screen, from the dark FrostMatte palette. The app renders dark
+ * until every screen reads [FrostTheme.palette]; the light palette is defined and previewable.
+ */
+object OsirisColors {
+    val Background = FrostMatte.dark.background.color()
+    val Surface = FrostMatte.dark.glassFallback.color()
+    val Primary = FrostMatte.dark.accent.color()
+    val Secondary = FrostMatte.dark.accentAlt.color()
+    val Error = FrostMatte.dark.danger.color()
+    val Success = FrostMatte.dark.success.color()
+    val Warning = FrostMatte.dark.warning.color()
+    val Gold = FrostMatte.dark.gold.color()
+    val Muted = FrostMatte.dark.textSecondary.color()
+    val Faint = FrostMatte.dark.textMuted.color()
+}
+
+private fun scheme(mode: FrostMatte.Mode) = FrostMatte.palette(mode).let { p ->
+    val base = if (mode == FrostMatte.Mode.DARK) darkColorScheme() else lightColorScheme()
+    base.copy(
+        primary = p.accent.color(),
+        onPrimary = p.onAccent.color(),
+        secondary = p.accentAlt.color(),
+        onSecondary = p.background.color(),
+        background = p.background.color(),
+        onBackground = p.textPrimary.color(),
+        surface = p.glassFallback.color(),
+        onSurface = p.textPrimary.color(),
+        onSurfaceVariant = p.textSecondary.color(),
+        surfaceContainer = p.glassFallback.color(),
+        outline = p.glassBorder.color(),
+        error = p.danger.color(),
+        onError = p.onAccent.color(),
+    )
+}
+
+private fun style(s: FrostMatte.TextStyle, letterSpacing: Float = 0f) = TextStyle(
+    fontSize = s.size.sp,
+    lineHeight = s.lineHeight.sp,
+    fontWeight = FontWeight(s.weight),
+    letterSpacing = letterSpacing.sp,
 )
 
 private val type = Typography(
-    headlineMedium = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp),
-    headlineSmall = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold),
-    titleLarge = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
-    bodyLarge = TextStyle(fontSize = 16.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp),
+    displaySmall = style(FrostMatte.TextStyle.DISPLAY),
+    headlineMedium = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = 1f),
+    headlineSmall = style(FrostMatte.TextStyle.TITLE),
+    titleLarge = style(FrostMatte.TextStyle.HEADLINE),
+    titleMedium = style(FrostMatte.TextStyle.CALLOUT),
+    bodyLarge = style(FrostMatte.TextStyle.BODY),
+    bodyMedium = style(FrostMatte.TextStyle.CALLOUT),
+    bodySmall = style(FrostMatte.TextStyle.CAPTION),
+    labelLarge = style(FrostMatte.TextStyle.CALLOUT, letterSpacing = 1f),
+    labelMedium = style(FrostMatte.TextStyle.CAPTION),
 )
 
 @Composable
-fun OsirisTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = type, content = content)
+fun OsirisTheme(mode: FrostMatte.Mode = FrostMatte.Mode.DARK, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalFrostPalette provides FrostMatte.palette(mode)) {
+        MaterialTheme(colorScheme = scheme(mode), typography = type, content = content)
+    }
 }
 
 @Composable
