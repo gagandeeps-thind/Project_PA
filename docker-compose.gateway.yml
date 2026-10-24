@@ -3,6 +3,11 @@
 # The API is then reachable only through the gateway, which is why it may trust the gateway's
 # X-Forwarded-For (the rate limiter keys on the client IP). Scaling out needs PostgreSQL first;
 # see Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19.md ("Scaling out").
+#
+# Every replica must sign and accept the same tokens. Without OSIRIS_JWT_SECRET a dev process
+# makes up its own secret, so with two replicas half of all requests answer 401 (found running
+# `--scale backend=2`, report 20). Set it in the root .env or the shell; compose refuses to start
+# without it.
 services:
   backend:
     ports: !reset []
@@ -10,6 +15,7 @@ services:
       - "8000"
     environment:
       FORWARDED_ALLOW_IPS: "*"
+      OSIRIS_JWT_SECRET: ${OSIRIS_JWT_SECRET:?set OSIRIS_JWT_SECRET so every replica accepts the same tokens}
 
   gateway:
     image: nginx:1.27-alpine
