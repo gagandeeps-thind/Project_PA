@@ -1,4 +1,6 @@
+import CoreText
 import SwiftUI
+import UIKit
 import OsirisShared
 
 extension Color {
@@ -77,5 +79,65 @@ extension View {
     /// A padded FrostMatte card.
     func frostCard() -> some View {
         padding(CGFloat(FrostMatte.Spacing.shared.L)).frame(maxWidth: .infinity, alignment: .leading).frost()
+    }
+}
+
+/// Manrope (display and body) and Geist Mono (small labels), bundled with `UIAppFonts`. Both are
+/// variable fonts, so a weight is set on the `wght` axis, as Android does with `FontVariation`.
+enum FrostFont {
+    /// The `wght` variation axis tag.
+    private static let weightAxis = 0x7767_6874
+
+    static func manrope(_ style: FrostMatte.TextStyle, weight: Int? = nil) -> Font {
+        variable("Manrope", style: style, weight: weight)
+    }
+
+    static func mono(_ style: FrostMatte.TextStyle, weight: Int = 600) -> Font {
+        variable("Geist Mono", style: style, weight: weight)
+    }
+
+    /// Hero stays at its token size, as on Android; every other style follows Dynamic Type.
+    private static func variable(_ family: String, style: FrostMatte.TextStyle, weight: Int?) -> Font {
+        let descriptor = UIFontDescriptor(fontAttributes: [
+            .family: family,
+            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): [weightAxis: weight ?? Int(style.weight)],
+        ])
+        let font = UIFont(descriptor: descriptor, size: CGFloat(style.size))
+        return Font(style == .hero ? font : UIFontMetrics.default.scaledFont(for: font))
+    }
+}
+
+/// The one focal number of a screen: 72 pt Manrope ExtraBold, tight tracking. The unit and the
+/// labels around it stay small and muted so nothing competes with it.
+struct HeroMetric: View {
+    let value: String
+    var unit: String? = nil
+    var label: String? = nil
+    var caption: String? = nil
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let palette = FrostPalette(scheme)
+        let hero = FrostMatte.TextStyle.hero
+        VStack(alignment: .leading, spacing: 0) {
+            if let label {
+                Text(label.uppercased()).font(FrostFont.mono(.caption)).foregroundStyle(palette.textMuted)
+            }
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(value)
+                    .font(FrostFont.manrope(hero))
+                    .tracking(CGFloat(hero.size * FrostMatte.shared.HERO_TRACKING_EM))
+                    .foregroundStyle(palette.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                if let unit {
+                    Text(unit).font(FrostFont.manrope(.headline, weight: 700)).foregroundStyle(palette.textMuted)
+                }
+            }
+            if let caption {
+                Text(caption).font(FrostFont.manrope(.callout)).foregroundStyle(palette.textSecondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
