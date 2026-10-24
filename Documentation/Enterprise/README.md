@@ -27,6 +27,7 @@ This directory is the maintained startup-level source of truth for Osiris. Obsol
 | [15 Exercises Phase 2 2026-10-15](15_Exercise_Phase2_Launch_Test_and_Audit_2026-10-15.md) | ML consent, review queue, browser launch test (admin + Flutter web), performance, audit |
 | [16 Rep-Counting Accuracy 2026-10-17](16_Exercise_Accuracy_Sprint3_2026-10-17.md) | Accuracy evaluation across frame rate, noise, size and roll; engine fixes; slow-phone warning; QA recording and replay |
 | [17 Performance Pass and Audit 2026-10-19](17_Performance_Pass_and_Audit_2026-10-19.md) | N+1 fixes, gzip and ETags, leaderboard cache, paging, admin code splitting, APK size, Compose stability, load test, scaling-out prerequisites |
+| [18 Competitor Teardown: Steppa 2026-10-18](18_Competitor_Teardown_Steppa_2026-10-18.md) | How Steppa's real-money step challenges work (REA runtime capture, terms, App Store), compared with Osiris |
 
 ## Product north star
 
