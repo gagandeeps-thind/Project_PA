@@ -212,7 +212,11 @@ private fun CueOptions(s: RunState, vm: RunViewModel) {
         )
         if (s.audioCues) {
             for (interval in CueInterval.entries) {
-                FilterChip(selected = s.cueInterval == interval, onClick = { vm.setCueInterval(interval) }, label = { Text(interval.label) })
+                FilterChip(
+                    selected = s.cueInterval == interval,
+                    onClick = { vm.setCueInterval(interval) },
+                    label = { Text(interval.label) },
+                )
             }
         }
     }
