@@ -10,7 +10,7 @@ import {
   Zap,
   Target,
 } from "lucide-react";
-import { getNearbyBounties, createBounty } from "../api/client";
+import { apiErrorMessage, getNearbyBounties, createBounty } from "../api/client";
 import type { Bounty, CreateBountyPayload } from "../api/types";
 import { TableSkeleton } from "../components/Skeleton";
 
@@ -50,7 +50,7 @@ export default function BountiesPage() {
       );
       setBounties(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load bounties");
+      setError(apiErrorMessage(err, "Failed to load bounties"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export default function BountiesPage() {
       setShowForm(false);
       await fetchBounties();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to create bounty");
+      setError(apiErrorMessage(err, "Failed to create bounty"));
     } finally {
       setSubmitting(false);
     }

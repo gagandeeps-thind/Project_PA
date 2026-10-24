@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────── */
 import { useState, type FormEvent } from "react";
 import { Shield, Loader } from "lucide-react";
-import { loginAdmin } from "../api/client";
+import { apiErrorMessage, loginAdmin } from "../api/client";
 import type { AdminUser } from "../api/types";
 
 interface LoginPageProps {
@@ -31,11 +31,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       };
       onLogin(user, res.access_token);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Login failed. Please check your credentials.");
-      }
+      setError(apiErrorMessage(err, "Login failed. Please check your credentials."));
     } finally {
       setLoading(false);
     }
