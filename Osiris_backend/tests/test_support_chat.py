@@ -17,7 +17,9 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 import growth_support  # noqa: E402
+import database  # noqa: E402
 import main  # noqa: E402
+from core import clock  # noqa: E402
 import models  # noqa: E402
 from database import Base  # noqa: E402
 
@@ -34,7 +36,7 @@ def _db():
         db.close()
 
 
-main.app.dependency_overrides[main.get_db] = _db
+main.app.dependency_overrides[database.get_db] = _db
 client = TestClient(main.app)
 URL = "/api/v2/support/ws"
 
@@ -76,7 +78,7 @@ def test_unauthenticated_and_revoked_sessions_are_refused():
     token = register("ben")
     db = Session()
     user = db.query(models.User).filter(models.User.email == "support_ben@example.com").one()
-    user.tokens_valid_after = main._now_naive_utc() + timedelta(minutes=1)
+    user.tokens_valid_after = clock._now_naive_utc() + timedelta(minutes=1)
     db.commit()
     db.close()
     assert refused({"Authorization": f"Bearer {token}"})
@@ -87,7 +89,7 @@ def test_suspended_player_can_still_reach_support():
     token = register("cy")
     db = Session()
     db.query(models.User).filter(models.User.email == "support_cy@example.com").update(
-        {models.User.suspended_at: main._now_naive_utc()})
+        {models.User.suspended_at: clock._now_naive_utc()})
     db.commit()
     db.close()
     with client.websocket_connect(URL, headers={"Authorization": f"Bearer {token}"}) as ws:

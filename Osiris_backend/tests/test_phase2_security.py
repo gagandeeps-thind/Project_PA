@@ -137,9 +137,9 @@ def test_login_rate_limited():
 
 # --- Route audit 2026-10-12: the legacy login and the public events endpoint are limited ----
 def test_legacy_login_rate_limited():
-    import main
+    from core import rate_limit
     client, _models, _db = _client_and_models()
-    main._rate_buckets.clear()  # the bucket is shared with /auth/login, so start empty
+    rate_limit._rate_buckets.clear()  # the bucket is shared with /auth/login, so start empty
     body = {"email": "nobody-ph2@example.com", "password": "wrongpass",
             "device_timestamp": "2026-06-11T00:00:00+00:00"}
     codes = [client.post("/api/v1/login", json=body).status_code for _ in range(15)]
@@ -147,9 +147,9 @@ def test_legacy_login_rate_limited():
 
 
 def test_public_events_rate_limited():
-    import main
+    from core import rate_limit
     client, _models, _db = _client_and_models()
-    main._rate_buckets.clear()
+    rate_limit._rate_buckets.clear()
     codes = [client.post("/api/v2/events", json={"event_name": "app_opened", "install_id": "ph2-sec-install"}).status_code
              for _ in range(70)]
     _check("audit: unauthenticated /api/v2/events is rate limited", 429 in codes)
@@ -157,7 +157,7 @@ def test_public_events_rate_limited():
 
 # --- Route audit 2026-10-12: suspension applies to legacy player routes too ---------------
 def test_suspended_player_blocked_on_v1_routes():
-    import main
+    from core import security
     from datetime import datetime
     client, models, database = _client_and_models()
     db = database.SessionLocal()
@@ -167,7 +167,7 @@ def test_suspended_player_blocked_on_v1_routes():
     db.commit()
     uid = user.id
     try:
-        headers = {"Authorization": f"Bearer {main.create_access_token({'sub': str(uid), 'role': 'player'})}"}
+        headers = {"Authorization": f"Bearer {security.create_access_token({'sub': str(uid), 'role': 'player'})}"}
         calls = {
             "GET /api/v1/domains/nearby": client.get("/api/v1/domains/nearby", params={"lat": 44.6, "lng": -63.6},
                                                      headers=headers),

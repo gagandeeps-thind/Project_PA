@@ -16,7 +16,10 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+import database  # noqa: E402
 import main  # noqa: E402
+from core import clock  # noqa: E402
+from core import security  # noqa: E402
 import models  # noqa: E402
 from services import challenges as challenge_rules  # noqa: E402
 from database import Base  # noqa: E402
@@ -35,9 +38,9 @@ def _db():
         db.close()
 
 
-main.app.dependency_overrides[main.get_db] = _db
+main.app.dependency_overrides[database.get_db] = _db
 client = TestClient(main.app)
-NOW = main._now_naive_utc()
+NOW = clock._now_naive_utc()
 
 
 def register(name, opt_in=True):
@@ -253,7 +256,7 @@ def admin_headers(email):
     admin = models.Admin(email=email, hashed_password="x", name="Hub Admin")
     db.add(admin)
     db.commit()
-    headers = {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin.id), 'role': 'admin'})}"}
+    headers = {"Authorization": f"Bearer {security.create_access_token({'sub': str(admin.id), 'role': 'admin'})}"}
     db.close()
     return headers
 

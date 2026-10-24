@@ -29,11 +29,15 @@ the backend suites → detekt + KMP shared tests, and only re-checks components 
 No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat files wholesale.
 
 ## Architecture map
-- `Osiris_backend/main.py` — FastAPI app, auth/JWT/RBAC, most legacy endpoints (large monolith).
+- `Osiris_backend/main.py` — app assembly only: middleware, scheduler, router mounting (order matters).
+- `Osiris_backend/core/` — logging, auth/JWT/RBAC (`security.py`), rate limits, clock, error shapes.
+- `Osiris_backend/routers/` — v1/v2 endpoints by area (accounts, runs, challenges, admin trust, payments, ...);
+  their Pydantic models live in `schemas.py`. See `docs/architecture/backend.md`.
 - `Osiris_backend/growth_api.py` — `APIRouter` for growth features, mounted onto `main.app`;
   logic in `growth_social.py`, `growth_communities.py`, `growth_safety.py`.
 - `Osiris_backend/services/` — domain services: `ledger.py` (sole writer of `User.mana_crystals`),
-  `stripe_gateway.py`, `challenges.py`, `quests.py`, `leaderboards.py`, `player_safety.py`.
+  `stripe_gateway.py`, `challenges.py`, `quests.py`, `leaderboards.py`, `player_safety.py`,
+  `progression.py` (rank, XP, badges), `challenge_store.py`, `proofs.py`, `jobs.py` (scheduled jobs).
 - `Osiris_backend/models.py` / `database.py` — SQLAlchemy models; SQLite at `Osiris_backend/fitness_mvp.db`.
 - `Osiris_backend/run_verifier.py`, `ml_referee.py`, `spatial_utils.py` — run/proof verification and geo math.
 - `Osiris_backend/alembic/versions/` — migrations. `scripts/` — ops (reconcile, OpenAPI export/drift, seeding).

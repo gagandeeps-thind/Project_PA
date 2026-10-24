@@ -28,16 +28,11 @@ from sqlalchemy.orm import Session
 import growth_safety
 import models
 from growth_communities import LEADERBOARD_LIMIT, PRIVATE_NAME, _week_window
-from main import (
-    ChallengePublic,
-    ChallengeStats,
-    _challenge_public,
-    _now_naive_utc,
-    _refresh_challenge_status,
-    app,
-    get_active_player,
-    get_db,
-)
+from core.clock import _now_naive_utc
+from core.security import get_active_player
+from database import get_db
+from schemas import ChallengePublic
+from services.challenge_store import _challenge_public, _refresh_challenge_status, ChallengeStats
 from services import leaderboards as lb
 from services.ttl_cache import TTLCache, ttl_from_env
 
@@ -291,6 +286,3 @@ def global_leaderboard(
         lower_is_better=ascending, explainer=explainer, rows=[row(*r) for r in shown], my_row=mine,
         ranked_players=len(ranked),
     )
-
-
-app.include_router(router)

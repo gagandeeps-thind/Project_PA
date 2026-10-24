@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 import database
 import growth_api
 import main
+from services import jobs  # noqa: E402
 import models
 import run_verifier
 
@@ -209,7 +210,7 @@ def test_raw_route_points_expire_after_retention_window() -> None:
     in_review = _finished_run(client, headers, "review")
     db = database.SessionLocal()
     try:
-        long_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=main.ROUTE_POINT_RETENTION_DAYS + 5)
+        long_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=jobs.ROUTE_POINT_RETENTION_DAYS + 5)
         for rid in (old_run, in_review):
             db.query(models.RunSession).filter(models.RunSession.id == rid).update({"finished_at": long_ago})
         # Evidence for an attempt still awaiting a human reviewer must survive.
@@ -217,7 +218,7 @@ def test_raw_route_points_expire_after_retention_window() -> None:
                                        run_session_id=in_review))
         db.commit()
 
-        main.process_route_point_ttl()
+        jobs.process_route_point_ttl()
 
         db.expire_all()
         def points(rid: int) -> int:

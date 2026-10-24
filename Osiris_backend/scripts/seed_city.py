@@ -36,7 +36,9 @@ os.environ.setdefault("OSIRIS_ENV", "dev")
 from fastapi.testclient import TestClient  # noqa: E402
 
 import database  # noqa: E402
-import main  # noqa: E402
+import main  # noqa: E402,F401  (creates missing tables)
+from core import security  # noqa: E402
+from services import progression  # noqa: E402
 import models  # noqa: E402
 from services import challenges as challenge_rules  # noqa: E402
 from services import leaderboards as lb  # noqa: E402
@@ -69,8 +71,8 @@ def _official_account(email: str) -> tuple[int, dict]:
     try:
         user = db.query(models.User).filter(models.User.email == email).first()
         if user is None:
-            user = models.User(email=email, hashed_password=main.get_password_hash(secrets.token_urlsafe(24)),
-                               xp=0, rank=main.get_rank(0), title=main.get_title(0.0), cumulative_area=0.0,
+            user = models.User(email=email, hashed_password=security.get_password_hash(secrets.token_urlsafe(24)),
+                               xp=0, rank=progression.get_rank(0), title=progression.get_title(0.0), cumulative_area=0.0,
                                streak=0, mana_crystals=0, avatar_class="Official")
             db.add(user)
             db.flush()
@@ -84,7 +86,7 @@ def _official_account(email: str) -> tuple[int, dict]:
         uid = user.id
     finally:
         db.close()
-    token = main.create_access_token({"sub": str(uid), "role": "player"})
+    token = security.create_access_token({"sub": str(uid), "role": "player"})
     return uid, {"Authorization": f"Bearer {token}"}
 
 

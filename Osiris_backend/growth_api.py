@@ -3,9 +3,7 @@
 "What is my next physical quest?" — registration without body measurements, a goal-driven
 daily quest, a weekly goal, a rest-friendly weekly streak, and funnel analytics.
 
-`main.py` imports this module on its last line, so every name imported from `main` below
-already exists whichever module is imported first. The router registers itself on
-`main.app` at the bottom of this file, once all routes are declared.
+`main.py` mounts `router`. Shared plumbing comes from `core/`, `schemas` and `services/`.
 """
 from __future__ import annotations
 
@@ -21,28 +19,16 @@ from sqlalchemy.orm import Session
 
 import models
 import spatial_utils
-from main import (
-    _api_error,
-    _audit,
-    _challenge_public,
-    _check_email_unique,
-    _award_badge,
-    _now_naive_utc,
-    _refresh_challenge_status,
-    _rl_events,
-    _rl_onboard,
-    app,
-    ChallengePublic,
-    NewPassword,
-    create_access_token,
-    get_active_player,
-    get_current_admin,
-    get_current_user_token,
-    get_db,
-    get_password_hash,
-    get_rank,
-    get_title,
-)
+from core.clock import _now_naive_utc
+from core.errors import _api_error
+from core.rate_limit import _rl_events, _rl_onboard
+from core.security import create_access_token, get_active_player, get_current_admin, get_current_user_token, get_password_hash, NewPassword
+from database import get_db
+from schemas import ChallengePublic
+from services.accounts import _check_email_unique
+from services.audit import _audit
+from services.challenge_store import _challenge_public, _refresh_challenge_status
+from services.progression import _award_badge, get_rank, get_title
 from services import challenges as challenge_rules
 from services import leaderboards as leaderboard_rules
 from services import quests as quest_rules
@@ -763,13 +749,5 @@ def admin_funnel(
     )
 
 
-app.include_router(router)
-
-# Later growth modules build on this one, so they load after it is complete. Importing them
-# here (not from main) keeps every import order working: main -> growth_api -> growth_social.
-import growth_social  # noqa: E402,F401
-import growth_communities  # noqa: E402,F401
+# growth_safety imports names from this module, so it loads once this module is complete.
 import growth_safety  # noqa: E402
-import exercise_api  # noqa: E402,F401
-import growth_hub  # noqa: E402,F401
-import growth_support  # noqa: E402,F401

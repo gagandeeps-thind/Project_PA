@@ -72,3 +72,12 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base is the parent class that all of our Database Models will inherit from
 Base = declarative_base()
+
+def get_db():
+    """FastAPI dependency: one session per request, closed when the request ends.
+    Endpoints own their transaction and commit explicitly."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

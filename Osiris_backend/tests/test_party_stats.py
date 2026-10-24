@@ -13,7 +13,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from database import Base
-from main import app, get_db, record_activity, get_password_hash, get_rank, get_title, create_access_token
+from main import app
+from database import get_db
+from core.security import create_access_token, get_password_hash
+from services.progression import get_rank, get_title, record_activity
 import models
 
 # Set up an in-memory SQLite database for testing
