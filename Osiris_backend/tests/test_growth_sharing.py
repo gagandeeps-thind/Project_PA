@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 
 import database
 import main
+from core import clock  # noqa: E402
 import growth_api
 import models
 
@@ -225,7 +226,7 @@ def test_referral_rewards_are_capped() -> None:
             db.add(models.PlayerProfile(
                 user_id=u.id, display_name=f"P{i}", goal="running", referral_code=f"G2CAP{i:03d}",
                 referred_by_user_id=host["user_id"], referral_status="rewarded",
-                referral_rewarded_at=main._now_naive_utc(),
+                referral_rewarded_at=clock._now_naive_utc(),
             ))
         db.commit()
     finally:

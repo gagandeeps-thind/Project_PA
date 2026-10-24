@@ -13,6 +13,8 @@ import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.RunRepository
 import com.osiris.shared.domain.run.ActiveRun
+import com.osiris.shared.domain.run.AutoPause
+import com.osiris.shared.domain.run.CueInterval
 import com.osiris.shared.domain.run.Daylight
 import com.osiris.shared.domain.run.LatLng
 import com.osiris.shared.domain.run.LocationFix
@@ -57,8 +59,10 @@ data class RunState(
     val paused: Boolean = false,
     /** Chosen before starting; a challenge run is always a run. */
     val sport: Sport = Sport.RUN,
-    val autoPause: Boolean = true,
+    val autoPause: AutoPause = AutoPause.STOPS,
+    /** Spoken cues; can be muted or re-timed mid-run. */
     val audioCues: Boolean = true,
+    val cueInterval: CueInterval = CueInterval.KILOMETRE,
     val offline: Boolean = false,
     val busy: Boolean = false,
     val dialog: RunDialog? = null,
@@ -115,17 +119,17 @@ class RunViewModel(
     private var nearbyLoaded = false
     private val _cues = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
-    /** Spoken announcements, one per kilometre. The platform speaks them, screen on or off. */
+    /** Spoken announcements at the chosen [CueInterval]. The platform speaks them, screen on or off. */
     val cues: SharedFlow<String> = _cues.asSharedFlow()
 
-    /** Last kilometre announced; -1 until a run is active (a recovered run is not caught up on). */
-    private var cuedKm = -1
+    /** Last cue mark announced; -1 until a run is active (a recovered run is not caught up on). */
+    private var cuedMark = -1
 
     init {
         scope.launch {
             runs.active.collect { run ->
                 _state.update { it.copy(run = run).withClock() }
-                if (run == null) cuedKm = -1 else cueIfDue(run)
+                if (run == null) cuedMark = -1 else cueIfDue(run)
             }
         }
         scope.launch { runs.offline.collect { off -> _state.update { it.copy(offline = off) } } }
@@ -168,16 +172,27 @@ class RunViewModel(
 
     fun selectSport(sport: Sport) = _state.update { if (it.recording) it else it.copy(sport = sport) }
 
-    fun setAutoPause(on: Boolean) = _state.update { if (it.recording) it else it.copy(autoPause = on) }
+    /** Chosen before starting: the recorded run and the server's moving time both use it. */
+    fun setAutoPause(setting: AutoPause) = _state.update { if (it.recording) it else it.copy(autoPause = setting) }
 
+    /** Mutes or unmutes cues, also mid-run. */
     fun setAudioCues(on: Boolean) = _state.update { it.copy(audioCues = on) }
 
+    /** Changes how often cues speak, also mid-run; counting restarts from now, so nothing is announced at once. */
+    fun setCueInterval(interval: CueInterval) {
+        _state.update { it.copy(cueInterval = interval) }
+        cuedMark = -1
+        runs.active.value?.let(::cueIfDue)
+    }
+
     private fun cueIfDue(run: ActiveRun) {
-        val km = (run.distanceM / METRES_PER_KM).toInt()
-        if (cuedKm < 0) cuedKm = km
-        if (km <= cuedKm) return
-        cuedKm = km
-        if (_state.value.audioCues) _cues.tryEmit(cueText(km, run, clock.now()))
+        val interval = _state.value.cueInterval
+        val now = clock.now()
+        val mark = interval.mark(run, now)
+        if (cuedMark < 0) cuedMark = mark
+        if (mark <= cuedMark) return
+        cuedMark = mark
+        if (_state.value.audioCues) _cues.tryEmit(cueText(interval, mark, run, now))
     }
 
     fun start(confirmedLowLight: Boolean = false) {
@@ -316,11 +331,19 @@ class RunViewModel(
     companion object {
         private const val METRES_PER_KM = 1000.0
 
-        /** "2 kilometres. Time 11:04. Pace 5:32 per kilometre." */
-        fun cueText(km: Int, run: ActiveRun, now: kotlin.time.Instant): String {
+        /**
+         * Distance cues: "2 kilometres. Time 11:04. Pace 5:32 per kilometre."
+         * Time cues: "10 minutes. 1.84 kilometres. Pace 5:26 per kilometre."
+         */
+        fun cueText(interval: CueInterval, mark: Int, run: ActiveRun, now: kotlin.time.Instant): String {
             val pace = run.paceSecPerKm(now)?.let { " Pace ${Format.duration(it)} per kilometre." }.orEmpty()
-            val unit = if (km == 1) "kilometre" else "kilometres"
-            return "$km $unit. Time ${Format.duration(run.moving(now).inWholeSeconds.toDouble())}.$pace"
+            val minutes = interval.minutesAt(mark)
+            if (minutes != null) {
+                val km = Format.fixed(run.distanceM / METRES_PER_KM, 2)
+                return "$minutes ${if (minutes == 1L) "minute" else "minutes"}. $km kilometres.$pace"
+            }
+            val unit = if (mark == 1) "kilometre" else "kilometres"
+            return "$mark $unit. Time ${Format.duration(run.moving(now).inWholeSeconds.toDouble())}.$pace"
         }
 
         fun celebrate(runId: Int, result: RunResult, today: TodayData?) = RunDialog.Celebrate(

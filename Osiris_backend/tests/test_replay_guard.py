@@ -13,7 +13,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from database import Base
-from main import app, get_db, get_password_hash, get_rank, get_title
+from main import app
+from database import get_db
+from core.security import get_password_hash
+from services.progression import get_rank, get_title
 import models
 
 # Set up an in-memory SQLite database for testing
@@ -111,10 +114,10 @@ def test_replay_attack_guard():
         
         # But wait, we can also test it by calling _consume_proof_or_409 directly!
         # Let's do that for a much cleaner unit test.
-        from main import _consume_proof_or_409
+        from services.proofs import _consume_proof_or_409
         from models import ProofConsumed
         from pydantic import TypeAdapter
-        from main import ActivityProof
+        from schemas import ActivityProof
         
         proof_obj = TypeAdapter(ActivityProof).validate_python(payload["defense_proof"])
         

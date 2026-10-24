@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.orm import Session
 
 import models
-from main import app, get_current_user_token, get_db
+from core.security import get_current_user_token
+from database import get_db
 
 router = APIRouter()
 
@@ -74,6 +75,3 @@ async def support_chat(websocket: WebSocket, db: Session = Depends(get_db)) -> N
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Message limit reached")
     except WebSocketDisconnect:
         return
-
-
-app.include_router(router)

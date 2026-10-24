@@ -8,6 +8,7 @@ import com.osiris.shared.data.network.api.RunApi
 import com.osiris.shared.domain.model.RunResult
 import com.osiris.shared.domain.repository.RunRepository
 import com.osiris.shared.domain.run.ActiveRun
+import com.osiris.shared.domain.run.AutoPause
 import com.osiris.shared.domain.run.LocationFix
 import com.osiris.shared.domain.run.Sport
 import com.russhwolf.settings.Settings
@@ -49,7 +50,7 @@ class RunRepositoryImpl(
         }
     }
 
-    override suspend fun start(challengeId: Int?, now: Instant, sport: Sport, autoPause: Boolean): Outcome<ActiveRun> = outcomeOf {
+    override suspend fun start(challengeId: Int?, now: Instant, sport: Sport, autoPause: AutoPause): Outcome<ActiveRun> = outcomeOf {
         val userId = currentUserId() ?: throw AppError.Unauthorized()
         if (_active.value != null) throw AppError.Validation("A run is already being recorded.")
         val created = api.create(now, sport.wire)
@@ -60,7 +61,8 @@ class RunRepositoryImpl(
             startedAt = now,
             challengeId = challengeId,
             sport = sport.wire,
-            autoPause = autoPause,
+            autoPause = autoPause.on,
+            autoPauseMps = if (autoPause.on) autoPause.mps else ActiveRun.MOVING_MIN_MPS,
         )
         state.withLock { save(run) }
         _offline.value = false
@@ -93,7 +95,7 @@ class RunRepositoryImpl(
         val run = _active.value ?: throw AppError.Validation("No run is being recorded.")
         // Waits for a background upload instead of skipping it, which would report "offline".
         if (!upload.withLock { drain() }) throw AppError.Offline()
-        val result = api.finish(run.runId, now, "run-${run.runId}-finish")
+        val result = api.finish(run.runId, now, "run-${run.runId}-finish", run.pauseBelowMps)
         state.withLock { clearLocked() }
         result
     }

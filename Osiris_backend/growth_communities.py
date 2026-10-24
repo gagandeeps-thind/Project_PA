@@ -8,7 +8,7 @@ Privacy: leaderboards show a display name only for players who opted in
 (`PlayerProfile.leaderboard_opt_in`). Everyone else appears as "Private runner" so their
 position still counts but cannot be tied to them. No location appears anywhere here.
 
-Registered on `main.app` at the bottom; imported from the end of growth_api.
+`main.py` mounts `router`.
 """
 from __future__ import annotations
 
@@ -25,19 +25,13 @@ from sqlalchemy.orm import Session
 import growth_safety
 import models
 from growth_api import emit_event, get_or_create_profile
-from main import (
-    ChallengePublic,
-    _api_error,
-    _audit,
-    ChallengeStats,
-    _challenge_public,
-    _now_naive_utc,
-    _refresh_challenge_status,
-    app,
-    get_active_player,
-    get_current_admin,
-    get_db,
-)
+from core.clock import _now_naive_utc
+from core.errors import _api_error
+from core.security import get_active_player, get_current_admin
+from database import get_db
+from schemas import ChallengePublic
+from services.audit import _audit
+from services.challenge_store import _challenge_public, _refresh_challenge_status, ChallengeStats
 from services import leaderboards as lb
 from services import quests as quest_rules
 
@@ -640,6 +634,3 @@ def admin_community_status(community_id: int, req: AdminCommunityStatus, db: Ses
         status=c.status, status_reason=c.status_reason, member_count=len(_member_ids(db, c.id)),
         owner_user_id=c.owner_user_id, created_at=c.created_at,
     )
-
-
-app.include_router(router)

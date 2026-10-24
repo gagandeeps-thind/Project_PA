@@ -67,6 +67,8 @@ import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.run.RunDialog
 import com.osiris.shared.presentation.run.RunState
 import com.osiris.shared.presentation.run.RunViewModel
+import com.osiris.shared.domain.run.AutoPause
+import com.osiris.shared.domain.run.CueInterval
 import com.osiris.shared.domain.run.Sport
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.FlowRow
@@ -139,7 +141,10 @@ fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChal
                     }
                 }
                 if (!s.recording && s.challengeId == null) StartOptions(s, vm)
-                if (s.recording) Metrics(s)
+                if (s.recording) {
+                    Metrics(s)
+                    FrostCard(contentPadding = 12.dp) { CueOptions(s, vm) }
+                }
             }
             RunButton(s, vm::toggle, Modifier.align(Alignment.BottomEnd).padding(16.dp))
         }
@@ -177,7 +182,7 @@ private fun Metrics(s: RunState) {
     }
 }
 
-/** Before a free run: what to record, and whether to auto-pause at stops and announce each kilometre. */
+/** Before a free run: what to record, below which speed to auto-pause, and how often to announce progress. */
 @Composable
 private fun StartOptions(s: RunState, vm: RunViewModel) {
     FrostCard(contentPadding = 12.dp) {
@@ -186,9 +191,33 @@ private fun StartOptions(s: RunState, vm: RunViewModel) {
                 FilterChip(selected = s.sport == sport, onClick = { vm.selectSport(sport) }, label = { Text(sport.label) })
             }
         }
+        Text("AUTO-PAUSE", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Faint)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = s.autoPause, onClick = { vm.setAutoPause(!s.autoPause) }, label = { Text("Auto-pause") })
-            FilterChip(selected = s.audioCues, onClick = { vm.setAudioCues(!s.audioCues) }, label = { Text("Audio cues") })
+            for (setting in AutoPause.entries) {
+                FilterChip(selected = s.autoPause == setting, onClick = { vm.setAutoPause(setting) }, label = { Text(setting.label) })
+            }
+        }
+        CueOptions(s, vm)
+    }
+}
+
+/** Audio cues: mute and interval. Shown before and during a run; changes apply at once. */
+@Composable
+private fun CueOptions(s: RunState, vm: RunViewModel) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = s.audioCues,
+            onClick = { vm.setAudioCues(!s.audioCues) },
+            label = { Text(if (s.audioCues) "Audio cues" else "Cues muted") },
+        )
+        if (s.audioCues) {
+            for (interval in CueInterval.entries) {
+                FilterChip(
+                    selected = s.cueInterval == interval,
+                    onClick = { vm.setCueInterval(interval) },
+                    label = { Text(interval.label) },
+                )
+            }
         }
     }
 }

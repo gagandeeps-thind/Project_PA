@@ -37,12 +37,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/* ── Expired or revoked session ──────────────────────────── */
+const LOGIN_PATH = "/api/v1/auth/login";
+let unauthorizedHandler: (() => void) | null = null;
+
+/** Called once when an authenticated request answers 401 (the token expired or was revoked),
+ *  so the app can return to the login screen instead of showing errors on every page.
+ *  Returns a function that removes the handler. */
+export function onUnauthorized(handler: () => void): () => void {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
+api.interceptors.response.use(undefined, (error: unknown) => {
+  if (
+    axios.isAxiosError(error) &&
+    error.response?.status === 401 &&
+    error.config?.url !== LOGIN_PATH
+  ) {
+    unauthorizedHandler?.();
+  }
+  return Promise.reject(error);
+});
+
 /* ── Auth ─────────────────────────────────────────────────── */
 export async function loginAdmin(
   email: string,
   password: string
 ): Promise<AdminLoginResponse> {
-  const { data } = await api.post<AdminLoginResponse>("/api/v1/auth/login", {
+  const { data } = await api.post<AdminLoginResponse>(LOGIN_PATH, {
     email,
     password,
     device_timestamp: new Date().toISOString(),
@@ -99,9 +124,10 @@ export async function createBounty(
   return data;
 }
 
-/* ── Trust console (R2, /api/v2/admin) ───────────────────── */
+/* ── Errors ───────────────────────────────────────────────── */
 
-/** Pull the human message out of a v2 `{detail: {code, message}}` error. */
+/** The message to show for a failed request: the server's `detail` (a string, a v2
+ *  `{code, message}`, or a list of validation errors), or a network hint. */
 export function apiErrorMessage(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) {
     const detail = err.response?.data?.detail;
@@ -109,10 +135,21 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
     if (detail && typeof detail === "object" && "message" in detail) {
       return String((detail as { message: unknown }).message);
     }
+    // FastAPI validation errors (422): a list of {loc, msg}.
+    if (Array.isArray(detail) && detail.length > 0) {
+      return detail
+        .map((d: { loc?: unknown[]; msg?: unknown }) => {
+          const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : undefined;
+          return field ? `${String(field)}: ${String(d.msg)}` : String(d.msg);
+        })
+        .join("; ");
+    }
+    if (!err.response) return "Cannot reach the Osiris API. Check your connection.";
   }
   return err instanceof Error ? err.message : fallback;
 }
 
+/* ── Trust console (R2, /api/v2/admin) ───────────────────── */
 export async function getReviewQueue(): Promise<ReviewQueueItem[]> {
   const { data } = await api.get<ReviewQueueItem[]>("/api/v2/admin/review-queue");
   return data;

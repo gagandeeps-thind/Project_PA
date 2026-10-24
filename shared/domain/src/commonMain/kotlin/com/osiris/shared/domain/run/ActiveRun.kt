@@ -47,8 +47,10 @@ data class ActiveRun(
     /** Run-relative time of the last point; the server rejects timestamps that do not increase. */
     @SerialName("last_t_ms") val lastTMs: Long? = null,
     val sport: String = Sport.RUN.wire,
-    /** Stops (slower than [MOVING_MIN_MPS] for [AUTO_PAUSE_AFTER_MS] straight) leave moving time. */
+    /** Stops (slower than [autoPauseMps] for [AUTO_PAUSE_AFTER_MS] straight) leave moving time. */
     @SerialName("auto_pause") val autoPause: Boolean = true,
+    /** Below this speed the player counts as stopped; see [AutoPause]. */
+    @SerialName("auto_pause_mps") val autoPauseMps: Double = MOVING_MIN_MPS,
     /** Length of the current slow stretch. */
     @SerialName("still_ms") val stillMs: Long = 0,
     @SerialName("paused_ms") val pausedMs: Long = 0,
@@ -58,6 +60,9 @@ data class ActiveRun(
 ) {
     /** Auto-paused right now. Points keep recording: they are the run's evidence. */
     val paused: Boolean get() = autoPause && stillMs >= AUTO_PAUSE_AFTER_MS
+
+    /** The stop speed the server should apply to this run's moving time; 0 when auto-pause is off. */
+    val pauseBelowMps: Double get() = if (autoPause) autoPauseMps else 0.0
     val uploaded: Int get() = nextSequence - pending.size
 
     fun elapsed(now: Instant): Duration = now - startedAt
@@ -98,9 +103,9 @@ data class ActiveRun(
         // reported 0 is a stop only if the position stayed within jitter; some phones report 0 while moving.
         val reported = point.speedMps
         val slow = dtMs > 0 && if (reported == null) {
-            segment / dtMs.milliseconds.toDouble(DurationUnit.SECONDS) < MOVING_MIN_MPS
+            segment / dtMs.milliseconds.toDouble(DurationUnit.SECONDS) < autoPauseMps
         } else {
-            reported < MOVING_MIN_MPS && segment <= maxOf(fix.accuracyM ?: 0.0, JITTER_FLOOR_M)
+            reported < autoPauseMps && segment <= maxOf(fix.accuracyM ?: 0.0, JITTER_FLOOR_M)
         }
         return copy(
             nextSequence = nextSequence + 1,
@@ -135,7 +140,7 @@ data class ActiveRun(
     companion object {
         val STALE_AFTER: Duration = 12.hours
 
-        /** Keep in step with run_verifier.py: MOVING_MIN_MPS, AUTO_PAUSE_AFTER_SECONDS, JITTER_FLOOR_M, CLIMB_STEP_M. */
+        /** Keep in step with run_verifier.py: MOVING_MIN_MPS (its default), AUTO_PAUSE_AFTER_SECONDS, JITTER_FLOOR_M, CLIMB_STEP_M. */
         const val MOVING_MIN_MPS = 0.5
         const val JITTER_FLOOR_M = 5.0
         const val AUTO_PAUSE_AFTER_MS = 10_000L

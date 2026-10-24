@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 
 import database
 import main
+from core import security  # noqa: E402
 import growth_api
 import models
 from services import quests as q
@@ -109,7 +110,7 @@ def _admin() -> dict:
         admin_id = admin.id
     finally:
         db.close()
-    return {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
+    return {"Authorization": f"Bearer {security.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
 
 
 # --- pure rules ---------------------------------------------------------------------

@@ -8,7 +8,7 @@ import {
   Store,
   Activity,
 } from "lucide-react";
-import { getPlatformRevenue, getMerchants } from "../api/client";
+import { apiErrorMessage, getPlatformRevenue, getMerchants } from "../api/client";
 import type { PlatformRevenue } from "../api/types";
 import { CardsSkeleton } from "../components/Skeleton";
 
@@ -30,7 +30,7 @@ export default function DashboardPage() {
           merchants.filter((m) => m.is_active).length
         );
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load data");
+        setError(apiErrorMessage(err, "Failed to load data"));
       } finally {
         setLoading(false);
       }

@@ -261,8 +261,11 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
 - [x] admin web: per-page chunks and long-lived library chunks, skeletonilters, non-blocking fonts
 - [x] android: ARM-only release APK (87 -> 47 MB), Compose stability config (90 -> 2 unstable params), loading skeleton
 - [x] infra: nginx gateway / load balancer config and compose override; `OSIRIS_RUN_SCHEDULER`
-- [ ] [human] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`);
-  before more than one replica: PostgreSQL, one scheduler, a shared rate limiter (report 17, section 4).
+- [x] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`)
+  - Ran 2026-10-24 (report 20): healthy, gzip/ETag/request id through nginx, WebSocket upgrade, even least_conn split
+    over 2 replicas. Found that replicas need a shared `OSIRIS_JWT_SECRET`; the override now requires it.
+- [ ] [human] infra: before more than one replica in a real environment: PostgreSQL, one scheduler, a shared rate
+  limiter (report 17, section 4).
 - [x] app: fetch Today once at start (it is fetched before and again after the first location fix)
   - Acceptance: a presentation test shows one `/api/v2/me/today` request when the location arrives within 2 s.
 
@@ -307,9 +310,33 @@ Build order (dependencies in brackets):
 - [x] tracker 1a: sport type (run, walk, hike), auto-pause (slower than 0.5 m/s for 10 s; a reported speed of 0 counts
   only if the position stayed within GPS jitter), live moving time and climb, spoken kilometre cues, no GPS distance
   filter so stops keep producing fixes; the server's verification decision records the same moving time and climb.
-- [ ] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+- [x] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+  - Cues every km, 5 or 10 min of moving time; mute and interval change mid-run (no burst). Auto-pause off, stops
+    only (0.5 m/s), under 3.6 or 5.4 km/h; the finish sends `auto_pause_mps` so the server's moving time matches.
+    Android UI not compiled in the agent container (no Android SDK); shared tests cover the logic.
 - [ ] [human] device QA for tracker 1: a 60-min run on a low-end Android phone loses under 1% of points (compare
   `point_count` with fixes logged), screen off and app swiped away; record battery drain per hour.
 - [ ] tracker 3: activity history and detail (map, splits, elevation profile), edit title, delete with derived-stat cascade
   (never the ledger). Needs `run_sessions.title` and `visibility` ([human] migration).
 - [ ] ride: per-sport speed rules, boards and quest eligibility before `ride` is accepted.
+
+## Structure and audit pass (2026-10-24)
+Report: `Documentation/Enterprise/20_Structure_Performance_and_Audit_2026-10-24.md`. Branch `claude/cool-wozniak-dk57od`.
+
+- [x] backend: split the 4,400-line `main.py` into `core/`, `routers/`, `schemas.py` and services (contract, routes and
+  middleware unchanged); `docs/architecture/backend.md`
+- [x] backend: `requirements.txt` lists `stripe` (imported at startup) and drops four unused packages
+- [x] backend: global boards rank from a cached sorted board (7.8 -> 0.03 ms per request at 10k players); daily decay in
+  SQL, no crash on a NULL last activity
+- [x] backend: hot paths read only the columns they use (load p95 927 -> 413 ms at 20 users); `scripts/load_test.py`
+- [x] backend + admin web: admin Bounties page works again; the console signs out on 401, shows server errors, and
+  survives a failed page chunk (error boundary)
+- [ ] [human] repo layout: rename top-level folders for consistency in one PR, with the CI, Dockerfile, compose, gate and
+  doc edits it needs: `Osiris_backend` -> `backend`, `Osiris_admin_web` -> `admin_web`; keep `shared`, `android_version`,
+  `ios_version`; then `Documentation/` -> `docs/enterprise/`. Not done by an agent: CI and the Dockerfile are danger zones.
+- [ ] [human] deps (lockfile): drop `passlib` from the backend lock (nothing imports it); move admin `@types/react` and
+  `@types/react-dom` to devDependencies (`npm install -D` rewrites the npm lock).
+- [ ] [human] build the Android app once on a machine with the SDK to compile the tracker 1b run-screen controls
+  (`./gradlew :android_version:app:assembleDebug`); the agent container has no Android SDK (dl.google.com is blocked).
+- [ ] backend: decide whether board display names may be cached with the board (opt-out would lag up to 60 s) or wait for
+  PostgreSQL; the name lookup is the remaining distance-board tail on SQLite (report 20, section 6).

@@ -9,7 +9,7 @@ Privacy rules for everything public here (Security §2-3, ADR-004):
 - Achievement pages are opt-in (`PlayerProfile.public_profile`) and show aggregate stats.
 - Share and invite tokens are random and unguessable; ids never appear in public URLs.
 
-Registered on `main.app` at the bottom of this module (see growth_api for the pattern).
+`main.py` mounts `router`.
 """
 from __future__ import annotations
 
@@ -37,14 +37,11 @@ from growth_api import (
     emit_event,
     get_or_create_profile,
 )
-from main import (
-    _api_error,
-    _now_naive_utc,
-    _refresh_challenge_status,
-    app,
-    get_active_player,
-    get_db,
-)
+from core.clock import _now_naive_utc
+from core.errors import _api_error
+from core.security import get_active_player
+from database import get_db
+from services.challenge_store import _refresh_challenge_status
 from services import challenges as challenge_rules
 from services import quests as quest_rules
 
@@ -571,6 +568,3 @@ def join_page(code: str, request: Request, db: Session = Depends(get_db)):
             f"<a class='cta' href='{APP_DEEP_LINK}join/{html.escape(profile.referral_code)}'>Open in Osiris</a>")
     return _page(title="Join Osiris", description=f"{TAGLINE} Free to start.",
                  url=url, body=body, index=False)
-
-
-app.include_router(router)

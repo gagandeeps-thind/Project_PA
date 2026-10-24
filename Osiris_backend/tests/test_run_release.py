@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 import database
 import growth_api
 import main
+from services import jobs  # noqa: E402
 import models
 import run_verifier
 
@@ -209,7 +210,7 @@ def test_raw_route_points_expire_after_retention_window() -> None:
     in_review = _finished_run(client, headers, "review")
     db = database.SessionLocal()
     try:
-        long_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=main.ROUTE_POINT_RETENTION_DAYS + 5)
+        long_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=jobs.ROUTE_POINT_RETENTION_DAYS + 5)
         for rid in (old_run, in_review):
             db.query(models.RunSession).filter(models.RunSession.id == rid).update({"finished_at": long_ago})
         # Evidence for an attempt still awaiting a human reviewer must survive.
@@ -217,7 +218,7 @@ def test_raw_route_points_expire_after_retention_window() -> None:
                                        run_session_id=in_review))
         db.commit()
 
-        main.process_route_point_ttl()
+        jobs.process_route_point_ttl()
 
         db.expire_all()
         def points(rid: int) -> int:
@@ -309,6 +310,77 @@ def test_hike_records_moving_time_and_climb_and_rides_wait_for_their_own_rules()
     assert (again["moving_seconds"], again["elevation_gain_m"]) == (330.0, 39.0)
 
 
+def test_the_players_auto_pause_setting_sets_moving_time_but_never_the_verdict() -> None:
+    """Tracker 1b: the app sends its auto-pause speed with the finish so both moving times agree."""
+    ts = [i * 1000 for i in range(61)]
+    walk_break = [0.0]
+    for i in range(1, 61):  # 3 m/s, with a 20 s walk at 1.2 m/s
+        walk_break.append(walk_break[-1] + (1.2 if 20 <= i < 40 else 3.0))
+    assert run_verifier.moving_seconds(ts, walk_break) == 60.0
+    assert run_verifier.moving_seconds(ts, walk_break, min_mps=1.5) == 40.0
+    assert run_verifier.moving_seconds(ts, walk_break, min_mps=0.0) == 60.0
+
+    _cleanup()
+    client = TestClient(main.app)
+    headers = {"Authorization": f"Bearer {_login(client)}"}
+    run_id = client.post("/api/v2/runs", headers=headers, json={"activity_type": "run", "device_started_at": _now()}).json()["id"]
+    client.post(f"/api/v2/runs/{run_id}/start", headers=headers, json={"device_started_at": _now()})
+    points, lat = [], 44.6
+    for i in range(40):  # 10 s apart; points 10-15 stand still for 60 s
+        if not 10 <= i < 16:
+            lat += 0.0002
+        points.append({"sequence": i, "t_ms": i * 10_000, "lat": lat, "lng": -63.6, "accuracy_m": 8})
+    assert client.post(f"/api/v2/runs/{run_id}/points", headers=headers, json={"points": points}).status_code == 200
+    finish = {"device_finished_at": _now(), "idempotency_key": "run-release-autopause-001"}
+    too_fast = client.post(f"/api/v2/runs/{run_id}/finish", headers=headers, json={**finish, "auto_pause_mps": 5})
+    assert too_fast.status_code == 422, too_fast.text
+    body = client.post(f"/api/v2/runs/{run_id}/finish", headers=headers, json={**finish, "auto_pause_mps": 0}).json()
+    assert body["verification_status"] == "accepted", body
+    assert body["moving_seconds"] == body["duration_seconds"] == 390.0, body  # auto-pause off: the stop counts
+
+
+def test_daily_decay_handles_players_without_activity():
+    """Audit 2026-10-24: the column is nullable, and one NULL (a row written by SQL or an import; the
+    ORM fills a default) made the whole decay job raise, so nobody decayed. The job now updates in
+    SQL and recomputes ranks only where they change."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    prefix = "decay.audit.20261024."
+    db = database.SessionLocal()
+    try:
+        db.query(models.User).filter(models.User.email.like(prefix + "%")).delete(synchronize_session=False)
+        rows = {
+            "idle": models.User(email=prefix + "idle@example.com", hashed_password="x", xp=1000, streak=5,
+                                last_activity_date=now - timedelta(days=2), rank="C - Intermediate"),
+            "fresh": models.User(email=prefix + "fresh@example.com", hashed_password="x", xp=1000, streak=3,
+                                 last_activity_date=now - timedelta(hours=2), rank="C - Intermediate"),
+            "never": models.User(email=prefix + "never@example.com", hashed_password="x", xp=100, streak=0,
+                                 last_activity_date=None, rank="D - Beginner"),
+            "gone": models.User(email=prefix + "gone@example.com", hashed_password="x", xp=600, streak=1,
+                                last_activity_date=now - timedelta(days=40), rank="C - Intermediate"),
+        }
+        db.add_all(rows.values())
+        db.commit()
+        ids = {k: u.id for k, u in rows.items()}
+        db.query(models.User).filter(models.User.id == ids["never"]).update(
+            {models.User.last_activity_date: None}, synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+    jobs.process_daily_decay()
+    db = database.SessionLocal()
+    try:
+        got = {k: db.get(models.User, i) for k, i in ids.items()}
+        assert (got["idle"].xp, got["idle"].streak, got["idle"].rank) == (950, 0, "C - Intermediate")
+        assert (got["fresh"].xp, got["fresh"].streak) == (1000, 3)
+        assert (got["never"].xp, got["never"].rank) == (100, "D - Beginner")
+        assert (got["gone"].xp, got["gone"].streak, got["gone"].rank) == (570, 0, "F - The Dishonored")
+        db.query(models.User).filter(models.User.id.in_(ids.values())).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     for test in (
         test_metrics_count_requests_and_verification_outcomes,
@@ -321,6 +393,8 @@ if __name__ == "__main__":
         test_raw_route_points_expire_after_retention_window,
         test_moving_time_drops_stops_and_elevation_ignores_gps_noise,
         test_hike_records_moving_time_and_climb_and_rides_wait_for_their_own_rules,
+        test_the_players_auto_pause_setting_sets_moving_time_but_never_the_verdict,
+        test_daily_decay_handles_players_without_activity,
     ):
         test()
         print(f"PASS {test.__name__}")
