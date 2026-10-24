@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The player's position: a purple dot with a white ring. -->
+<!-- The player's position: the lime accent with a slate ring, readable on the dimmed map. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <size android:width="20dp" android:height="20dp" />
-    <solid android:color="#FF9D4EDD" />
-    <stroke android:width="2dp" android:color="#FFFFFFFF" />
+    <size android:width="22dp" android:height="22dp" />
+    <solid android:color="#FFC6F432" />
+    <stroke android:width="4dp" android:color="#FF121418" />
 </shape>

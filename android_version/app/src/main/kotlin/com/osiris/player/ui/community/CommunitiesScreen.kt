@@ -1,6 +1,5 @@
 package com.osiris.player.ui.community
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,6 +45,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.model.Community
 import com.osiris.shared.presentation.AppGraph
@@ -112,7 +111,7 @@ private fun LazyListScope.section(
 
 @Composable
 private fun CommunityTile(c: Community, onClick: () -> Unit) {
-    Card(Modifier.padding(vertical = 4.dp).clickable(onClick = onClick)) {
+    FrostCard(Modifier.padding(vertical = 4.dp), onClick = onClick, contentPadding = 0.dp) {
         ListItem(
             leadingContent = {
                 Box(Modifier.size(40.dp).background(brandColor(c.brandColor), CircleShape), contentAlignment = Alignment.Center) {

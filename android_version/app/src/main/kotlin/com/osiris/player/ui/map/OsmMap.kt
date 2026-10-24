@@ -1,5 +1,6 @@
 package com.osiris.player.ui.map
 
+import android.graphics.ColorMatrixColorFilter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ fun OsmMap(
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             controller.setZoom(16.0)
+            overlayManager.tilesOverlay.setColorFilter(SLATE_TILES)
             overlays += CopyrightOverlay(context)
         }
     }
@@ -174,3 +176,25 @@ private class Layers(private val map: MapView) {
     private fun geo(p: LatLng) = GeoPoint(p.lat, p.lng)
 }
 
+/**
+ * OSM's standard tiles are bright; this recolours them onto the slate theme: inverted grey, scaled
+ * down and lifted a little, so land is near the background, labels stay light and the route and
+ * markers are the brightest things on the map. Luminance weights are Rec. 601.
+ */
+private const val TILE_CONTRAST = 0.7f
+private const val TILE_FLOOR = 20f
+private const val TILE_GREEN_LIFT = 3f
+private const val TILE_BLUE_LIFT = 8f
+private const val LUMA_R = 0.299f
+private const val LUMA_G = 0.587f
+private const val LUMA_B = 0.114f
+private const val MAX_CHANNEL = 255f
+
+private val SLATE_TILES = run {
+    val k = -TILE_CONTRAST
+    val lift = TILE_CONTRAST * MAX_CHANNEL + TILE_FLOOR
+    val grey = floatArrayOf(LUMA_R * k, LUMA_G * k, LUMA_B * k, 0f)
+    ColorMatrixColorFilter(
+        grey + lift + grey + (lift + TILE_GREEN_LIFT) + grey + (lift + TILE_BLUE_LIFT) + floatArrayOf(0f, 0f, 0f, 1f, 0f),
+    )
+}

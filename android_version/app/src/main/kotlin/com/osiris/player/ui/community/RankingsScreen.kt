@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.common.Loadable
@@ -86,7 +86,7 @@ fun RankingsScreen(graph: AppGraph, onBack: (() -> Unit)?, onSettings: () -> Uni
 @Composable
 private fun SeasonCardView(card: SeasonCard, onJoin: () -> Unit) {
     val season = card.season
-    Card(Modifier.padding(vertical = 6.dp)) {
+    FrostCard(Modifier.padding(vertical = 6.dp), contentPadding = 0.dp) {
         Column(Modifier.padding(16.dp)) {
             Text(season.name, style = MaterialTheme.typography.titleLarge)
             Text(card.status, color = OsirisColors.Muted)

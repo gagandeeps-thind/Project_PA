@@ -19,8 +19,6 @@ import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -59,6 +57,7 @@ import com.osiris.player.ui.common.localMinute
 import com.osiris.player.ui.common.rememberNow
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.map.CoursePreview
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.model.AttemptSummary
@@ -143,7 +142,7 @@ private fun Content(detail: ChallengeDetail, joining: Boolean, vm: ChallengeDeta
         val route = detail.course?.route.orEmpty()
         if (route.size >= 2) item { CoursePreview(route) }
         item {
-            Card {
+            FrostCard(contentPadding = 0.dp) {
                 Column(Modifier.padding(16.dp)) {
                     Text("TERMS", fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Gap(8)
@@ -166,7 +165,7 @@ private fun Content(detail: ChallengeDetail, joining: Boolean, vm: ChallengeDeta
         val notes = c.safetyNotes
         if (!notes.isNullOrBlank()) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = OsirisColors.Warning.copy(alpha = 0.12f))) {
+                FrostCard(contentPadding = 0.dp, fill = OsirisColors.Warning.copy(alpha = 0.12f)) {
                     ListItem(
                         leadingContent = { Icon(Icons.Filled.HealthAndSafety, null, tint = OsirisColors.Warning) },
                         headlineContent = { Text("Safety notes") },
@@ -209,7 +208,7 @@ private fun AttemptCard(a: AttemptSummary, vm: ChallengeDetailViewModel) {
         a.status == "rejected" -> OsirisColors.Error
         else -> OsirisColors.Secondary
     }
-    Card {
+    FrostCard(contentPadding = 0.dp) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("YOUR ATTEMPT", fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.weight(1f))

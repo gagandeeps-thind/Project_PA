@@ -280,3 +280,14 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
 - [ ] [human] ci: add `python tests/test_public_base_url.py` after the existing suites in `.github/workflows/ci.yml`.
 - [ ] [human] deploy: add `OSIRIS_PUBLIC_BASE_URL` (the public https origin) to `DEPLOY_RUNBOOK.md` and every
   non-dev environment; without it share, invite and referral links answer 503 instead of trusting the Host header.
+
+## UI: Slate redesign (2026-10-21)
+Mock-up canvas: https://claude.ai/artifact/9T7qH7rsRZ32o1YXq5McMy (Today, live run, Social).
+
+- [x] android: Slate tokens (charcoal slate, lime accent, orange for streaks; no purple), Manrope + Geist Mono,
+  glass panes with a specular top rim, stepped top-left shadows and grain, floating chunky tab bar, one 72 sp
+  focal number per screen (Today quest distance, Run distance, Social rank), asymmetric Today shortcuts,
+  slate-tinted map tiles. `DesignTokensTest` checks WCAG AA text contrast.
+- [ ] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
+  target with `UIAppFonts`, and use them in `Frost.swift`; the shared colours already apply. Needs a Mac to build.
+  - Acceptance: the iOS Today screen renders the quest distance in Manrope ExtraBold at 72 pt.

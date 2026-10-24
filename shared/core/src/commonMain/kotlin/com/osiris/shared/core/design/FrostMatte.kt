@@ -1,7 +1,10 @@
 package com.osiris.shared.core.design
 
 /**
- * FrostMatte design tokens: frosted-glass cards over non-reflective matte backgrounds.
+ * FrostMatte design tokens, "Slate" edition: glass panes over a charcoal slate backdrop with grain,
+ * a specular top rim on every pane, sharp stepped shadows lit from the top left, and one
+ * electric accent. Each screen has a single dominant number ([TextStyle.HERO]); everything else
+ * recedes into muted neutrals.
  *
  * The single source for both apps. Colors are ARGB (`0xAARRGGBB`) so Compose reads them with
  * `Color(argb)` and SwiftUI with `Color(argb:)`; lengths are density-independent points.
@@ -12,7 +15,8 @@ object FrostMatte {
     /**
      * @property glassFill card fill over the blurred backdrop
      * @property glassFallback opaque-looking fill where the platform cannot blur (Android < 12)
-     * @property glassBorder 1 pt hairline around every glass surface
+     * @property glassBorder the specular rim: brightest at a pane's top edge, fading to nothing at the bottom
+     * @property shadow the hard first step of a pane's shadow (offset down-right from a top-left light)
      */
     data class Palette(
         val background: Long,
@@ -35,24 +39,27 @@ object FrostMatte {
     )
 
     val dark = Palette(
-        background = 0xFF0E0F14,
-        backgroundAccent = 0xFF2A1A4A,
-        backgroundAccentAlt = 0xFF0B3A3A,
-        glassFill = 0x14FFFFFF, // rgba(255,255,255,0.08)
-        glassFallback = 0xE61A1B22,
-        glassBorder = 0x2EFFFFFF, // rgba(255,255,255,0.18)
-        shadow = 0x59000000,
-        textPrimary = 0xFFF4F4F7,
-        textSecondary = 0xB3F4F4F7,
-        textMuted = 0x80F4F4F7,
-        accent = 0xFF9D4EDD,
-        onAccent = 0xFFFFFFFF,
-        accentAlt = 0xFF03DAC6,
-        success = 0xFF4CAF50,
-        warning = 0xFFFFC107,
-        danger = 0xFFCF6679,
-        gold = 0xFFFDD835,
+        background = 0xFF16181D, // charcoal slate, never pure black
+        backgroundAccent = 0xFF22262E, // the lit top-left of the backdrop vignette
+        backgroundAccentAlt = 0xFF111317, // its shaded bottom-right
+        glassFill = 0xD9262A33,
+        glassFallback = 0xF2232730,
+        glassBorder = 0x80FFFFFF, // rim at the top edge; fades to transparent
+        shadow = 0xFF0B0C0F,
+        textPrimary = 0xFFF2F3F5,
+        textSecondary = 0xFF9DA2AB,
+        textMuted = 0xFF8B909A,
+        accent = 0xFFC6F432, // electric lime
+        onAccent = 0xFF121418,
+        accentAlt = 0xFFFF8A4C, // warm orange, streaks and heat only
+        success = 0xFF5CE1A6,
+        warning = 0xFFFFB547,
+        danger = 0xFFFF6B6B,
+        gold = 0xFFFFD166,
     )
+
+    /** The pressed-in base under an accent fill: the accent's own shadow, so a lime button reads as a key. */
+    const val ACCENT_BASE = 0xFF6E8A12
 
     val light = Palette(
         background = 0xFFE9EAF0,
@@ -66,9 +73,9 @@ object FrostMatte {
         textPrimary = 0xFF15151C,
         textSecondary = 0xB315151C,
         textMuted = 0x8015151C,
-        accent = 0xFF7B2CBF,
+        accent = 0xFF4D7C0F,
         onAccent = 0xFFFFFFFF,
-        accentAlt = 0xFF00897B,
+        accentAlt = 0xFFC2410C,
         success = 0xFF2E7D32,
         warning = 0xFFB26A00,
         danger = 0xFFB3261E,
@@ -81,14 +88,21 @@ object FrostMatte {
     const val BLUR_RADIUS = 20f
     const val BORDER_WIDTH = 1f
 
-    /** Soft diffuse drop shadow under glass surfaces. */
+    /**
+     * Tactile shadow: two hard steps offset down-right (light from the top left) plus one tight
+     * blur for contact, instead of a single soft, muddy drop shadow.
+     */
     object Shadow {
-        const val RADIUS = 24f
+        const val STEP1 = 2f
+        const val STEP2_X = 5f
+        const val STEP2_Y = 6f
+        const val STEP2_ALPHA = 0.55f
+        const val RADIUS = 12f
         const val OFFSET_Y = 8f
     }
 
-    /** Matte grain over backgrounds; keeps large areas non-reflective without a gloss gradient. */
-    const val GRAIN_ALPHA = 0.035f
+    /** Grain over the backdrop and inside glass, so large areas read as material, not flat fill. */
+    const val GRAIN_ALPHA = 0.07f
 
     object Radius {
         const val SMALL = 12f
@@ -108,6 +122,8 @@ object FrostMatte {
 
     /** Type scale in points: size to line height. */
     enum class TextStyle(val size: Float, val lineHeight: Float, val weight: Int) {
+        /** The one focal number per screen. Set with tight tracking ([HERO_TRACKING_EM]). */
+        HERO(72f, 68f, 800),
         DISPLAY(34f, 40f, 700),
         TITLE(22f, 28f, 700),
         HEADLINE(18f, 24f, 600),
@@ -115,6 +131,9 @@ object FrostMatte {
         CALLOUT(14f, 20f, 500),
         CAPTION(12f, 16f, 500),
     }
+
+    /** Letter spacing of [TextStyle.HERO], in em: big numerals need it tight. */
+    const val HERO_TRACKING_EM = -0.045f
 
     /** Minimum touch target (Material and Apple HIG agree on 44-48). */
     const val MIN_TOUCH_TARGET = 48f

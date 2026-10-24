@@ -16,8 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -37,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.model.Goal
 import com.osiris.shared.domain.model.Registration
@@ -70,9 +69,11 @@ private fun GoalStep(s: OnboardingState, vm: OnboardingViewModel) {
     Spacer(Modifier.height(20.dp))
     for (goal in Goal.entries) {
         val selected = s.goal == goal
-        Card(
-            colors = CardDefaults.cardColors(containerColor = if (selected) OsirisColors.Primary.copy(alpha = 0.25f) else OsirisColors.Surface),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { vm.selectGoal(goal) },
+        FrostCard(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            onClick = { vm.selectGoal(goal) },
+            contentPadding = 0.dp,
+            fill = if (selected) OsirisColors.Primary.copy(alpha = 0.22f) else null,
         ) {
             ListItem(
                 headlineContent = { Text(goal.label, fontWeight = FontWeight.SemiBold) },

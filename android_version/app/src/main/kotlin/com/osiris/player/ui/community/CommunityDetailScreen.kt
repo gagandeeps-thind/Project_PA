@@ -1,7 +1,6 @@
 package com.osiris.player.ui.community
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -50,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.ui.common.LoadableContent
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.model.TeamGoal
@@ -105,7 +104,7 @@ private fun Content(detail: CommunityDetail, vm: CommunityDetailViewModel, onOpe
         }
         c.perkText?.let { perk ->
             item {
-                Card {
+                FrostCard(contentPadding = 0.dp) {
                     ListItem(
                         leadingContent = { Icon(Icons.Filled.CardGiftcard, null, tint = OsirisColors.Warning) },
                         headlineContent = { Text("Member perk") },
@@ -117,7 +116,7 @@ private fun Content(detail: CommunityDetail, vm: CommunityDetailViewModel, onOpe
         }
         c.joinCode?.let { code ->
             item {
-                Card {
+                FrostCard(contentPadding = 0.dp) {
                     ListItem(
                         leadingContent = { Icon(Icons.Outlined.VpnKey, null) },
                         headlineContent = { Text("Join code: $code") },
@@ -140,7 +139,7 @@ private fun Content(detail: CommunityDetail, vm: CommunityDetailViewModel, onOpe
             if (detail.challenges.isEmpty()) Text("No featured challenges right now.", Modifier.padding(vertical = 8.dp))
         }
         items(detail.challenges, key = { it.id }) { ch ->
-            Card(Modifier.clickable { onOpenChallenge(ch.id) }) {
+            FrostCard(onClick = { onOpenChallenge(ch.id) }, contentPadding = 0.dp) {
                 ListItem(
                     leadingContent = { Icon(Icons.Outlined.Flag, null) },
                     headlineContent = { Text(ch.title) },
@@ -162,7 +161,7 @@ private fun Content(detail: CommunityDetail, vm: CommunityDetailViewModel, onOpe
 
 @Composable
 private fun TeamGoalCard(goal: TeamGoal) {
-    Card(Modifier.padding(top = 8.dp)) {
+    FrostCard(Modifier.padding(top = 8.dp), contentPadding = 0.dp) {
         Column(Modifier.padding(16.dp)) {
             Text("TEAM GOAL THIS WEEK", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp)
             Text(

@@ -1,6 +1,5 @@
 package com.osiris.player.ui.exercise
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,7 +17,6 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.HorizontalRule
 import androidx.compose.material.icons.filled.SportsGymnastics
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -42,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.ui.common.LoadableContent
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.exercise.RecentSetRow
@@ -80,7 +79,7 @@ fun ExerciseHubScreen(graph: AppGraph, onBack: () -> Unit, onOpen: (String) -> U
             LoadableContent(s.exercises, onRetry = vm::refresh) { tiles ->
                 LazyColumn(contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 32.dp)) {
                     item {
-                        Card {
+                        FrostCard(contentPadding = 0.dp) {
                             ListItem(
                                 leadingContent = { Icon(Icons.Outlined.Lock, null, tint = OsirisColors.Secondary) },
                                 headlineContent = { Text("Your camera stays on your phone") },
@@ -93,7 +92,7 @@ fun ExerciseHubScreen(graph: AppGraph, onBack: () -> Unit, onOpen: (String) -> U
                         }
                     }
                     items(tiles, key = { it.spec.key }) { t ->
-                        Card(Modifier.padding(top = 8.dp).clickable { vm.select(t.spec) }) {
+                        FrostCard(Modifier.padding(top = 8.dp), onClick = { vm.select(t.spec) }, contentPadding = 0.dp) {
                             ListItem(
                                 leadingContent = { Icon(exerciseIcon(t.spec.key), null, tint = OsirisColors.Secondary) },
                                 headlineContent = { Text(t.spec.name) },
