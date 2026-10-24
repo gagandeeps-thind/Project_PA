@@ -24,6 +24,17 @@ MIN_DISTANCE_METERS = 100.0
 MAX_ACCEPTED_ACCURACY_METERS = 100.0
 RULES_VERSION = "run-rules-v2"
 
+# Moving time and climbing, for display; they never change the verdict. The app applies the same
+# auto-pause rule live, so the two figures agree: slower than MOVING_MIN_MPS for
+# AUTO_PAUSE_AFTER_SECONDS straight counts as stopped, and climbs shorter than CLIMB_STEP_M are
+# GPS altitude noise.
+MOVING_MIN_MPS = 0.5
+AUTO_PAUSE_AFTER_SECONDS = 10.0
+# A reported speed under MOVING_MIN_MPS is a stop only if the position also moved no more than GPS
+# jitter: the fix's accuracy radius, at least JITTER_FLOOR_M. Some phones report 0 while moving.
+JITTER_FLOOR_M = 5.0
+CLIMB_STEP_M = 3.0
+
 
 @dataclass(frozen=True)
 class VerificationResult:
@@ -66,6 +77,50 @@ def _max_sustained_speed_kmh(timestamps: Sequence[float], cumulative: list[float
 def canonical_route_hash(points: Iterable[dict]) -> str:
     payload = json.dumps(list(points), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def moving_seconds(timestamps: Sequence[float], cumulative: list[float],
+                   speeds: Sequence[float | None] | None = None,
+                   accuracies: Sequence[float | None] | None = None) -> float:
+    """Elapsed time minus stops: a run of slow segments counts as a stop once it lasts
+    AUTO_PAUSE_AFTER_SECONDS, from its first slow segment. A point's own speed (Doppler, from the
+    phone) is preferred over the segment's, which GPS position jitter inflates when standing still."""
+    moving = 0.0
+    still = 0.0
+    for i in range(1, len(timestamps)):
+        dt = (timestamps[i] - timestamps[i - 1]) / 1000.0
+        if dt <= 0:
+            continue
+        segment = cumulative[i] - cumulative[i - 1]
+        reported = speeds[i] if speeds else None
+        if reported is None:
+            slow = segment / dt < MOVING_MIN_MPS
+        else:
+            jitter = max((accuracies[i] if accuracies else None) or 0.0, JITTER_FLOOR_M)
+            slow = reported < MOVING_MIN_MPS and segment <= jitter
+        if not slow:
+            if still < AUTO_PAUSE_AFTER_SECONDS:
+                moving += still
+            still = 0.0
+            moving += dt
+        else:
+            still += dt
+    return moving + (still if still < AUTO_PAUSE_AFTER_SECONDS else 0.0)
+
+
+def elevation_gain_m(altitudes: Iterable[float | None]) -> float:
+    """Total climb, ignoring rises under CLIMB_STEP_M from the lowest point since the last counted climb."""
+    gain = 0.0
+    base: float | None = None
+    for alt in altitudes:
+        if alt is None:
+            continue
+        if base is None or alt < base:
+            base = alt
+        elif alt - base >= CLIMB_STEP_M:
+            gain += alt - base
+            base = alt
+    return gain
 
 
 def verify_route(points: list[dict]) -> VerificationResult:
@@ -131,6 +186,9 @@ def verify_route(points: list[dict]) -> VerificationResult:
         "max_segment_speed_kmh": round(max_segment_speed_kmh, 2),
         "max_gap_seconds": round(max_gap_seconds, 2),
         "average_accuracy_m": round(average_accuracy, 2),
+        "moving_seconds": round(moving_seconds(timestamps, cumulative, [p["speed_mps"] for p in normalized],
+                                               [p["accuracy_m"] for p in normalized]), 2),
+        "elevation_gain_m": round(elevation_gain_m(p["altitude_m"] for p in normalized), 1),
     }
     status = "accepted" if not reasons else "rejected"
     return VerificationResult(status, reasons, metrics, route_hash)

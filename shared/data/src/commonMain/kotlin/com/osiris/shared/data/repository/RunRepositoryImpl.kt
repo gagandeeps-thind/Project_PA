@@ -9,6 +9,7 @@ import com.osiris.shared.domain.model.RunResult
 import com.osiris.shared.domain.repository.RunRepository
 import com.osiris.shared.domain.run.ActiveRun
 import com.osiris.shared.domain.run.LocationFix
+import com.osiris.shared.domain.run.Sport
 import com.russhwolf.settings.Settings
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
@@ -48,12 +49,19 @@ class RunRepositoryImpl(
         }
     }
 
-    override suspend fun start(challengeId: Int?, now: Instant): Outcome<ActiveRun> = outcomeOf {
+    override suspend fun start(challengeId: Int?, now: Instant, sport: Sport, autoPause: Boolean): Outcome<ActiveRun> = outcomeOf {
         val userId = currentUserId() ?: throw AppError.Unauthorized()
         if (_active.value != null) throw AppError.Validation("A run is already being recorded.")
-        val created = api.create(now)
+        val created = api.create(now, sport.wire)
         api.start(created.id, now)
-        val run = ActiveRun(runId = created.id, userId = userId, startedAt = now, challengeId = challengeId)
+        val run = ActiveRun(
+            runId = created.id,
+            userId = userId,
+            startedAt = now,
+            challengeId = challengeId,
+            sport = sport.wire,
+            autoPause = autoPause,
+        )
         state.withLock { save(run) }
         _offline.value = false
         run

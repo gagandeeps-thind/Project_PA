@@ -48,6 +48,7 @@ import com.osiris.player.platform.permission.PermissionStatus
 import com.osiris.player.platform.permission.openAppSettings
 import com.osiris.player.platform.permission.rememberPermission
 import com.osiris.player.platform.share.share
+import com.osiris.player.platform.speech.rememberSpeech
 import com.osiris.player.ui.common.ConfirmDialog
 import com.osiris.player.ui.common.InfoDialog
 import com.osiris.player.ui.common.OsirisScaffold
@@ -66,6 +67,9 @@ import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.run.RunDialog
 import com.osiris.shared.presentation.run.RunState
 import com.osiris.shared.presentation.run.RunViewModel
+import com.osiris.shared.domain.run.Sport
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.FlowRow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
@@ -93,6 +97,9 @@ fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChal
         if (s.recording) RunTrackingService.start(context) else RunTrackingService.stop(context)
     }
     DisposableEffect(Unit) { onDispose { RunTrackingService.stop(context) } }
+    // Like GPS above, this keeps collecting with the screen off, so cues reach a phone in a pocket.
+    val speak = rememberSpeech()
+    LaunchedEffect(Unit) { vm.cues.collect(speak) }
 
     OsirisScaffold(
         s.title,
@@ -131,6 +138,7 @@ fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChal
                         )
                     }
                 }
+                if (!s.recording && s.challengeId == null) StartOptions(s, vm)
                 if (s.recording) Metrics(s)
             }
             RunButton(s, vm::toggle, Modifier.align(Alignment.BottomEnd).padding(16.dp))
@@ -158,12 +166,29 @@ private fun Metrics(s: RunState) {
     val value = s.distance.substringBeforeLast(' ')
     val unit = s.distance.substringAfterLast(' ', "")
     FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 20.dp) {
-        HeroMetric(value, unit = unit.ifEmpty { null }, label = "Distance")
+        HeroMetric(value, unit = unit.ifEmpty { null }, label = if (s.paused) "Paused" else "Distance")
         Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            Metric("TIME", s.elapsed)
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Metric("MOVING", s.moving)
             Metric("PACE /KM", s.pace?.removeSuffix(" /km") ?: "--")
+            s.climb?.let { Metric("CLIMB", it) }
             Metric(if (s.offline) "OFFLINE" else "SYNCED", "${run.uploaded}/${run.nextSequence}", if (s.offline) OsirisColors.Warning else null)
+        }
+    }
+}
+
+/** Before a free run: what to record, and whether to auto-pause at stops and announce each kilometre. */
+@Composable
+private fun StartOptions(s: RunState, vm: RunViewModel) {
+    FrostCard(contentPadding = 12.dp) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (sport in Sport.entries) {
+                FilterChip(selected = s.sport == sport, onClick = { vm.selectSport(sport) }, label = { Text(sport.label) })
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = s.autoPause, onClick = { vm.setAutoPause(!s.autoPause) }, label = { Text("Auto-pause") })
+            FilterChip(selected = s.audioCues, onClick = { vm.setAudioCues(!s.audioCues) }, label = { Text("Audio cues") })
         }
     }
 }

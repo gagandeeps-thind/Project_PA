@@ -18,7 +18,8 @@ final class LocationTracker: NSObject, ObservableObject {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = 5
+        // No distance filter: a stop must keep producing fixes, or auto-pause never sees it.
+        manager.distanceFilter = kCLDistanceFilterNone
         manager.activityType = .fitness
         manager.pausesLocationUpdatesAutomatically = false
     }

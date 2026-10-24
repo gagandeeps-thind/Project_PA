@@ -1,5 +1,6 @@
 package com.osiris.shared.data
 
+import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.data.FakeServer.Companion.reply
 import com.osiris.shared.domain.run.LocationFix
@@ -198,5 +199,16 @@ class RunRepositoryTest {
         val app = TestApp(settings = settings)
         assertNull(app.graph.runs.active.value)
         assertNull(app.settings.getStringOrNull("osiris.active_run.v1"))
+    }
+
+    @Test
+    fun `the chosen sport and auto-pause are recorded and the sport reaches the server`() = test {
+        val (app, _) = signedIn()
+        app.server.calls.clear()
+        val run = app.graph.runs.start(null, t0, Sport.HIKE, autoPause = false).getOrThrow()
+        assertEquals("hike", run.sport)
+        assertEquals(false, run.autoPause)
+        val create = app.server.calls.first { it.method == "POST" && it.path == "/api/v2/runs" }
+        assertEquals("hike", create.body!!.jsonObject["activity_type"]!!.jsonPrimitive.content)
     }
 }

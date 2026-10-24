@@ -1,5 +1,6 @@
 package com.osiris.shared.presentation
 
+import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.domain.exercise.Verdict
 import com.osiris.shared.domain.model.Registration
@@ -34,6 +35,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import com.osiris.shared.domain.run.LatLng
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 
 class ViewModelTest {
@@ -361,5 +363,34 @@ class ViewModelTest {
         vm.shared(true)
         vm.loadRules()
         assertEquals(listOf("Runs are checked for speed."), vm.state.value.rules!!.first { it.title == "How runs are checked" }.lines)
+    }
+
+    @Test
+    fun `the chosen sport starts the run and each kilometre is announced once`() = runTest {
+        val clock = FixedClock(noon)
+        val runs = FakeRuns()
+        RunViewModel(runs, FakeChallenges(), FakePlayer(), clock = clock, dispatcher = main()).use {
+            val vm = this
+            val spoken = mutableListOf<String>()
+            val listening = backgroundScope.launch(main()) { vm.cues.collect { spoken += it } }
+            vm.onLocation(amsterdam)
+            vm.selectSport(Sport.WALK)
+            vm.setAutoPause(false)
+            vm.start()
+            assertEquals("walk", runs.active.value!!.sport)
+            assertEquals(false, runs.active.value!!.autoPause)
+            vm.selectSport(Sport.HIKE) // ignored while recording
+            assertEquals(Sport.WALK, vm.state.value.sport)
+            var lat = 52.37
+            repeat(12) { // about 2.2 km in 12 fixes, 60 s apart
+                clock.now += 60.seconds
+                lat += 0.0017
+                vm.onLocation(LocationFix(lat, 4.89, at = clock.now))
+            }
+            assertEquals(2, spoken.size)
+            assertTrue(spoken[0].startsWith("1 kilometre. Time "), spoken[0])
+            assertTrue(spoken[1].startsWith("2 kilometres. "), spoken[1])
+            listening.cancel()
+        }
     }
 }

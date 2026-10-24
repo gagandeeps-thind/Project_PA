@@ -46,7 +46,8 @@ class LocationClient(context: Context) {
         }
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, INTERVAL_MS)
             .setMinUpdateIntervalMillis(INTERVAL_MS)
-            .setMinUpdateDistanceMeters(DISTANCE_FILTER_M)
+            // No distance filter: a stop must keep producing fixes, or auto-pause never sees it.
+            .setMinUpdateDistanceMeters(0f)
             .build()
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -96,7 +97,6 @@ class LocationClient(context: Context) {
 
     companion object {
         const val INTERVAL_MS = 1_000L
-        const val DISTANCE_FILTER_M = 5f
 
         fun permissionError() = AppError.Permission(
             Manifest.permission.ACCESS_FINE_LOCATION,

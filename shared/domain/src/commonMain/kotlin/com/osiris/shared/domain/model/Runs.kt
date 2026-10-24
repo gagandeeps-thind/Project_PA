@@ -30,6 +30,8 @@ data class RunResult(
     @SerialName("rejection_reason") val rejectionReason: String? = null,
     @SerialName("distance_m") val distanceM: Double = 0.0,
     @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
+    @SerialName("moving_seconds") val movingSeconds: Double? = null,
+    @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
     @SerialName("xp_awarded") val xpAwarded: Int = 0,
 ) {
     val accepted: Boolean get() = verificationStatus == "accepted"

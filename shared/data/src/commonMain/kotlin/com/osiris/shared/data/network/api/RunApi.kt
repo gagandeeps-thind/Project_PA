@@ -10,8 +10,8 @@ import kotlinx.serialization.json.JsonObject
 
 /** Verified running: create, start, stream points, finish. */
 class RunApi(private val api: ApiClient) {
-    suspend fun create(startedAt: Instant): RunRecord =
-        api.post("/api/v2/runs", ApiClient.body("activity_type" to "run", "device_started_at" to startedAt.toString()))
+    suspend fun create(startedAt: Instant, activityType: String = "run"): RunRecord =
+        api.post("/api/v2/runs", ApiClient.body("activity_type" to activityType, "device_started_at" to startedAt.toString()))
 
     suspend fun start(runId: Int, startedAt: Instant) {
         api.post<JsonObject>("/api/v2/runs/$runId/start", ApiClient.body("device_started_at" to startedAt.toString()))

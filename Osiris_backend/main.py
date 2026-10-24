@@ -621,7 +621,9 @@ class UserProfile(BaseModel):
 # --- First-release running loop ------------------------------------------------
 
 class RunSessionCreate(BaseModel):
-    activity_type: str = Field(default="run", pattern="^(run|jog)$")
+    # Foot sports only: game rules (quests, boards, challenges) count every verified session as
+    # running or walking distance, so rides wait for per-sport rules and boards.
+    activity_type: str = Field(default="run", pattern="^(run|jog|walk|hike)$")
     device_started_at: datetime
 
 
@@ -658,11 +660,16 @@ class RunSessionSummary(BaseModel):
     duration_seconds: float
     route_hash: Optional[str] = None
     rejection_reason: Optional[str] = None
+    # From the verification decision; null until the run is finished.
+    moving_seconds: Optional[float] = None
+    elevation_gain_m: Optional[float] = None
     xp_awarded: int = 0
     message: str
 
 
-def _run_summary(session: models.RunSession, *, xp_awarded: int = 0, message: str = "Run session") -> RunSessionSummary:
+def _run_summary(session: models.RunSession, *, xp_awarded: int = 0, message: str = "Run session",
+                 decision_metrics: Optional[dict] = None) -> RunSessionSummary:
+    m = decision_metrics or {}
     return RunSessionSummary(
         id=session.id,
         activity_type=session.activity_type,
@@ -673,6 +680,8 @@ def _run_summary(session: models.RunSession, *, xp_awarded: int = 0, message: st
         duration_seconds=round(session.duration_seconds or 0.0, 2),
         route_hash=session.route_hash,
         rejection_reason=session.rejection_reason,
+        moving_seconds=m.get("moving_seconds"),
+        elevation_gain_m=m.get("elevation_gain_m"),
         xp_awarded=xp_awarded,
         message=message,
     )
@@ -1634,7 +1643,7 @@ def finish_run_session(
     db.commit()
     db.refresh(session)
     message = "Run verified and accepted" if result.status == "accepted" else "Run rejected by verification rules"
-    return _run_summary(session, xp_awarded=xp_awarded, message=message)
+    return _run_summary(session, xp_awarded=xp_awarded, message=message, decision_metrics=result.metrics)
 
 
 @app.get("/api/v2/runs/{run_id}", response_model=RunSessionSummary)
@@ -1644,7 +1653,9 @@ def get_run_session(
     token_data: dict = Depends(get_active_player),
 ):
     session = _get_player_run(db, run_id, token_data["id"])
-    return _run_summary(session, message="Run session status")
+    decision = db.query(models.VerificationDecision.metrics_json).filter(
+        models.VerificationDecision.run_session_id == session.id).scalar()
+    return _run_summary(session, message="Run session status", decision_metrics=json.loads(decision) if decision else None)
 
 
 # --- R2 API v2: courses and challenges (PRD-005..008, ADR-004/005) -------------------

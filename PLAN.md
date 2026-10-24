@@ -291,3 +291,27 @@ Mock-up canvas: https://claude.ai/artifact/9T7qH7rsRZ32o1YXq5McMy (Today, live r
 - [ ] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
   target with `UIAppFonts`, and use them in `Frost.swift`; the shared colours already apply. Needs a Mac to build.
   - Acceptance: the iOS Today screen renders the quest distance in Manrope ExtraBold at 72 pt.
+
+## Strava parity program (2026-10-24)
+Brief: 24 features, OpenAPI-first, verified-only game effects, privacy defaults on, PostGIS-only spatial work.
+Repo reality the plan follows: player app is KMP (Compose + SwiftUI, not Flutter), the merchant app is retired,
+the database is SQLite until the PostGIS migration (ADR-002), and agents cannot write Alembic revisions, so each
+new table is a model + tests here and a `[human]` migration item. Rides wait: every game query counts any accepted
+session as foot distance, so ride km would fill run quests and boards until per-sport rules exist.
+
+Build order (dependencies in brackets):
+- A. Tracker and performance: 1, 3 [1], 4 [3], 7 [3], 6, 5 [3; HR part after 2], 24 [1 audio cues], 18 volume challenges
+- B. Social: visibility + privacy zones [needed by 3, 9, 10, 23], 8, 10, 9 [8, visibility], 11 [9]
+- C. Sensors: 2 [health consent; physical device]
+- D. Groups: 19 (clubs exist: add feed and board) [9], 20, 21 [8]
+- E. Spatial, after PostgreSQL/PostGIS: 12 [routing engine], 13 [12], 14 [12], 15, 16 [3], 17 [16], 22 [8], 23 [privacy zones]
+
+- [x] tracker 1a: sport type (run, walk, hike), auto-pause (slower than 0.5 m/s for 10 s; a reported speed of 0 counts
+  only if the position stayed within GPS jitter), live moving time and climb, spoken kilometre cues, no GPS distance
+  filter so stops keep producing fixes; the server's verification decision records the same moving time and climb.
+- [ ] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+- [ ] [human] device QA for tracker 1: a 60-min run on a low-end Android phone loses under 1% of points (compare
+  `point_count` with fixes logged), screen off and app swiped away; record battery drain per hour.
+- [ ] tracker 3: activity history and detail (map, splits, elevation profile), edit title, delete with derived-stat cascade
+  (never the ledger). Needs `run_sessions.title` and `visibility` ([human] migration).
+- [ ] ride: per-sport speed rules, boards and quest eligibility before `ride` is accepted.

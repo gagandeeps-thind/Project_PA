@@ -16,6 +16,7 @@ import com.osiris.shared.domain.run.ActiveRun
 import com.osiris.shared.domain.run.Daylight
 import com.osiris.shared.domain.run.LatLng
 import com.osiris.shared.domain.run.LocationFix
+import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.common.SharedViewModel
 import com.osiris.shared.presentation.common.UiMessage
 import kotlin.time.Clock
@@ -24,8 +25,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -44,8 +48,17 @@ data class RunState(
     val course: CourseRoute? = null,
     val nearby: List<ChallengeSummary> = emptyList(),
     val elapsed: String = "0:00",
+    /** Elapsed time minus auto-paused stops. */
+    val moving: String = "0:00",
     val distance: String = Format.km(0.0),
     val pace: String? = null,
+    /** Elevation gained, once there is any. */
+    val climb: String? = null,
+    val paused: Boolean = false,
+    /** Chosen before starting; a challenge run is always a run. */
+    val sport: Sport = Sport.RUN,
+    val autoPause: Boolean = true,
+    val audioCues: Boolean = true,
     val offline: Boolean = false,
     val busy: Boolean = false,
     val dialog: RunDialog? = null,
@@ -100,9 +113,21 @@ class RunViewModel(
     val state: StateFlow<RunState> = _state.asStateFlow()
     private var ticker: Job? = null
     private var nearbyLoaded = false
+    private val _cues = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    /** Spoken announcements, one per kilometre. The platform speaks them, screen on or off. */
+    val cues: SharedFlow<String> = _cues.asSharedFlow()
+
+    /** Last kilometre announced; -1 until a run is active (a recovered run is not caught up on). */
+    private var cuedKm = -1
 
     init {
-        scope.launch { runs.active.collect { run -> _state.update { it.copy(run = run).withClock() } } }
+        scope.launch {
+            runs.active.collect { run ->
+                _state.update { it.copy(run = run).withClock() }
+                if (run == null) cuedKm = -1 else cueIfDue(run)
+            }
+        }
         scope.launch { runs.offline.collect { off -> _state.update { it.copy(offline = off) } } }
         _state.value.challengeId?.let(::loadCourse)
         runs.active.value?.let { run ->
@@ -141,6 +166,20 @@ class RunViewModel(
         if (_state.value.recording) finish() else start()
     }
 
+    fun selectSport(sport: Sport) = _state.update { if (it.recording) it else it.copy(sport = sport) }
+
+    fun setAutoPause(on: Boolean) = _state.update { if (it.recording) it else it.copy(autoPause = on) }
+
+    fun setAudioCues(on: Boolean) = _state.update { it.copy(audioCues = on) }
+
+    private fun cueIfDue(run: ActiveRun) {
+        val km = (run.distanceM / METRES_PER_KM).toInt()
+        if (cuedKm < 0) cuedKm = km
+        if (km <= cuedKm) return
+        cuedKm = km
+        if (_state.value.audioCues) _cues.tryEmit(cueText(km, run, clock.now()))
+    }
+
     fun start(confirmedLowLight: Boolean = false) {
         val s = _state.value
         if (s.busy || s.recording) return
@@ -152,7 +191,8 @@ class RunViewModel(
         }
         _state.update { it.copy(busy = true, dialog = null) }
         scope.launch {
-            runs.start(s.challengeId, now).orShow()?.let {
+            val sport = if (s.challengeId == null) s.sport else Sport.RUN
+            runs.start(s.challengeId, now, sport, s.autoPause).orShow()?.let {
                 _state.update { st -> st.copy(trace = listOf(position)) }
                 startTicker()
             }
@@ -256,12 +296,15 @@ class RunViewModel(
     }
 
     private fun RunState.withClock(): RunState {
-        val r = run ?: return copy(elapsed = "0:00", distance = Format.km(0.0), pace = null)
+        val r = run ?: return copy(elapsed = "0:00", moving = "0:00", distance = Format.km(0.0), pace = null, climb = null, paused = false)
         val now = clock.now()
         return copy(
             elapsed = Format.duration(r.elapsed(now).inWholeSeconds.toDouble()),
+            moving = Format.duration(r.moving(now).inWholeSeconds.toDouble()),
             distance = Format.km(r.distanceM),
             pace = r.paceSecPerKm(now)?.let { Format.duration(it) + " /km" },
+            climb = r.elevationGainM.takeIf { it >= 1 }?.let { "${Format.fixed(it, 0)} m" },
+            paused = r.paused,
         )
     }
 
@@ -271,6 +314,15 @@ class RunViewModel(
     }
 
     companion object {
+        private const val METRES_PER_KM = 1000.0
+
+        /** "2 kilometres. Time 11:04. Pace 5:32 per kilometre." */
+        fun cueText(km: Int, run: ActiveRun, now: kotlin.time.Instant): String {
+            val pace = run.paceSecPerKm(now)?.let { " Pace ${Format.duration(it)} per kilometre." }.orEmpty()
+            val unit = if (km == 1) "kilometre" else "kilometres"
+            return "$km $unit. Time ${Format.duration(run.moving(now).inWholeSeconds.toDouble())}.$pace"
+        }
+
         fun celebrate(runId: Int, result: RunResult, today: TodayData?) = RunDialog.Celebrate(
             runId = runId,
             title = if (today?.today?.completed == true) "Quest complete!" else "Run verified",

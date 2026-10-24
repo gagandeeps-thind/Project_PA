@@ -259,6 +259,56 @@ def test_metrics_count_requests_and_verification_outcomes() -> None:
     assert 'osiris_http_request_duration_seconds_bucket{method="POST",route="/api/v2/runs/{run_id}/points",le="+Inf"}' in body
 
 
+def test_moving_time_drops_stops_and_elevation_ignores_gps_noise() -> None:
+    """Tracker core: a 20 s stop at a crossing leaves moving time; a 5 s one does not (the auto-pause
+    rule the app applies live). Altitude jitter under 3 m adds no climb."""
+    step = 1000  # one point a second
+    ts, cum, d = [], [], 0.0
+    for i in range(101):
+        ts.append(i * step)
+        stopped = 30 <= i < 50 or 70 <= i < 75  # 20 s stop, then a 5 s pause
+        if i:
+            d += 0.0 if stopped else 3.0
+        cum.append(d)
+    assert run_verifier.moving_seconds(ts, cum) == 80.0
+    # Standing still with 3 m of GPS jitter a second still counts as stopped when the phone reports speed 0.
+    jitter = [i * 3.0 for i in range(101)]
+    speeds = [None] + [0.0 if 30 <= i < 50 else 3.0 for i in range(1, 101)]
+    assert run_verifier.moving_seconds(ts, jitter, speeds) == 80.0
+    # A phone that reports speed 0 while clearly moving (10 m a second) is not stopped.
+    striding = [i * 10.0 for i in range(101)]
+    assert run_verifier.moving_seconds(ts, striding, [0.0] * 101) == 100.0
+    assert run_verifier.elevation_gain_m([10, 12, 11, 12.5, 10, 20, 19, 25, None, 24, 30]) == 22.0  # 10 + 6 + 6
+    assert run_verifier.elevation_gain_m([None, None]) == 0.0
+
+
+def test_hike_records_moving_time_and_climb_and_rides_wait_for_their_own_rules() -> None:
+    _cleanup()
+    client = TestClient(main.app)
+    headers = {"Authorization": f"Bearer {_login(client)}"}
+    ride = client.post("/api/v2/runs", headers=headers, json={"activity_type": "ride", "device_started_at": _now()})
+    assert ride.status_code == 422, ride.text
+    response = client.post("/api/v2/runs", headers=headers, json={"activity_type": "hike", "device_started_at": _now()})
+    assert response.status_code == 201, response.text
+    assert response.json()["activity_type"] == "hike" and response.json()["moving_seconds"] is None
+    run_id = response.json()["id"]
+    client.post(f"/api/v2/runs/{run_id}/start", headers=headers, json={"device_started_at": _now()})
+    points, lat = [], 44.6
+    for i in range(40):  # 10 s apart; points 10-15 stand still for 60 s
+        if not 10 <= i < 16:
+            lat += 0.0002  # about 22 m
+        points.append({"sequence": i, "t_ms": i * 10_000, "lat": lat, "lng": -63.6, "accuracy_m": 8,
+                       "altitude_m": 50 + i * 1.0})
+    assert client.post(f"/api/v2/runs/{run_id}/points", headers=headers, json={"points": points}).status_code == 200
+    body = client.post(f"/api/v2/runs/{run_id}/finish", headers=headers, json={
+        "device_finished_at": _now(), "idempotency_key": "run-release-hike-001"}).json()
+    assert body["verification_status"] == "accepted", body
+    assert body["duration_seconds"] == 390.0 and body["moving_seconds"] == 330.0, body
+    assert body["elevation_gain_m"] == 39.0, body
+    again = client.get(f"/api/v2/runs/{run_id}", headers=headers).json()
+    assert (again["moving_seconds"], again["elevation_gain_m"]) == (330.0, 39.0)
+
+
 if __name__ == "__main__":
     for test in (
         test_metrics_count_requests_and_verification_outcomes,
@@ -269,6 +319,8 @@ if __name__ == "__main__":
         test_a_single_jump_past_the_segment_cap_is_rejected,
         test_route_sequence_and_authentication_are_enforced,
         test_raw_route_points_expire_after_retention_window,
+        test_moving_time_drops_stops_and_elevation_ignores_gps_noise,
+        test_hike_records_moving_time_and_climb_and_rides_wait_for_their_own_rules,
     ):
         test()
         print(f"PASS {test.__name__}")

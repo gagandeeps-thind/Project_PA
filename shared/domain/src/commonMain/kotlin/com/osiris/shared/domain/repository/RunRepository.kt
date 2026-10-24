@@ -4,6 +4,7 @@ import com.osiris.shared.core.error.Outcome
 import com.osiris.shared.domain.model.RunResult
 import com.osiris.shared.domain.run.ActiveRun
 import com.osiris.shared.domain.run.LocationFix
+import com.osiris.shared.domain.run.Sport
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.StateFlow
 
@@ -19,7 +20,7 @@ interface RunRepository : AccountScoped {
     val offline: StateFlow<Boolean>
 
     /** Creates and starts a run on the server, then records locally. */
-    suspend fun start(challengeId: Int?, now: Instant): Outcome<ActiveRun>
+    suspend fun start(challengeId: Int?, now: Instant, sport: Sport = Sport.RUN, autoPause: Boolean = true): Outcome<ActiveRun>
 
     /** Queues one GPS fix and uploads in batches. No-op without an active run. */
     suspend fun addFix(fix: LocationFix, now: Instant)
