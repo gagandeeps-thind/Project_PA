@@ -289,9 +289,11 @@ Mock-up canvas: https://claude.ai/artifact/9T7qH7rsRZ32o1YXq5McMy (Today, live r
   glass panes with a specular top rim, stepped top-left shadows and grain, floating chunky tab bar, one 72 sp
   focal number per screen (Today quest distance, Run distance, Social rank), asymmetric Today shortcuts,
   slate-tinted map tiles. `DesignTokensTest` checks WCAG AA text contrast.
-- [ ] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
+- [x] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
   target with `UIAppFonts`, and use them in `Frost.swift`; the shared colours already apply. Needs a Mac to build.
   - Acceptance: the iOS Today screen renders the quest distance in Manrope ExtraBold at 72 pt.
+- [ ] [human] on a Mac: `xcodegen`, build, and confirm the Today quest distance is Manrope ExtraBold at 72 pt
+  (Xcode's view debugger shows the font name). The Swift side of the fonts has not been compiled yet.
 
 ## Strava parity program (2026-10-24)
 Brief: 24 features, OpenAPI-first, verified-only game effects, privacy defwork.
