@@ -169,14 +169,17 @@ NewPassword = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(
 
 def _require_active_player(token_data: dict, db: Session) -> dict:
     """The PRD-010 checks: the player exists, is not suspended, and the token predates no sign-out."""
-    user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
+    # Runs on every player request: read the two columns it needs, not the whole user row.
+    user = db.query(models.User.suspended_at, models.User.tokens_valid_after).filter(
+        models.User.id == token_data["id"]).first()
     if user is None:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
-    if user.suspended_at is not None:
+    suspended_at, tokens_valid_after = user
+    if suspended_at is not None:
         raise _api_error(403, "ACCOUNT_SUSPENDED", "This account is suspended. Contact support.")
-    if user.tokens_valid_after is not None:
+    if tokens_valid_after is not None:
         issued_at = token_data.get("iat") or 0
-        if issued_at < int(user.tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()):
+        if issued_at < int(tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()):
             raise _api_error(401, "SESSION_REVOKED", "This session was signed out. Please sign in again.")
     return token_data
 
