@@ -12,8 +12,8 @@ import com.osiris.player.ui.theme.OsirisTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // The app is always dark, so keep light status and navigation bar icons even when the
-        // phone is in light mode (the default style would pick dark icons there).
+        // The app is always dark; the default style follows the system theme and would draw dark
+        // status bar icons on the dark screens whenever the phone is in light mode.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),

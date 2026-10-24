@@ -2,11 +2,12 @@ import SwiftUI
 import OsirisShared
 
 struct LoginView: View {
+    let graph: AppGraph
     @StateObject private var model: Observed<LoginViewModel, LoginState>
 
     init(graph: AppGraph) {
-        let vm = graph.login()
-        _model = StateObject(wrappedValue: Observed(vm, state: vm.state))
+        self.graph = graph
+        _model = StateObject(wrappedValue: Observed(graph.login()) { $0.state })
     }
 
     var body: some View {
@@ -25,6 +26,7 @@ struct LoginView: View {
             }
             Button(s.busy ? "SIGNING IN…" : "SIGN IN") { model.vm.submit() }
                 .disabled(!s.canSubmit)
+            NavigationLink("New here? Create an account") { OnboardingView(graph: graph) }
         }
         .navigationTitle("OSIRIS")
     }

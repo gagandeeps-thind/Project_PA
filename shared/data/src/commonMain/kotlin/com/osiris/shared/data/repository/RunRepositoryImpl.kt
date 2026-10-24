@@ -83,7 +83,8 @@ class RunRepositoryImpl(
 
     override suspend fun finish(now: Instant): Outcome<RunResult> = outcomeOf {
         val run = _active.value ?: throw AppError.Validation("No run is being recorded.")
-        if (!flush().getOrThrow()) throw AppError.Offline()
+        // Waits for a background upload instead of skipping it, which would report "offline".
+        if (!upload.withLock { drain() }) throw AppError.Offline()
         val result = api.finish(run.runId, now, "run-${run.runId}-finish")
         state.withLock { clearLocked() }
         result
