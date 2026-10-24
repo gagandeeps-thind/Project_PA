@@ -81,4 +81,27 @@ class ActiveRunTest {
         val climbed = walk(run, 0, alts.size, { 3.0 }, { i -> alts[i] })
         assertEquals(22.0, climbed.elevationGainM) // 10 + 6 + 6, as on the server
     }
+
+    @Test
+    fun aHigherAutoPauseSpeedPausesWalkingBreaksAndTheDefaultDoesNot() {
+        val walkBreak = { i: Int -> if (i in 20 until 40) 1.2 else 3.0 } // a 20 s walk at 4.3 km/h
+        val default = walk(run, 0, 61, walkBreak)
+        assertEquals(60.seconds, default.moving(t0 + 60.seconds))
+        val walking = run.copy(autoPauseMps = AutoPause.WALKING.mps)
+        assertEquals(40.seconds, walk(walking, 0, 61, walkBreak).moving(t0 + 60.seconds))
+        assertEquals(AutoPause.WALKING, AutoPause.of(walking))
+        assertEquals(1.5, walking.pauseBelowMps)
+        assertEquals(0.0, walking.copy(autoPause = false).pauseBelowMps)
+        assertEquals(AutoPause.OFF, AutoPause.of(walking.copy(autoPause = false)))
+    }
+
+    @Test
+    fun cueIntervalsCountKilometresOrMinutesOfMovingTime() {
+        val r = walk(run, 0, 401, { 3.0 }) // 400 s at 3 m/s: 1.2 km
+        assertEquals(1, CueInterval.KILOMETRE.mark(r, t0 + 400.seconds))
+        assertEquals(1, CueInterval.FIVE_MINUTES.mark(r, t0 + 400.seconds))
+        assertEquals(0, CueInterval.TEN_MINUTES.mark(r, t0 + 400.seconds))
+        assertEquals(10L, CueInterval.FIVE_MINUTES.minutesAt(2))
+        assertEquals(null, CueInterval.KILOMETRE.minutesAt(2))
+    }
 }

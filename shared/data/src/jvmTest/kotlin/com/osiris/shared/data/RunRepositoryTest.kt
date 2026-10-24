@@ -1,5 +1,6 @@
 package com.osiris.shared.data
 
+import com.osiris.shared.domain.run.AutoPause
 import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.data.FakeServer.Companion.reply
@@ -174,7 +175,23 @@ class RunRepositoryTest {
         assertEquals(3, server.stored)
         val body = app.server.calls.last().body!!.jsonObject
         assertEquals("run-11-finish", body["idempotency_key"]!!.jsonPrimitive.content)
+        assertEquals("0.5", body["auto_pause_mps"]!!.jsonPrimitive.content) // the default, as the server's
         assertNull(app.graph.runs.active.value)
+    }
+
+    @Test
+    fun `the chosen auto-pause speed reaches the server with the finish, and off sends zero`() = test {
+        val (app, _) = signedIn()
+        val run = app.graph.runs.start(null, t0, Sport.RUN, autoPause = AutoPause.WALKING).getOrThrow()
+        assertEquals(1.5, run.autoPauseMps)
+        app.walk(3)
+        app.graph.runs.finish(t0 + 60.seconds).getOrThrow()
+        val walking = app.server.calls.last().body!!.jsonObject
+        assertEquals("1.5", walking["auto_pause_mps"]!!.jsonPrimitive.content)
+        app.graph.runs.start(null, t0 + 120.seconds, Sport.RUN, autoPause = AutoPause.OFF).getOrThrow()
+        app.walk(3)
+        app.graph.runs.finish(t0 + 180.seconds).getOrThrow()
+        assertEquals("0.0", app.server.calls.last().body!!.jsonObject["auto_pause_mps"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -205,7 +222,7 @@ class RunRepositoryTest {
     fun `the chosen sport and auto-pause are recorded and the sport reaches the server`() = test {
         val (app, _) = signedIn()
         app.server.calls.clear()
-        val run = app.graph.runs.start(null, t0, Sport.HIKE, autoPause = false).getOrThrow()
+        val run = app.graph.runs.start(null, t0, Sport.HIKE, autoPause = AutoPause.OFF).getOrThrow()
         assertEquals("hike", run.sport)
         assertEquals(false, run.autoPause)
         val create = app.server.calls.first { it.method == "POST" && it.path == "/api/v2/runs" }

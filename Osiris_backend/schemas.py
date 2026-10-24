@@ -6,8 +6,8 @@ from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from core.security import NewPassword
+import run_verifier
 from services import challenges as challenge_rules
-
 
 
 # --- Pydantic Models (Data Validation) ---
@@ -185,6 +185,12 @@ class RoutePointBatch(BaseModel):
 class RunSessionFinish(BaseModel):
     device_finished_at: datetime
     idempotency_key: str = Field(..., min_length=8, max_length=128)
+    # The player's auto-pause setting, so the moving time shown after the run matches the live one.
+    # Display only: it never changes the verdict, distance, duration or XP.
+    auto_pause_mps: float = Field(
+        run_verifier.MOVING_MIN_MPS, ge=0, le=2.0,
+        description="Below this speed for 10 s the player counts as stopped; 0 turns auto-pause off.",
+    )
 
 
 class RunSessionSummary(BaseModel):

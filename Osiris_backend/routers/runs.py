@@ -174,7 +174,7 @@ def finish_run_session(
             "altitude_m": point.altitude_m,
         }
         for point in points
-    ])
+    ], auto_pause_mps=req.auto_pause_mps)
     metrics.observe_run_verification(result.status, result.reason_codes)
     session.status = "closed"
     session.verification_status = result.status

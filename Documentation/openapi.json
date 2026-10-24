@@ -4658,6 +4658,14 @@
       },
       "RunSessionFinish": {
         "properties": {
+          "auto_pause_mps": {
+            "default": 0.5,
+            "description": "Below this speed for 10 s the player counts as stopped; 0 turns auto-pause off.",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Auto Pause Mps",
+            "type": "number"
+          },
           "device_finished_at": {
             "format": "date-time",
             "title": "Device Finished At",

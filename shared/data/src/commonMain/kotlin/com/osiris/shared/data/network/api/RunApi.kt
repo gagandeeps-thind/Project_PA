@@ -23,11 +23,18 @@ class RunApi(private val api: ApiClient) {
         api.post<JsonObject>("/api/v2/runs/$runId/points", ApiClient.body("points" to encoded))
     }
 
-    /** Idempotent per [idempotencyKey]; a retry returns the first result. */
-    suspend fun finish(runId: Int, finishedAt: Instant, idempotencyKey: String): RunResult =
+    /**
+     * Idempotent per [idempotencyKey]; a retry returns the first result. [autoPauseMps] is the stop speed
+     * the server applies to moving time (0: auto-pause off), so its figure matches the app's.
+     */
+    suspend fun finish(runId: Int, finishedAt: Instant, idempotencyKey: String, autoPauseMps: Double): RunResult =
         api.post(
             "/api/v2/runs/$runId/finish",
-            ApiClient.body("device_finished_at" to finishedAt.toString(), "idempotency_key" to idempotencyKey),
+            ApiClient.body(
+                "device_finished_at" to finishedAt.toString(),
+                "idempotency_key" to idempotencyKey,
+                "auto_pause_mps" to autoPauseMps,
+            ),
         )
 
     suspend fun run(runId: Int): RunRecord = api.get("/api/v2/runs/$runId")

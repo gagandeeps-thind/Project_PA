@@ -307,7 +307,10 @@ Build order (dependencies in brackets):
 - [x] tracker 1a: sport type (run, walk, hike), auto-pause (slower than 0.5 m/s for 10 s; a reported speed of 0 counts
   only if the position stayed within GPS jitter), live moving time and climb, spoken kilometre cues, no GPS distance
   filter so stops keep producing fixes; the server's verification decision records the same moving time and climb.
-- [ ] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+- [x] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+  - Cues every km, 5 or 10 min of moving time; mute and interval change mid-run (no burst). Auto-pause off, stops
+    only (0.5 m/s), under 3.6 or 5.4 km/h; the finish sends `auto_pause_mps` so the server's moving time matches.
+    Android UI not compiled in the agent container (no Android SDK); shared tests cover the logic.
 - [ ] [human] device QA for tracker 1: a 60-min run on a low-end Android phone loses under 1% of points (compare
   `point_count` with fixes logged), screen off and app swiped away; record battery drain per hour.
 - [ ] tracker 3: activity history and detail (map, splits, elevation profile), edit title, delete with derived-stat cascade

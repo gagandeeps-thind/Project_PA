@@ -41,6 +41,7 @@ import com.osiris.shared.domain.repository.ExerciseRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.RunRepository
 import com.osiris.shared.domain.run.ActiveRun
+import com.osiris.shared.domain.run.AutoPause
 import com.osiris.shared.domain.run.LatLng
 import com.osiris.shared.domain.run.LocationFix
 import com.osiris.shared.domain.run.Sport
@@ -110,8 +111,11 @@ class FakeRuns(initial: ActiveRun? = null) : RunRepository {
     val fixes = mutableListOf<LocationFix>()
     var finishResult: Outcome<RunResult> = ok(RunResult("accepted", distanceM = 2400.0, durationSeconds = 720.0, xpAwarded = 40))
     override suspend fun bindAccount(userId: Int?) = Unit
-    override suspend fun start(challengeId: Int?, now: Instant, sport: Sport, autoPause: Boolean): Outcome<ActiveRun> {
-        val run = ActiveRun(runId = 11, userId = 7, startedAt = now, challengeId = challengeId, sport = sport.wire, autoPause = autoPause)
+    override suspend fun start(challengeId: Int?, now: Instant, sport: Sport, autoPause: AutoPause): Outcome<ActiveRun> {
+        val run = ActiveRun(
+            runId = 11, userId = 7, startedAt = now, challengeId = challengeId, sport = sport.wire,
+            autoPause = autoPause.on, autoPauseMps = if (autoPause.on) autoPause.mps else ActiveRun.MOVING_MIN_MPS,
+        )
         active.value = run
         return ok(run)
     }
