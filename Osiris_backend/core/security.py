@@ -167,12 +167,8 @@ def _fits_bcrypt(password: str) -> str:
 NewPassword = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(_fits_bcrypt)]
 
 
-def get_active_player(
-    token_data: dict = Depends(get_current_player),
-    db: Session = Depends(get_db),
-) -> dict:
-    """Player auth plus the PRD-010 suspension check. Every v2 player endpoint uses this, so
-    an admin suspension takes effect on the player's next request without revoking tokens."""
+def _require_active_player(token_data: dict, db: Session) -> dict:
+    """The PRD-010 checks: the player exists, is not suspended, and the token predates no sign-out."""
     user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
     if user is None:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
@@ -183,3 +179,25 @@ def get_active_player(
         if issued_at < int(user.tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()):
             raise _api_error(401, "SESSION_REVOKED", "This session was signed out. Please sign in again.")
     return token_data
+
+
+def get_active_player(
+    token_data: dict = Depends(get_current_player),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Player auth plus the PRD-010 suspension check. Every v2 player endpoint uses this, so
+    an admin suspension takes effect on the player's next request without revoking tokens."""
+    return _require_active_player(token_data, db)
+
+
+def get_active_player_or_admin(
+    token_data: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Read endpoints the admin console shares with the app: admins pass, players get the
+    suspension check, other roles get 403."""
+    if token_data["role"] == "admin":
+        return token_data
+    if token_data["role"] != "player":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return _require_active_player(token_data, db)

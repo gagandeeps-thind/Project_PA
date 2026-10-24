@@ -185,6 +185,21 @@ def test_suspended_player_blocked_on_v1_routes():
         db.close()
 
 
+# --- Admin console 2026-10-24: the Bounties page lists bounties with an admin token -----------
+def test_admin_can_list_nearby_bounties_and_merchants_cannot():
+    """The suspension fix (2026-10-12) made /bounties/nearby player-only, so the admin Bounties page
+    showed "Not enough permissions". Admins may list; players keep the suspension check."""
+    from core import security
+    client, _models, _db = _client_and_models()
+    params = {"lat": 44.6, "lng": -63.6}
+    admin = {"Authorization": f"Bearer {security.create_access_token({'sub': '1', 'role': 'admin'})}"}
+    merchant = {"Authorization": f"Bearer {security.create_access_token({'sub': '1', 'role': 'merchant'})}"}
+    _check("admin console: admin lists nearby bounties",
+           client.get("/api/v1/bounties/nearby", params=params, headers=admin).status_code == 200)
+    _check("admin console: merchant still gets 403 on nearby bounties",
+           client.get("/api/v1/bounties/nearby", params=params, headers=merchant).status_code == 403)
+
+
 # --- Metrics endpoint is closed by default in production-like environments -----------------
 def test_metrics_endpoint_requires_token():
     client, _models, _db = _client_and_models()
@@ -210,6 +225,7 @@ if __name__ == "__main__":
     test_legacy_login_rate_limited()
     test_public_events_rate_limited()
     test_suspended_player_blocked_on_v1_routes()
+    test_admin_can_list_nearby_bounties_and_merchants_cannot()
     test_metrics_endpoint_requires_token()
     print()
     if _FAILURES:

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import models
 import spatial_utils
 from core.clock import _now_naive_utc, _to_naive_utc
-from core.security import get_active_player, get_current_admin_or_merchant, get_current_user_token
+from core.security import get_active_player, get_active_player_or_admin, get_current_admin_or_merchant, get_current_user_token
 from database import get_db
 from schemas import (
     BountyCompleteRequest,
@@ -99,7 +99,8 @@ def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_dat
 
 
 @router.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
-def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
+def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db),
+                        token_data: dict = Depends(get_active_player_or_admin)):
     """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
     nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
     `ST_DWithin` in Phase 2."""
