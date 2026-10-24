@@ -4,6 +4,8 @@ import logging
 import os
 from datetime import timedelta
 
+from sqlalchemy import case, func, update
+
 import database
 import models
 from core.clock import _now_naive_utc
@@ -15,27 +17,35 @@ logger = logging.getLogger(__name__)
 
 # --- Background Tasks (Cron Logic) ---
 
-def process_daily_decay():
-    """Background task triggered daily. Deducts XP and ends streaks if last activity is > 24 hours."""
-    # We have to open a manual database session here because this runs outside of normal HTTP requests
+def process_daily_decay() -> int:
+    """Daily job: players idle for more than 24 hours lose their streak and 5% of their XP, then
+    every rank is re-evaluated (XP may have crossed a tier, or 30 idle days make it F).
+
+    The decay is one UPDATE (`xp - xp // 20` takes `int(xp * 0.05)` off non-negative XP, in SQLite
+    and PostgreSQL alike), and ranks are recomputed from three columns and written only where
+    they change, instead of loading and rewriting every player. A NULL last activity is skipped,
+    as it counts as no activity to decay. Returns the number of players decayed."""
+    cutoff = _now_naive_utc() - timedelta(hours=24)
     db = database.SessionLocal()
     try:
-        users = db.query(models.User).all()
-        for user in users:
-            now = _now_naive_utc()
-            hours_since_activity = (now - user.last_activity_date).total_seconds() / 3600
-
-            # If they haven't logged in/completed an activity in over a day
-            if hours_since_activity > 24:
-                user.streak = 0
-                # Deduct 5% of XP daily as a penalty
-                penalty = int(user.xp * 0.05)
-                user.xp = max(0, user.xp - penalty)
-
-            # Re-evaluate rank in case their XP dropped below a tier threshold, or they hit 30-day inactivity
-            user.rank = get_rank(user.xp, user.last_activity_date)
-        # Save all changes to the database
+        user = models.User
+        decayed = db.query(user).filter(user.last_activity_date < cutoff).update(
+            {
+                user.streak: 0,
+                user.xp: case((func.coalesce(user.xp, 0) > 0, user.xp - user.xp // 20), else_=0),
+            },
+            synchronize_session=False,
+        )
+        rows = db.query(user.id, user.xp, user.last_activity_date, user.rank).all()
+        changed = [
+            {"id": uid, "rank": rank}
+            for uid, xp, last, old in rows
+            if (rank := get_rank(xp or 0, last)) != old
+        ]
+        if changed:
+            db.execute(update(user), changed)
         db.commit()
+        return decayed
     finally:
         db.close()
 

@@ -310,6 +310,48 @@ def test_hike_records_moving_time_and_climb_and_rides_wait_for_their_own_rules()
     assert (again["moving_seconds"], again["elevation_gain_m"]) == (330.0, 39.0)
 
 
+def test_daily_decay_handles_players_without_activity():
+    """Audit 2026-10-24: the column is nullable, and one NULL (a row written by SQL or an import; the
+    ORM fills a default) made the whole decay job raise, so nobody decayed. The job now updates in
+    SQL and recomputes ranks only where they change."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    prefix = "decay.audit.20261024."
+    db = database.SessionLocal()
+    try:
+        db.query(models.User).filter(models.User.email.like(prefix + "%")).delete(synchronize_session=False)
+        rows = {
+            "idle": models.User(email=prefix + "idle@example.com", hashed_password="x", xp=1000, streak=5,
+                                last_activity_date=now - timedelta(days=2), rank="C - Intermediate"),
+            "fresh": models.User(email=prefix + "fresh@example.com", hashed_password="x", xp=1000, streak=3,
+                                 last_activity_date=now - timedelta(hours=2), rank="C - Intermediate"),
+            "never": models.User(email=prefix + "never@example.com", hashed_password="x", xp=100, streak=0,
+                                 last_activity_date=None, rank="D - Beginner"),
+            "gone": models.User(email=prefix + "gone@example.com", hashed_password="x", xp=600, streak=1,
+                                last_activity_date=now - timedelta(days=40), rank="C - Intermediate"),
+        }
+        db.add_all(rows.values())
+        db.commit()
+        ids = {k: u.id for k, u in rows.items()}
+        db.query(models.User).filter(models.User.id == ids["never"]).update(
+            {models.User.last_activity_date: None}, synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+    jobs.process_daily_decay()
+    db = database.SessionLocal()
+    try:
+        got = {k: db.get(models.User, i) for k, i in ids.items()}
+        assert (got["idle"].xp, got["idle"].streak, got["idle"].rank) == (950, 0, "C - Intermediate")
+        assert (got["fresh"].xp, got["fresh"].streak) == (1000, 3)
+        assert (got["never"].xp, got["never"].rank) == (100, "D - Beginner")
+        assert (got["gone"].xp, got["gone"].streak, got["gone"].rank) == (570, 0, "F - The Dishonored")
+        db.query(models.User).filter(models.User.id.in_(ids.values())).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     for test in (
         test_metrics_count_requests_and_verification_outcomes,
@@ -322,6 +364,7 @@ if __name__ == "__main__":
         test_raw_route_points_expire_after_retention_window,
         test_moving_time_drops_stops_and_elevation_ignores_gps_noise,
         test_hike_records_moving_time_and_climb_and_rides_wait_for_their_own_rules,
+        test_daily_decay_handles_players_without_activity,
     ):
         test()
         print(f"PASS {test.__name__}")

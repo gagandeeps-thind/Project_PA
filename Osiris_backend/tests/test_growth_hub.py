@@ -217,6 +217,37 @@ def test_riegel_and_ranking_rules():
     print("PASS test_riegel_and_ranking_rules")
 
 
+def test_ranked_board_matches_a_full_re_rank():
+    """Performance audit 2026-10-19: a cached board was re-sorted for every viewer (~40 ms at 10k players).
+    RankedBoard sorts once; each view must equal rank_values over the same values with the viewer replaced."""
+    import random
+    import time as _t
+    rng = random.Random(20261024)
+    for case in range(400):
+        ascending = case % 2 == 0
+        n = rng.randint(0, 40)
+        values = {k: float(rng.choice([0, 1, 2, 2, 3, 5, 8, rng.randint(0, 50)])) for k in range(1, n + 1)}
+        viewer = rng.randint(1, n + 3)
+        fresh = rng.choice([None, 0.0, 2.0, float(rng.randint(0, 60))])
+        limit = rng.randint(1, 12)
+        expected_values = {k: v for k, v in values.items() if k != viewer}
+        if fresh is not None:
+            expected_values[viewer] = fresh
+        expected = lb.rank_values(expected_values, ascending=ascending)
+        shown, mine, count = lb.RankedBoard(values, ascending=ascending).view(viewer, fresh, limit)
+        assert shown == expected[:limit], (case, shown, expected[:limit])
+        assert mine == next((r for r in expected if r[0] == viewer), None), case
+        assert count == len(expected), case
+    big = {k: float(rng.randint(0, 5000)) for k in range(10_000)}
+    ranking = lb.RankedBoard(big, ascending=False)
+    start = _t.perf_counter()
+    for viewer in range(200):
+        ranking.view(viewer, float(viewer), 50)
+    per_view_ms = (_t.perf_counter() - start) / 200 * 1000
+    assert per_view_ms < 5, per_view_ms
+    print(f"PASS test_ranked_board_matches_a_full_re_rank ({per_view_ms:.2f} ms per view at 10k players)")
+
+
 def test_progression_counts_for_the_profile():
     db = Session()
     for uid, xp in ((ana, 50), (ben, 300), (cy, 300)):
@@ -459,6 +490,7 @@ if __name__ == "__main__":
     test_pace_board_ranks_riegel_time_lowest_first()
     test_reps_and_rewards_boards()
     test_riegel_and_ranking_rules()
+    test_ranked_board_matches_a_full_re_rank()
     test_progression_counts_for_the_profile()
     test_list_endpoints_run_a_fixed_number_of_queries()  # last: it adds challenges the tests above count
     test_other_lists_run_a_fixed_number_of_queries()
