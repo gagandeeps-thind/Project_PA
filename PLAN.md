@@ -33,11 +33,11 @@ setting the repo up for autonomous agent work (2026-10-12).
 - [x] backend: resolve the OpenAPI contract drift
   - `python scripts/check_openapi_drift.py` exits 1 against the current working tree.
   - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
-    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` contains only intended changes.
+    `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` conttended changes.
 
 - [ ] [human] ci: add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
-  - Acceptance: the CI job runs the suite and it passes.
+  - Acceptance: the CI jouite and it passes.
 
 - [ ] [human] ci: add a job for `Osiris_admin_web` (`npm run build`)
   - Today CI covers the backend only; the command passes locally. (The Flutter app this item also named was retired
@@ -91,7 +91,7 @@ setting the repo up for autonomous agent work (2026-10-12).
 - [ ] [human] product: design pause/resume for runs (PRD-002)
   - Needs a per-point segment (migration) and an anti-cheat rule so a pause cannot hide travel (e.g. resume must be
     near the pause point, or the paused leg is excluded and capped). Verification rules version must be bumped.
-  - Acceptance: approved design; then migration + verifier + app work can be planned as agent items.
+  - Acceptance: then migration + verifier + app work can be planned as agent items.
 
 - [ ] [human] product: retire or gate the legacy v1 game endpoints (domains, vault, sieges, bounties, coupons)
   - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages (the parked
@@ -116,21 +116,21 @@ setting the repo up for autonomous agent work (2026-10-12).
     twilight (-6°) START asks first, with advice; the player can still start.
 
 - [x] customer: restore cold start after the exercise feature (release build, 2026-10-14)
-  - Session restore opened the exercise SQLite DB on every launch to drop other accounts' rows (~200 ms). The owner
-    is now remembered in preferences; the DB opens only when the signed-in account changes.
+  - Session restore opened the exercise SQLite DB on every launch to drop other accounts' rows (~er
+    is now remembered in preferences; the DB opens o - Nonly when the signed-in account changes.
 
 - [ ] [human] product: should a zero-rep exercise set be uploaded? (report 14)
-  - Today it uploads a summary that earns nothing and counts against the 30/min upload limit.
+  - Todit uploads a summary that earns nothing and counts against the 30/min upload limit.
   - Acceptance: decision recorded; if "no", the app keeps it local and the result sheet says so.
 
 - [ ] [human] size: ML Kit pose model bundled vs delivered by Google Play services (report 14)
   - Universal APK went 53 → 99.7 MB (arm64 download 43.7 MB). The Play-services model shrinks the app but downloads on
-    first use and needs a dependency change (lockfile).
+    first use and needs a dependencfile).
   - Acceptance: decision recorded; if switched, first-use download handled in the exercise screen.
 
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
-    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL before SIT.
+    (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL b
   - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
 
 - [ ] [human] ci: make the mypy step blocking
@@ -227,8 +227,7 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
   `docker-compose.yml` + admin image, detekt for Kotlin with baselines, SwiftLint config, gate covers KMP
 - [ ] [human] ci: add `python tests/test_settings.py` after the existing suites in `.github/workflows/ci.yml`.
 - [ ] [human] ci: add a KMP job on `ubuntu-latest` with JDK 17 running
-  `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest :shared:presentation:compileKotlinIosSimulatorArm64`
-  for pull requests touching `shared/**`, `android_version/**`, `gradle/**`, `*.gradle.kts`, `config/**`;
+  `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest :shared:presentation:compileKotlinIosSimulatorArm64`s touching `shared/**`, `android_version/**`, `gradle/**`, `*.gradle.kts`, `config/**`;
   and an Android job (`android-actions/setup-android`) running `./gradlew :android_version:app:assembleDebug detekt`.
 - [ ] [human] admin web: add `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks` and `prettier` to devDependencies
   (`npm install -D ...` rewrites `package-lock.json`, which agents may not edit); an agent then adds the configs and a `lint` script.
@@ -236,9 +235,8 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
 - [x] tabs: Discover (live, upcoming, community, finished; `GET /api/v2/challenge-hub`), Social global boards
   (distance, Riegel Pace Index, reps, rewards; `GET /api/v2/leaderboards/global`), Profile (rank gauge from
   `rank_floor_xp`, metrics grid), Wallet behind `features.walletDemo` with mock adapters only (no PAN handling,
-  EIP-55 / base58 address checks, never touches crystals)
-- [x] support: live chat stub on Profile, `WS /api/v2/support/ws` (player token, suspended players allowed, nothing stored)
-  with the shared Ktor WebSocket client and `SupportChatViewModel`
+  EIP-55 / base58cks, never touches crystals)
+- [x] support: live chat stub on Profile, `WS /api/v2/support/ws` (player token, suspended players allowed, nothid Ktor WebSocket client and `SupportChatViewModel`
 - [ ] [human] ci: add `python tests/test_growth_hub.py` and `python tests/test_support_chat.py` after the existing
   suites in `.github/workflows/ci.yml`.
 - [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
@@ -252,7 +250,7 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
   courses, communities, seasons, invites, blocks, admin queues); `test_growth_hub` asserts it
 - [x] backend: gzip (>= 1 KB), weak ETags with 304 on `If-None-Match`, `Cache-Control: private, no-cache`;
   the KMP client installs Ktor `HttpCache`
-- [x] backend: PostgreSQL pool settings (`OSIRIS_DB_POOL_*`); SQLite planner statistics on connect and nightly
+- [x] backend: PostgreSQL pool settings (`OSIRIS_DB_POOL_*`); SQics on connect and nightly
 - [x] backend: global leaderboards cached 60 s per board (`OSIRIS_LEADERBOARD_CACHE_SECONDS`), viewer row always fresh
 - [x] backend: `limit`/`offset` paging on long lists, `before_id` on audit events
 - [ ] [human] migrations: add a covering index for the global boards and team goals (board query 40 -> 25 ms at
@@ -260,7 +258,7 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
   `CREATE INDEX ix_run_sessions_verified_finished ON run_sessions (verification_status, finished_at, user_id, distance_m, duration_seconds);`
   and `ix_run_sessions_user_verified ON run_sessions (user_id, verification_status, finished_at)` for per-player totals.
   - Acceptance: an Alembic revision with both indexes (and `models.py` `Index(...)` entries) passes the gate.
-- [x] admin web: per-page chunks and long-lived library chunks, skeletons, debounced filters, non-blocking fonts
+- [x] admin web: per-page chunks and long-lived library chunks, skeletonilters, non-blocking fonts
 - [x] android: ARM-only release APK (87 -> 47 MB), Compose stability config (90 -> 2 unstable params), loading skeleton
 - [x] infra: nginx gateway / load balancer config and compose override; `OSIRIS_RUN_SCHEDULER`
 - [ ] [human] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`);
@@ -293,7 +291,7 @@ Mock-up canvas: https://claude.ai/artifact/9T7qH7rsRZ32o1YXq5McMy (Today, live r
   - Acceptance: the iOS Today screen renders the quest distance in Manrope ExtraBold at 72 pt.
 
 ## Strava parity program (2026-10-24)
-Brief: 24 features, OpenAPI-first, verified-only game effects, privacy defaults on, PostGIS-only spatial work.
+Brief: 24 features, OpenAPI-first, verified-only game effects, privacy defwork.
 Repo reality the plan follows: player app is KMP (Compose + SwiftUI, not Flutter), the merchant app is retired,
 the database is SQLite until the PostGIS migration (ADR-002), and agents cannot write Alembic revisions, so each
 new table is a model + tests here and a `[human]` migration item. Rides wait: every game query counts any accepted
