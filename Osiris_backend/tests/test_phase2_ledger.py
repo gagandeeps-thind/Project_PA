@@ -41,9 +41,12 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from database import Base  # noqa: E402
-import main  # noqa: E402
+from core import security  # noqa: E402
 import models  # noqa: E402
-from main import app, get_db, get_password_hash, get_rank, get_title  # noqa: E402
+from main import app  # noqa: E402
+from database import get_db  # noqa: E402
+from core.security import get_password_hash  # noqa: E402
+from services.progression import get_rank, get_title  # noqa: E402
 from services import ledger  # noqa: E402
 
 _FAILURES = []
@@ -94,7 +97,7 @@ def _now_str() -> str:
 
 
 def _auth(uid: int) -> dict:
-    tok = main.create_access_token({"sub": str(uid), "role": "player"})
+    tok = security.create_access_token({"sub": str(uid), "role": "player"})
     return {"Authorization": f"Bearer {tok}"}
 
 

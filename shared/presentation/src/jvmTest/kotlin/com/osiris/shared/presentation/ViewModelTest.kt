@@ -6,6 +6,8 @@ import com.osiris.shared.domain.exercise.Verdict
 import com.osiris.shared.domain.model.Registration
 import com.osiris.shared.domain.model.RunResult
 import com.osiris.shared.domain.run.ActiveRun
+import com.osiris.shared.domain.run.AutoPause
+import com.osiris.shared.domain.run.CueInterval
 import com.osiris.shared.domain.run.LocationFix
 import com.osiris.shared.presentation.challenge.ChallengeDetailViewModel
 import com.osiris.shared.presentation.common.Loadable
@@ -375,7 +377,7 @@ class ViewModelTest {
             val listening = backgroundScope.launch(main()) { vm.cues.collect { spoken += it } }
             vm.onLocation(amsterdam)
             vm.selectSport(Sport.WALK)
-            vm.setAutoPause(false)
+            vm.setAutoPause(AutoPause.OFF)
             vm.start()
             assertEquals("walk", runs.active.value!!.sport)
             assertEquals(false, runs.active.value!!.autoPause)
@@ -390,6 +392,45 @@ class ViewModelTest {
             assertEquals(2, spoken.size)
             assertTrue(spoken[0].startsWith("1 kilometre. Time "), spoken[0])
             assertTrue(spoken[1].startsWith("2 kilometres. "), spoken[1])
+            listening.cancel()
+        }
+    }
+
+    @Test
+    fun `cues can be muted and re-timed mid-run without a burst of announcements`() = runTest {
+        val clock = FixedClock(noon)
+        val runs = FakeRuns()
+        RunViewModel(runs, FakeChallenges(), FakePlayer(), clock = clock, dispatcher = main()).use {
+            val vm = this
+            val spoken = mutableListOf<String>()
+            val listening = backgroundScope.launch(main()) { vm.cues.collect { spoken += it } }
+            vm.onLocation(amsterdam)
+            vm.setAutoPause(AutoPause.WALKING)
+            vm.start()
+            assertEquals(1.5, runs.active.value!!.autoPauseMps)
+            vm.setAutoPause(AutoPause.OFF) // ignored while recording
+            assertEquals(AutoPause.WALKING, vm.state.value.autoPause)
+            var lat = 52.37
+            fun minute() {
+                repeat(6) { // 10 s fixes at about 3 m/s
+                    clock.now += 10.seconds
+                    lat += 0.00027
+                    vm.onLocation(LocationFix(lat, 4.89, at = clock.now))
+                }
+            }
+            repeat(4) { minute() } // 4 min, about 0.7 km: no kilometre yet
+            vm.setCueInterval(CueInterval.FIVE_MINUTES) // re-timed: counting restarts, nothing announced now
+            assertEquals(0, spoken.size)
+            minute() // 5 min of moving time
+            assertEquals(1, spoken.size)
+            assertTrue(spoken[0].startsWith("5 minutes. 0."), spoken[0])
+            vm.setAudioCues(false) // muted mid-run
+            repeat(5) { minute() }
+            assertEquals(1, spoken.size)
+            vm.setAudioCues(true)
+            repeat(5) { minute() }
+            assertEquals(2, spoken.size)
+            assertTrue(spoken[1].startsWith("15 minutes. "), spoken[1])
             listening.cancel()
         }
     }

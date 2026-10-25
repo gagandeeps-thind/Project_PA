@@ -12,7 +12,7 @@
 - Session security: "sign out everywhere" and password change revoke every older token.
 - `GET /api/v2/rules`: plain-language reward, refund, verification, and safety rules.
 
-Imported from the end of growth_api; registers its router on `main.app`.
+`main.py` mounts `router`.
 """
 from __future__ import annotations
 
@@ -34,20 +34,12 @@ from growth_api import (
     delete_growth_data,
     get_or_create_profile,
 )
-from main import (
-    _api_error,
-    _audit,
-    _now_naive_utc,
-    app,
-    NewPassword,
-    create_access_token,
-    get_active_player,
-    get_current_admin,
-    get_db,
-    get_password_hash,
-    get_rank,
-    verify_password,
-)
+from core.clock import _now_naive_utc
+from core.errors import _api_error
+from core.security import create_access_token, get_active_player, get_current_admin, get_password_hash, NewPassword, verify_password
+from database import get_db
+from services.audit import _audit
+from services.progression import get_rank
 from services import leaderboards as lb
 from services import player_safety
 from services import quests as quest_rules
@@ -579,6 +571,3 @@ def admin_erase_user(user_id: int, req: AdminReason, db: Session = Depends(get_d
     erase_player(db, user, "admin", admin["id"])
     db.commit()
     return {"status": "erased", "user_id": user_id}
-
-
-app.include_router(router)

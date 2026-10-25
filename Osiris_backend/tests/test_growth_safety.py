@@ -20,6 +20,8 @@ from fastapi.testclient import TestClient
 
 import database
 import main
+from core import clock  # noqa: E402
+from core import security  # noqa: E402
 import growth_api
 import models
 
@@ -131,7 +133,7 @@ def _admin() -> dict:
         admin_id = admin.id
     finally:
         db.close()
-    return {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
+    return {"Authorization": f"Bearer {security.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
 
 
 def test_location_consent_gates_runs_and_is_recorded() -> None:
@@ -261,7 +263,7 @@ def test_export_and_erase() -> None:
         attempt = db.query(models.ChallengeAttempt).filter(models.ChallengeAttempt.challenge_id == ch["id"]).first()
         assert attempt is not None
         challenge = db.query(models.Challenge).filter(models.Challenge.id == ch["id"]).first()
-        assert challenge.closes_at <= main._now_naive_utc()
+        assert challenge.closes_at <= clock._now_naive_utc()
     finally:
         db.close()
 

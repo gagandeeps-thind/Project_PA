@@ -89,12 +89,20 @@ struct TodayView: View {
 
     private func quest(_ q: Quest) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(q.heading).font(.caption).kerning(1.2).foregroundStyle(OsirisColor.secondary)
-            Text(q.title).font(.title3.bold())
-            Text(q.description_).foregroundStyle(OsirisColor.muted)
+            HStack {
+                Text(q.heading.uppercased())
+                Spacer()
+                Text("+\(q.xp) XP")
+            }
+            .font(FrostFont.mono(.caption))
+            .foregroundStyle(OsirisColor.muted)
+            // The screen's focal point: today's quest distance, at hero size; everything else recedes.
+            HeroMetric(
+                value: Format.shared.fixed(value: q.progressM / 1000, decimals: 2),
+                unit: "/ \(Format.shared.km(metres: Double(q.targetM)))"
+            )
+            Text("\(q.title). \(q.description_)").font(FrostFont.manrope(.callout)).foregroundStyle(OsirisColor.muted)
             ProgressView(value: q.fraction).padding(.top, 8)
-            Text("\(Format.shared.km(metres: q.progressM)) of \(Format.shared.km(metres: Double(q.targetM)))  •  +\(q.xp) XP")
-                .font(.footnote).foregroundStyle(OsirisColor.muted)
             if q.completed {
                 HStack {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(OsirisColor.success)

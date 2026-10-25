@@ -14,12 +14,18 @@ targets:
   Osiris:
     type: application
     platform: iOS
-    sources: [Osiris/Sources]
+    sources:
+      - Osiris/Sources
+      # One copy of the fonts for both apps: the Android ones, copied into the bundle root.
+      - path: ../android_version/app/src/main/res/font
+        buildPhase: resources
     info:
       path: Osiris/Info.plist
       properties:
         CFBundleDisplayName: Osiris
         UILaunchScreen: {}
+        # Manrope and Geist Mono (SIL OFL), registered at launch; Frost.swift sets their weights.
+        UIAppFonts: [manrope.ttf, geist_mono.ttf]
         NSLocationWhenInUseUsageDescription: Osiris uses your location while you record a run, to verify the distance. Your route is never shown to other players.
         NSCameraUsageDescription: Osiris counts exercise reps with the camera. Images are analysed on this phone and never saved or uploaded.
         NSMotionUsageDescription: Osiris reads your step count and motion activity to check that runs and step challenges were done on foot.

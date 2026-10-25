@@ -19,6 +19,8 @@ from fastapi.testclient import TestClient
 import database
 import growth_api
 import main
+from core import security  # noqa: E402
+from services import jobs  # noqa: E402
 import models
 from services import challenges as rules
 
@@ -130,7 +132,7 @@ def _admin() -> dict:
         admin_id = admin.id
     finally:
         db.close()
-    return {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
+    return {"Authorization": f"Bearer {security.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
 
 
 def _run(headers: dict, points, key: str) -> dict:
@@ -404,7 +406,7 @@ def test_settlement_and_suspension() -> None:
         db.commit()
     finally:
         db.close()
-    main.process_challenge_settlement()
+    jobs.process_challenge_settlement()
     assert client.get(f"/api/v2/challenges/{ch['id']}", headers=defender).json()["status"] == "settled"
 
     # Suspended players are locked out of the v2 API until unsuspended.

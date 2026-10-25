@@ -2,8 +2,7 @@
 
 The app runs pose estimation and rep counting on the device and uploads a summary per set.
 The server re-checks the summary (`services.exercises.evaluate`), stores it, and grants
-capped XP for verified sets. Imported at the end of `growth_api.py`; registers its router on
-`main.app` when the import completes.
+capped XP for verified sets. `main.py` mounts `router`.
 """
 from __future__ import annotations
 
@@ -21,9 +20,13 @@ from sqlalchemy.orm import Session
 import models
 from growth_api import get_or_create_profile
 from growth_safety import record_consent
-from main import (
-    _api_error, _audit, _now_naive_utc, _rate_limit, app, get_active_player, get_current_admin, get_db, get_rank,
-)
+from core.clock import _now_naive_utc
+from core.errors import _api_error
+from core.rate_limit import _rate_limit
+from core.security import get_active_player, get_current_admin
+from database import get_db
+from services.audit import _audit
+from services.progression import get_rank
 from services import exercises as exercise_rules
 from services import metrics
 from services import player_safety
@@ -367,6 +370,3 @@ def admin_review_exercise_session(
     db.commit()
     metrics.observe_exercise_verification(row.exercise_key, f"review_{new_status}", [])
     return AdminExerciseReviewOut(id=session_id, status=new_status, xp_awarded=xp)
-
-
-app.include_router(router)

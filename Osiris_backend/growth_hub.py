@@ -28,16 +28,11 @@ from sqlalchemy.orm import Session
 import growth_safety
 import models
 from growth_communities import LEADERBOARD_LIMIT, PRIVATE_NAME, _week_window
-from main import (
-    ChallengePublic,
-    ChallengeStats,
-    _challenge_public,
-    _now_naive_utc,
-    _refresh_challenge_status,
-    app,
-    get_active_player,
-    get_db,
-)
+from core.clock import _now_naive_utc
+from core.security import get_active_player
+from database import get_db
+from schemas import ChallengePublic
+from services.challenge_store import _challenge_public, _refresh_challenge_status, ChallengeStats
 from services import leaderboards as lb
 from services.ttl_cache import TTLCache, ttl_from_env
 
@@ -98,11 +93,15 @@ class GlobalBoard(BaseModel):
 
 def _names(db: Session, user_ids: list[int], viewer_id: int) -> dict[int, str]:
     hidden = growth_safety.blocked_user_ids(db, viewer_id)
-    profiles = db.query(models.PlayerProfile).filter(models.PlayerProfile.user_id.in_(user_ids or [-1])).all()
+    # Three columns, not whole profiles: a board shows up to 50 names, and under concurrent load
+    # SQLite row fetches cost per column (audit 2026-10-24: 18 -> 5 ms per call at 20 users).
+    profile = models.PlayerProfile
+    rows = db.query(profile.user_id, profile.display_name, profile.leaderboard_opt_in).filter(
+        profile.user_id.in_(user_ids or [-1])).all()
     out = {uid: PRIVATE_NAME for uid in user_ids}
-    for p in profiles:
-        if p.user_id == viewer_id or (p.leaderboard_opt_in and p.user_id not in hidden):
-            out[p.user_id] = p.display_name
+    for uid, name, opted_in in rows:
+        if uid == viewer_id or (opted_in and uid not in hidden):
+            out[uid] = name
     return out
 
 
@@ -269,28 +268,25 @@ def global_leaderboard(
 ):
     uid = token_data["id"]
     start = _period_start(period, _now_naive_utc())
-    values = dict(BOARD_CACHE.get_or_compute(
-        (board, start, exercise), lambda: _active_board_values(db, board, start, exercise)))
-    # The viewer is active (get_active_player), so their fresh value can always stand in.
-    values.pop(uid, None)
-    values.update(_board_values(db, board, start, exercise, user_id=uid))
     ascending = board == "pace"
-    ranked = lb.rank_values(values, ascending=ascending)
-    shown = ranked[:LEADERBOARD_LIMIT]
+    # Sorted once per cache fill; the viewer is active (get_active_player), so their fresh value
+    # always stands in for the cached one.
+    ranking: lb.RankedBoard = BOARD_CACHE.get_or_compute(
+        (board, start, exercise),
+        lambda: lb.RankedBoard(_active_board_values(db, board, start, exercise), ascending=ascending))
+    fresh = _board_values(db, board, start, exercise, user_id=uid).get(uid)
+    shown, my_rank, ranked_players = ranking.view(uid, fresh, LEADERBOARD_LIMIT)
     names = _names(db, [k for k, _, _ in shown] + [uid], uid)
 
     def row(key: int, value: float, position: int) -> BoardRow:
         return BoardRow(rank=position, name=names.get(key, PRIVATE_NAME), value=round(value, 1), is_me=key == uid)
 
-    mine = next((row(*r) for r in ranked if r[0] == uid), None)
+    mine = row(*my_rank) if my_rank is not None else None
     unit, explainer = BOARD_META[board]
     if board == "reps" and exercise == "plank":
         unit, explainer = "s", "Seconds of verified plank hold."
     return GlobalBoard(
         board=board, period=period, exercise=exercise if board == "reps" else None, unit=unit,
         lower_is_better=ascending, explainer=explainer, rows=[row(*r) for r in shown], my_row=mine,
-        ranked_players=len(ranked),
+        ranked_players=ranked_players,
     )
-
-
-app.include_router(router)

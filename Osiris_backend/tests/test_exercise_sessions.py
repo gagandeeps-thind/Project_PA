@@ -20,6 +20,8 @@ from fastapi.testclient import TestClient
 import database
 import growth_api
 import main
+from core import rate_limit  # noqa: E402
+from core import security  # noqa: E402
 import models
 from services import exercises as rules
 
@@ -77,7 +79,7 @@ def _admin() -> dict:
         admin_id = admin.id
     finally:
         db.close()
-    return {"Authorization": f"Bearer {main.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
+    return {"Authorization": f"Bearer {security.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
 
 
 def _durations(n, base=1.5):
@@ -213,15 +215,15 @@ def test_plank_hold() -> None:
 
 def test_submission_is_rate_limited() -> None:
     headers = _register("ratelimit")
-    main._rate_buckets.clear()
-    dev_env = main._IS_DEV_ENV
-    main._IS_DEV_ENV = False          # limits are off in dev/test; exercise the prod path
+    rate_limit._rate_buckets.clear()
+    dev_env = rate_limit._IS_DEV_ENV
+    rate_limit._IS_DEV_ENV = False          # limits are off in dev/test; exercise the prod path
     try:
         codes = [client.post("/api/v2/exercise-sessions", headers=headers, json=_set(reps=3)).status_code
                  for _ in range(35)]
     finally:
-        main._IS_DEV_ENV = dev_env
-        main._rate_buckets.clear()
+        rate_limit._IS_DEV_ENV = dev_env
+        rate_limit._rate_buckets.clear()
     assert codes[:30] == [201] * 30 and 429 in codes[30:], codes
     print("PASS submission is rate limited")
 

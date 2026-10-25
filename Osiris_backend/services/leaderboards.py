@@ -7,6 +7,7 @@ flat bonus, so five easy days beat one exhausting one.
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
 from dataclasses import dataclass
 from datetime import date
 from typing import Mapping
@@ -128,3 +129,63 @@ def rank_values(values: Mapping[int, float], *, ascending: bool) -> list[tuple[i
         position = out[-1][2] if out and out[-1][1] == value else i
         out.append((key, value, position))
     return out
+
+
+class RankedBoard:
+    """A board sorted once, then viewed many times with one player's value replaced.
+
+    The global boards are cached for a minute but every request swaps in the viewer's live
+    value. Re-sorting every player per request cost ~40 ms at 10k players; here the sort happens
+    once per cache fill and each view costs O(limit + log n). `view` returns exactly what
+    `rank_values` would return for the same values with the viewer's entry replaced.
+    """
+
+    def __init__(self, values: Mapping[int, float], *, ascending: bool) -> None:
+        self.ascending = ascending
+        self._values = {k: v for k, v in values.items() if ascending or v > 0}
+        self._rows = sorted(((self._sort_key(v), k) for k, v in self._values.items()))
+        self._keys = [sk for sk, _ in self._rows]
+
+    def _sort_key(self, value: float) -> float:
+        return value if self.ascending else -value
+
+    def _eligible(self, value: float | None) -> bool:
+        return value is not None and (self.ascending or value > 0)
+
+    def view(self, viewer: int, viewer_value: float | None, limit: int
+             ) -> tuple[list[tuple[int, float, int]], tuple[int, float, int] | None, int]:
+        """(top `limit` rows, the viewer's row or None, ranked player count) with the viewer's
+        cached value replaced by `viewer_value` (None: the viewer has no value on this board)."""
+        old = self._values.get(viewer)
+        old_key = self._sort_key(old) if old is not None else None
+        fresh = (self._sort_key(viewer_value), viewer) if self._eligible(viewer_value) else None
+
+        def better_than(sort_key: float, include_viewer: bool) -> int:
+            n = bisect_left(self._keys, sort_key)
+            if old_key is not None and old_key < sort_key:
+                n -= 1
+            if include_viewer and fresh is not None and fresh[0] < sort_key:
+                n += 1
+            return n
+
+        top: list[tuple[float, int]] = []
+        for row in self._rows:
+            if row[1] == viewer:
+                continue
+            top.append(row)
+            if len(top) >= limit:
+                break
+        if fresh is not None:
+            top.append(fresh)
+            top.sort()
+            top = top[:limit]
+
+        def ranked(sort_key: float, key: int) -> tuple[int, float, int]:
+            value = sort_key if self.ascending else -sort_key
+            position = 1 + better_than(sort_key, include_viewer=key != viewer)
+            return key, value, position
+
+        shown = [ranked(sk, k) for sk, k in top]
+        mine = ranked(*fresh) if fresh is not None else None
+        count = len(self._rows) - (1 if old_key is not None else 0) + (1 if fresh is not None else 0)
+        return shown, mine, count

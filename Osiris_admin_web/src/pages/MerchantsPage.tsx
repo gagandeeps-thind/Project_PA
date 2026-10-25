@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Store } from "lucide-react";
 import {
+  apiErrorMessage,
   getMerchants,
   activateMerchant,
   deactivateMerchant,
@@ -35,7 +36,7 @@ export default function MerchantsPage() {
       const data = await getMerchants(status);
       setMerchants(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load merchants");
+      setError(apiErrorMessage(err, "Failed to load merchants"));
     } finally {
       setLoading(false);
     }
@@ -86,9 +87,7 @@ export default function MerchantsPage() {
       setDialog({ open: false, action: "activate", merchant: null });
       await fetchMerchants();
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Action failed"
-      );
+      setError(apiErrorMessage(err, "Action failed"));
     } finally {
       setActionLoading(false);
     }

@@ -40,9 +40,13 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from database import Base  # noqa: E402
-import main  # noqa: E402
+from core import security  # noqa: E402
+from routers import payments  # noqa: E402
+from services import stripe_gateway  # noqa: E402
 import models  # noqa: E402
-from main import app, get_db, get_password_hash  # noqa: E402
+from main import app  # noqa: E402
+from database import get_db  # noqa: E402
+from core.security import get_password_hash  # noqa: E402
 
 _FAILURES = []
 
@@ -108,9 +112,9 @@ def _fake_construct_event(payload, sig_header):
     return json.loads(payload)
 
 
-main.stripe_gateway.create_payment_intent = _fake_create_payment_intent
-main.stripe_gateway.construct_event = _fake_construct_event
-main.stripe_gateway.STRIPE_PUBLISHABLE_KEY = "pk_test_fake"
+stripe_gateway.create_payment_intent = _fake_create_payment_intent
+stripe_gateway.construct_event = _fake_construct_event
+stripe_gateway.STRIPE_PUBLISHABLE_KEY = "pk_test_fake"
 
 
 def _now() -> datetime:
@@ -122,12 +126,12 @@ def _now_str() -> str:
 
 
 def _player_auth(uid: int) -> dict:
-    tok = main.create_access_token({"sub": str(uid), "role": "player"})
+    tok = security.create_access_token({"sub": str(uid), "role": "player"})
     return {"Authorization": f"Bearer {tok}"}
 
 
 def _merchant_auth(mid: int) -> dict:
-    tok = main.create_access_token({"sub": str(mid), "role": "merchant"})
+    tok = security.create_access_token({"sub": str(mid), "role": "merchant"})
     return {"Authorization": f"Bearer {tok}"}
 
 
@@ -203,7 +207,7 @@ def test_price_is_server_authoritative():
                     headers=_player_auth(uid), json={"pack_id": "starter"})
     _check("crystals/intent returns 200", r.status_code == 200)
     body = r.json()
-    pack = main.CRYSTAL_PACKS["starter"]
+    pack = payments.CRYSTAL_PACKS["starter"]
     _check("response amount_cents matches server pack",
            body.get("amount_cents") == pack["amount_cents"])
     _check("response crystal_amount matches server pack",
@@ -230,8 +234,8 @@ def test_crystal_fulfillment_idempotent():
     assert r.status_code == 200, r.text
     intent = r.json()
     pi_id = intent["payment_intent_id"]
-    grant = main.CRYSTAL_PACKS["champion"]["crystals"]
-    price = main.CRYSTAL_PACKS["champion"]["amount_cents"]
+    grant = payments.CRYSTAL_PACKS["champion"]["crystals"]
+    price = payments.CRYSTAL_PACKS["champion"]["amount_cents"]
     meta = {"kind": "crystal_purchase", "user_id": str(uid),
             "pack_id": "champion", "crystal_amount": str(grant)}
 
@@ -310,18 +314,18 @@ def test_merchant_pilot_fee_activation():
 # --- Test 5: unconfigured Stripe -> 503 (fail loud, never a silent stub) --------------------
 def test_unconfigured_stripe_503():
     uid = _onboard("stripe_off@test.com")
-    saved = main.stripe_gateway.create_payment_intent
+    saved = stripe_gateway.create_payment_intent
 
     def _raise_not_configured(**kwargs):
-        raise main.stripe_gateway.StripeNotConfiguredError("Stripe is not configured.")
+        raise stripe_gateway.StripeNotConfiguredError("Stripe is not configured.")
 
-    main.stripe_gateway.create_payment_intent = _raise_not_configured
+    stripe_gateway.create_payment_intent = _raise_not_configured
     try:
         r = client.post("/api/v1/payments/crystals/intent",
                         headers=_player_auth(uid), json={"pack_id": "starter"})
         _check("intent creation with Stripe disabled -> 503", r.status_code == 503)
     finally:
-        main.stripe_gateway.create_payment_intent = saved
+        stripe_gateway.create_payment_intent = saved
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ This directory is the maintained startup-level source of truth for Osiris. Obsol
 | [17 Performance Pass and Audit 2026-10-19](17_Performance_Pass_and_Audit_2026-10-19.md) | N+1 fixes, gzip and ETags, leaderboard cache, paging, admin code splitting, APK size, Compose stability, load test, scaling-out prerequisites |
 | [18 Competitor Teardown: Steppa 2026-10-18](18_Competitor_Teardown_Steppa_2026-10-18.md) | How Steppa's real-money step challenges work (REA runtime capture, terms, App Store), compared with Osiris |
 | [19 Production Release Plan 2026-10-17](19_Production_Release_Plan_2026-10-17.md) | Hosting decision, security hardening before the release build, CI/CD and rollback, monitoring and maintenance, build status (written before the Flutter app was retired for KMP) |
+| [20 Structure, Performance and Audit 2026-10-24](20_Structure_Performance_and_Audit_2026-10-24.md) | Backend split into core/routers/services, load test (p95 927 -> 413 ms), first gateway run with 2 replicas, admin console fixes, tracker 1b |
 
 ## Product north star
 

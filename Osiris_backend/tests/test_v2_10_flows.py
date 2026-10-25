@@ -33,6 +33,7 @@ import database
 import models
 import growth_api
 import main
+import schemas  # noqa: E402
 
 
 # --- Test infrastructure ---
@@ -207,7 +208,7 @@ def test_dos_cap_accelerometer():
     pid, token = _onboard_player(client, "doscap")
 
     # Build a payload that overflows the per-channel cap by one.
-    OVERFLOW = main.MAX_SAMPLES_PER_CHANNEL + 1
+    OVERFLOW = schemas.MAX_SAMPLES_PER_CHANNEL + 1
     proof = _build_pushup_proof()
     proof["accelerometer"] = [{"t_ms": i, "ax": 0.0, "ay": 0.0, "az": 9.8} for i in range(OVERFLOW)]
 

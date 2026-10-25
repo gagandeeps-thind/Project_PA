@@ -35,11 +35,11 @@ setting the repo up for autonomous agent work (2026-10-12).
   - Acceptance: confirm that every schema difference comes from an intended API change in the WIP, then run
     `python scripts/check_openapi_drift.py --write`; the drift check exits 0 and the diff to `Documentation/openapi.json` conttended changes.
 
-- [ : add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
+- [ ] [human] ci: add `python tests/test_mvp_gdpr_and_email_uniqueness.py` to `.github/workflows/ci.yml`
   - The suite exists and passes locally, but CI does not run it. After the CI step is added, an agent adds it to `BACKEND_TESTS` in `.claude/hooks/gate.sh`.
   - Acceptance: the CI jouite and it passes.
 
-] ci: add a job for `Osiris_admin_web` (`npm run build`)
+- [ ] [human] ci: add a job for `Osiris_admin_web` (`npm run build`)
   - Today CI covers the backend only; the command passes locally. (The Flutter app this item also named was retired
     on 2026-10-19; the KMP job is its own item below.)
   - Acceptance: a pull request that touches the admin app runs its job, and the job passes.
@@ -81,17 +81,17 @@ setting the repo up for autonomous agent work (2026-10-12).
 
 - [x] backend: Prometheus metrics endpoint (backlog Phase 1 observability, Phase 2 run instrumentation)
   - Acceptance: request count and latency histogram by route template, run verification outcomes and rejection
-    reasons; token-protected outside dev/test; covered in `test_run_ret_phase2_security.py`.
+    reasons; token-protected outside dev/test; covered in `test_run_release.py` and `test_phase2_security.py`.
 
 - [ ] [human] customer: request the Android 13+ notification permission
   - The recording notification is posted but hidden until the app holds POST_NOTIFICATIONS; tracking works
     regardless. Requesting it needs a permission plugin (pubspec/lockfile change) or a small platform channel.
-  - Acceptance: decision recorded; if adopted, the app asks once bef and the notification shows.
+  - Acceptance: decision recorded; if adopted, the app asks once before the first run and the notification shows.
 
 - [ ] [human] product: design pause/resume for runs (PRD-002)
   - Needs a per-point segment (migration) and an anti-cheat rule so a pause cannot hide travel (e.g. resume must be
     near the pause point, or the paused leg is excluded and capped). Verification rules version must be bumped.
-  - Acceptance: then migration + rk can be planned as agent items.
+  - Acceptance: then migration + verifier + app work can be planned as agent items.
 
 - [ ] [human] product: retire or gate the legacy v1 game endpoints (domains, vault, sieges, bounties, coupons)
   - The PRD scopes them out of the MVP; they are kept alive by the admin Merchants/Bounties pages (the parked
@@ -121,26 +121,26 @@ setting the repo up for autonomous agent work (2026-10-12).
 
 - [ ] [human] product: should a zero-rep exercise set be uploaded? (report 14)
   - Todit uploads a summary that earns nothing and counts against the 30/min upload limit.
-  - Acceptance: ded; if "no", the app keeps it local and the result sheet says so.
+  - Acceptance: decision recorded; if "no", the app keeps it local and the result sheet says so.
 
 - [ ] [human] size: ML Kit pose model bundled vs delivered by Google Play services (report 14)
   - Universal APK went 53 → 99.7 MB (arm64 download 43.7 MB). The Play-services model shrinks the app but downloads on
     first use and needs a dependencfile).
-  - Acceptancorded; if switched, first-use download handled in the exercise screen.
+  - Acceptance: decision recorded; if switched, first-use download handled in the exercise screen.
 
 - [ ] [human] infra: SQLite single-writer tail latency
   - With WAL on, p95 meets target but write endpoints still show p99 0.8-1.1 s at 20 concurrent writers
     (route upload, /me/today). That is SQLite's one-writer limit; ADR-002 already requires PostgreSQL b
-  - Acceptance: SIT runSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
+  - Acceptance: SIT runs on PostgreSQL and the load test (`p99 < 500 ms` for writes at 20 users) is re-run there.
 
 - [ ] [human] ci: make the mypy step blocking
   - Since the typed-models refactor the CI mypy command reports zero errors, but the CI workflow still marks the
-    step `continue-on-error: true`, so a regression would not fail CI. After the CI edit, an aggate.sh.
+    step `continue-on-error: true`, so a regression would not fail CI. After the CI edit, an agent adds mypy to gate.sh.
   - Acceptance: the mypy step has no `continue-on-error` and passes.
 
 - [ ] [human] tooling: decide on formatters (`ruff format` for the backend, `dart format` for the apps)
   - None are adopted (`ruff.toml` defers formatting). `.claude/hooks/format.sh` is a no-op until one is chosen.
-  - Acceptance: decision recorded; -off formatting commit, then format.sh and CLAUDE.md are updated with the command.
+  - Acceptance: decision recorded; if adopted, a one-off formatting commit, then format.sh and CLAUDE.md are updated with the command.
 
 - [ ] [human] tooling: decide on lint and tests for `Osiris_admin_web`
   - There is no ESLint config and no test runner; only `tsc` (via `npm run build`) guards it.
@@ -188,14 +188,14 @@ for review had no reviewer.
   - Acceptance: admins list `review` sets and approve (capped XP for that set's day) or reject them, once, with an
     audit event; non-admins get 401/403; admin page `ExerciseReviewPage.tsx`; the app's local history picks up
     review outcomes on refresh.
-- [x] launch test, performance an 2 (report 15): admin console and Flutter web build driven in
+- [x] launch test, performance and audit for phase 2 (report 15): admin console and Flutter web build driven in
   Chromium; fixed the database-failure path and the review-queue N+1.
 - [ ] [human] tooling: adopt a browser E2E suite (Playwright) for the admin console and the Flutter web smoke test
   described in report 15 §5, and decide where it runs (gate, CI, or on demand).
 
 ## Sprint 3: rep-counting accuracy before device QA (2026-10-17)
 Goal: know, with numbers, where the rep engine is right and wrong before people test it, and make device QA
-produce reusable labeled data. Input: report 14 measured pose detection at 5.1 fps tor; the engine
+produce reusable labeled data. Input: report 14 measured pose detection at 5.1 fps on the emulator; the engine
 had only been tested at 30 fps.
 
 - [x] gate: run `tests/test_exercise_sessions.py` in `.claude/hooks/gate.sh` (done 2026-10-17)
@@ -223,11 +223,11 @@ had only been tested at 30 fps.
 ## Next phase: FrostMatte player app (2026-10-19)
 Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per pipeline phase.
 
-- [x] scaffolding: `.env.exampgs.secret()` (env or secret-manager file), `OSIRIS_DATABASE_URL`,
-  `docker-compose.yml` + admin i for Kotlin with baselines, SwiftLint config, gate covers KMP
+- [x] scaffolding: `.env.example`, `settings.secret()` (env or secret-manager file), `OSIRIS_DATABASE_URL`,
+  `docker-compose.yml` + admin image, detekt for Kotlin with baselines, SwiftLint config, gate covers KMP
 - [ ] [human] ci: add `python tests/test_settings.py` after the existing suites in `.github/workflows/ci.yml`.
 - [ ] [human] ci: add a KMP job on `ubuntu-latest` with JDK 17 running
-  `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest :shared:presentation:compileKotlinIosSimulatorArm64`s touching `sharedndroid_version/**`, `gradle/**`, `*.gradle.kts`, `config/**`;
+  `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest :shared:presentation:compileKotlinIosSimulatorArm64`s touching `shared/**`, `android_version/**`, `gradle/**`, `*.gradle.kts`, `config/**`;
   and an Android job (`android-actions/setup-android`) running `./gradlew :android_version:app:assembleDebug detekt`.
 - [ ] [human] admin web: add `eslint`, `typescript-eslint`, `eslint-plugin-react-hooks` and `prettier` to devDependencies
   (`npm install -D ...` rewrites `package-lock.json`, which agents may not edit); an agent then adds the configs and a `lint` script.
@@ -235,8 +235,8 @@ Spec audit and defaults: project thread "next steps" (spec-audit.md). One PR per
 - [x] tabs: Discover (live, upcoming, community, finished; `GET /api/v2/challenge-hub`), Social global boards
   (distance, Riegel Pace Index, reps, rewards; `GET /api/v2/leaderboards/global`), Profile (rank gauge from
   `rank_floor_xp`, metrics grid), Wallet behind `features.walletDemo` with mock adapters only (no PAN handling,
-  EIP-55 / basr touches crystals)
-- [x] support: live chat stub on Profile, `WS /api/v2/support/ws` (player token, suspended players allowed, nothid Ktor WeSupportChatViewModel`
+  EIP-55 / base58cks, never touches crystals)
+- [x] support: live chat stub on Profile, `WS /api/v2/support/ws` (player token, suspended players allowed, nothid Ktor WebSocket client and `SupportChatViewModel`
 - [ ] [human] ci: add `python tests/test_growth_hub.py` and `python tests/test_support_chat.py` after the existing
   suites in `.github/workflows/ci.yml`.
 - [ ] [human] migrations: approve agent-written Alembic revisions (in PRs) for refresh tokens, friendships and the
@@ -250,7 +250,8 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
   courses, communities, seasons, invites, blocks, admin queues); `test_growth_hub` asserts it
 - [x] backend: gzip (>= 1 KB), weak ETags with 304 on `If-None-Match`, `Cache-Control: private, no-cache`;
   the KMP client installs Ktor `HttpCache`
-- [x] backend: PostgreSQL pool settings (`OSIRIS_DB_POOL_*`); SQics on connect ankend: global leaderboards cached 60 s per board (`OSIRIS_LEADERBOARD_CACHE_SECONDS`), viewer row always fresh
+- [x] backend: PostgreSQL pool settings (`OSIRIS_DB_POOL_*`); SQics on connect and nightly
+- [x] backend: global leaderboards cached 60 s per board (`OSIRIS_LEADERBOARD_CACHE_SECONDS`), viewer row always fresh
 - [x] backend: `limit`/`offset` paging on long lists, `before_id` on audit events
 - [ ] [human] migrations: add a covering index for the global boards and team goals (board query 40 -> 25 ms at
   100k runs, measured on a scratch copy):
@@ -260,8 +261,11 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
 - [x] admin web: per-page chunks and long-lived library chunks, skeletonilters, non-blocking fonts
 - [x] android: ARM-only release APK (87 -> 47 MB), Compose stability config (90 -> 2 unstable params), loading skeleton
 - [x] infra: nginx gateway / load balancer config and compose override; `OSIRIS_RUN_SCHEDULER`
-- [ ] [human] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`);
-  before more than one replica: PostgreSQL, one scheduler, a shared rate limiter (report 17, section 4).
+- [x] infra: run the gateway override once with Docker (`docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build`)
+  - Ran 2026-10-24 (report 20): healthy, gzip/ETag/request id through nginx, WebSocket upgrade, even least_conn split
+    over 2 replicas. Found that replicas need a shared `OSIRIS_JWT_SECRET`; the override now requires it.
+- [ ] [human] infra: before more than one replica in a real environment: PostgreSQL, one scheduler, a shared rate
+  limiter (report 17, section 4).
 - [x] app: fetch Today once at start (it is fetched before and again after the first location fix)
   - Acceptance: a presentation test shows one `/api/v2/me/today` request when the location arrives within 2 s.
 
@@ -273,7 +277,9 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
   `starlette>=1.3.1` (with a `fastapi` release that allows it), `anyio==4.14.2`, `idna==3.15`, `urllib3==2.8.0`.
   PyJWT GHSA-gvp8-978c-rx2q has no fix yet; it only bites callers that reuse an `options` dict, which `main.py` does not.
 - [ ] [human] deps (lockfile): `npm audit` finds 6 high advisories in `Osiris_admin_web/package-lock.json`
-  (`axios`, `vite` direct; `form-data`, `nanoid`, `postcss`, `source-map-js` transitive); `npm audit fix` resolve] [human] ci: add `python tests/test_public_base_url.py` after the existing suites in `.github/workflows/chuman] deploy: add `OSIRIS_PUBLIC_BASE_URL` (the public https origin) to `DEPLOY_RUNBOOK.md` and every
+  (`axios`, `vite` direct; `form-data`, `nanoid`, `postcss`, `source-map-js` transitive); `npm audit fix` resolves all.
+- [ ] [human] ci: add `python tests/test_public_base_url.py` after the existing suites in `.github/workflows/ci.yml`.
+- [ ] [human] deploy: add `OSIRIS_PUBLIC_BASE_URL` (the public https origin) to `DEPLOY_RUNBOOK.md` and every
   non-dev environment; without it share, invite and referral links answer 503 instead of trusting the Host header.
 
 ## UI: Slate redesign (2026-10-21)
@@ -283,9 +289,11 @@ Mock-up canvas: https://claude.ai/artifact/9T7qH7rsRZ32o1YXq5McMy (Today, live r
   glass panes with a specular top rim, stepped top-left shadows and grain, floating chunky tab bar, one 72 sp
   focal number per screen (Today quest distance, Run distance, Social rank), asymmetric Today shortcuts,
   slate-tinted map tiles. `DesignTokensTest` checks WCAG AA text contrast.
-- [ ] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
+- [x] ios: bundle `manrope.ttf` and `geist_mono.ttf` (from `android_version/app/src/main/res/font/`) in the Xcode
   target with `UIAppFonts`, and use them in `Frost.swift`; the shared colours already apply. Needs a Mac to build.
   - Acceptance: the iOS Today screen renders the quest distance in Manrope ExtraBold at 72 pt.
+- [ ] [human] on a Mac: `xcodegen`, build, and confirm the Today quest distance is Manrope ExtraBold at 72 pt
+  (Xcode's view debugger shows the font name). The Swift side of the fonts has not been compiled yet.
 
 ## Strava parity program (2026-10-24)
 Brief: 24 features, OpenAPI-first, verified-only game effects, privacy defwork.
@@ -303,10 +311,34 @@ Build order (dependencies in brackets):
 
 - [x] tracker 1a: sport type (run, walk, hike), auto-pause (slower than 0.5 m/s for 10 s; a reported speed of 0 counts
   only if the position stayed within GPS jitter), live moving time and climb, spoken kilometre cues, no GPS distance
-  filter so stops keep producing fixes; the server's verification decision rame moving time and climb.
-- [ ] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+  filter so stops keep producing fixes; the server's verification decision records the same moving time and climb.
+- [x] tracker 1b: audio cue interval options (per km or per N minutes) and a mid-run mute; auto-pause threshold setting
+  - Cues every km, 5 or 10 min of moving time; mute and interval change mid-run (no burst). Auto-pause off, stops
+    only (0.5 m/s), under 3.6 or 5.4 km/h; the finish sends `auto_pause_mps` so the server's moving time matches.
+    Android UI not compiled in the agent container (no Android SDK); shared tests cover the logic.
 - [ ] [human] device QA for tracker 1: a 60-min run on a low-end Android phone loses under 1% of points (compare
   `point_count` with fixes logged), screen off and app swiped away; record battery drain per hour.
 - [ ] tracker 3: activity history and detail (map, splits, elevation profile), edit title, delete with derived-stat cascade
   (never the ledger). Needs `run_sessions.title` and `visibility` ([human] migration).
 - [ ] ride: per-sport speed rules, boards and quest eligibility before `ride` is accepted.
+
+## Structure and audit pass (2026-10-24)
+Report: `Documentation/Enterprise/20_Structure_Performance_and_Audit_2026-10-24.md`. Branch `claude/cool-wozniak-dk57od`.
+
+- [x] backend: split the 4,400-line `main.py` into `core/`, `routers/`, `schemas.py` and services (contract, routes and
+  middleware unchanged); `docs/architecture/backend.md`
+- [x] backend: `requirements.txt` lists `stripe` (imported at startup) and drops four unused packages
+- [x] backend: global boards rank from a cached sorted board (7.8 -> 0.03 ms per request at 10k players); daily decay in
+  SQL, no crash on a NULL last activity
+- [x] backend: hot paths read only the columns they use (load p95 927 -> 413 ms at 20 users); `scripts/load_test.py`
+- [x] backend + admin web: admin Bounties page works again; the console signs out on 401, shows server errors, and
+  survives a failed page chunk (error boundary)
+- [ ] [human] repo layout: rename top-level folders for consistency in one PR, with the CI, Dockerfile, compose, gate and
+  doc edits it needs: `Osiris_backend` -> `backend`, `Osiris_admin_web` -> `admin_web`; keep `shared`, `android_version`,
+  `ios_version`; then `Documentation/` -> `docs/enterprise/`. Not done by an agent: CI and the Dockerfile are danger zones.
+- [ ] [human] deps (lockfile): drop `passlib` from the backend lock (nothing imports it); move admin `@types/react` and
+  `@types/react-dom` to devDependencies (`npm install -D` rewrites the npm lock).
+- [ ] [human] build the Android app once on a machine with the SDK to compile the tracker 1b run-screen controls
+  (`./gradlew :android_version:app:assembleDebug`); the agent container has no Android SDK (dl.google.com is blocked).
+- [ ] backend: decide whether board display names may be cached with the board (opt-out would lag up to 60 s) or wait for
+  PostgreSQL; the name lookup is the remaining distance-board tail on SQLite (report 20, section 6).
