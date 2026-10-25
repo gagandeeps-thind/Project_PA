@@ -1,0 +1,62 @@
+# Render Blueprint: the API (Docker) and the admin console (static site).
+# Dashboard: New > Blueprint > this repo. Values marked `sync: false` are asked for on first deploy.
+services:
+  - type: web
+    name: osiris-api
+    runtime: docker
+    dockerContext: ./Osiris_backend
+    dockerfilePath: ./Osiris_backend/Dockerfile
+    plan: starter # a persistent disk needs a paid plan
+    region: oregon
+    healthCheckPath: /healthz
+    autoDeploy: true
+    # shortcut: SQLite on one disk means one instance; move to PostgreSQL/PostGIS (ADR-002) before scaling out.
+    disk:
+      name: osiris-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT # the image's uvicorn listens on 8000
+        value: "8000"
+      - key: OSIRIS_ENV
+        value: production
+      - key: OSIRIS_LOG_JSON
+        value: "1"
+      - key: OSIRIS_DATABASE_URL
+        value: sqlite:////data/osiris.db
+      - key: OSIRIS_JWT_SECRET
+        generateValue: true
+      - key: OSIRIS_WEBHOOK_SECRET
+        generateValue: true
+      - key: STRIPE_SECRET_KEY # production refuses to boot without both Stripe values
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: OSIRIS_PUBLIC_BASE_URL # e.g. https://osiris-api.onrender.com; share/invite links answer 503 without it
+        sync: false
+      - key: OSIRIS_CORS_ORIGINS # the admin console's URL, e.g. https://osiris-admin.onrender.com
+        sync: false
+
+  - type: web
+    name: osiris-admin
+    runtime: static
+    rootDir: Osiris_admin_web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE_URL # the API's public URL, read at build time
+        sync: false
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
