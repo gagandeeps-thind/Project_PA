@@ -54,9 +54,7 @@
       "Write(**/supabase/functions/.env)",
       "Read(.env*)",
       "Edit(**/alembic.ini)",
-      "Read(**/.env*)"
-    ],
-    "deny": [
+      "Read(**/.env*)",
       "Bash(rm -rf:*)",
       "Read(**/*secret*)",
       "Edit(**/alembic/versions/**)",
@@ -67,6 +65,9 @@
       "Write(**/package-lock.json)",
       "Edit(**/pubspec.lock)",
       "Write(**/pubspec.lock)"
+    ],
+    "deny": [
+
     ]
   },
   "hooks": {
