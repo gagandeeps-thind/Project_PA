@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
 
 from core import logging_setup  # noqa: E402  (configures logging before anything logs)
+from core.origin_guard import OriginGuardMiddleware  # noqa: E402
 import core.security  # noqa: E402,F401  (fail-closed secret checks run at import)
 import database  # noqa: E402
 import exercise_api  # noqa: E402
@@ -88,6 +89,9 @@ app.add_middleware(
 # and would defeat the small-body threshold. Small bodies are not worth the CPU.
 app.add_middleware(ConditionalGetMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Outside CORS, so a request that skipped the CDN is refused before anything else runs; inside the
+# access log, so those refusals are still logged.
+app.add_middleware(OriginGuardMiddleware)
 app.middleware("http")(logging_setup.access_log_middleware)
 
 for _router in (
