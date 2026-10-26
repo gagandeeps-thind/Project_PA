@@ -278,7 +278,7 @@ Audit report: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19
   PyJWT GHSA-gvp8-978c-rx2q has no fix yet; it only bites callers that reuse an `options` dict, which `main.py` does not.
 - [ ] [human] deps (lockfile): `npm audit` finds 6 high advisories in `Osiris_admin_web/package-lock.json`
   (`axios`, `vite` direct; `form-data`, `nanoid`, `postcss`, `source-map-js` transitive); `npm audit fix` resolves all.
-- [ ] [human] ci: add `python tests/test_public_base_url.py` after the existing suites in `.github/workflows/ci.yml`.
+- [ ] [human] ci: add `python tests/test_public_base_url.py` and `python tests/test_origin_guard.py` after the existing suites in `.github/workflows/ci.yml`.
 - [ ] [human] deploy: add `OSIRIS_PUBLIC_BASE_URL` (the public https origin) to `DEPLOY_RUNBOOK.md` and every
   non-dev environment; without it share, invite and referral links answer 503 instead of trusting the Host header.
 
