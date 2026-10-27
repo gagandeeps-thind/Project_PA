@@ -54,7 +54,7 @@ run() {
 
 BACKEND_TESTS="test_ml_referee test_v2_10_flows test_phase2_security test_phase3_stripe test_phase2_ledger
 test_replay_guard test_party_stats test_run_release test_challenge_release test_growth_core_loop
-test_growth_sharing test_growth_communities test_growth_safety test_exercise_sessions test_settings test_growth_hub test_support_chat test_public_base_url test_origin_guard"
+test_growth_sharing test_growth_communities test_growth_safety test_exercise_sessions test_settings test_growth_hub test_support_chat test_public_base_url test_origin_guard test_rate_limits"
 
 check_backend=0; check_admin=0; check_kmp=0
 needs_check Osiris_backend backend && check_backend=1
