@@ -195,10 +195,13 @@ def delete_user_account(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Legacy v1 personal data that erase_player does not cover: exact territory polygons,
-    # issued coupon codes, and proof hashes.
+    # issued coupon codes, and proof hashes. Domain rows stay (sieges and the crystal ledger
+    # reference them, and PostgreSQL enforces those keys); only the polygon, the personal part,
+    # is removed, which also takes the domain out of discovery and sieges.
     db.query(models.BountyCompletion).filter(models.BountyCompletion.user_id == user_id).delete(synchronize_session=False)
     db.query(models.ProofConsumed).filter(models.ProofConsumed.user_id == user_id).delete(synchronize_session=False)
-    db.query(models.Domain).filter(models.Domain.owner_id == user_id).delete(synchronize_session=False)
+    db.query(models.Domain).filter(models.Domain.owner_id == user_id).update(
+        {models.Domain.geometry_json: None}, synchronize_session=False)
     growth_safety.erase_player(db, user, role, caller_id)
     db.commit()
     return {"status": "deleted", "user_id": user_id, "message": "Account and personal data erased."}
