@@ -10,7 +10,8 @@ services:
     region: oregon
     healthCheckPath: /healthz
     autoDeploy: true
-    # shortcut: SQLite on one disk means one instance; move to PostgreSQL/PostGIS (ADR-002) before scaling out.
+    # The database is Supabase PostgreSQL (OSIRIS_DATABASE_URL). The disk only keeps the retired SQLite file;
+    # drop it once nothing there is needed.
     disk:
       name: osiris-data
       mountPath: /data
@@ -22,8 +23,12 @@ services:
         value: production
       - key: OSIRIS_LOG_JSON
         value: "1"
-      - key: OSIRIS_DATABASE_URL
-        value: sqlite:////data/osiris.db
+      - key: OSIRIS_DATABASE_URL # Supabase session pooler (IPv4; the db.* host is IPv6-only), carries the password:
+        sync: false              # postgresql://postgres.<ref>:<password>@aws-?-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: OSIRIS_DB_POOL_SIZE # per instance; stays under the Supabase session pooler's connection limit
+        value: "5"
+      - key: OSIRIS_DB_MAX_OVERFLOW
+        value: "5"
       - key: OSIRIS_JWT_SECRET
         generateValue: true
       - key: OSIRIS_WEBHOOK_SECRET
