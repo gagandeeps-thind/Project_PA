@@ -25,6 +25,9 @@ def _pool_options() -> dict:
     if _IS_SQLITE:
         return {"connect_args": {"check_same_thread": False}}
     return {
+        # psycopg 3 server-side prepares a query after 5 runs; a transaction-mode pooler (Supabase :6543,
+        # PgBouncer) hands each transaction a different backend, where that statement is missing or clashes.
+        "connect_args": {"prepare_threshold": None} if SQLALCHEMY_DATABASE_URL.startswith("postgresql+psycopg:") else {},
         "pool_size": int(os.environ.get("OSIRIS_DB_POOL_SIZE", "20")),
         "max_overflow": int(os.environ.get("OSIRIS_DB_MAX_OVERFLOW", "20")),
         "pool_timeout": int(os.environ.get("OSIRIS_DB_POOL_TIMEOUT", "10")),
