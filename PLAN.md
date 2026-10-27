@@ -342,3 +342,29 @@ Report: `Documentation/Enterprise/20_Structure_Performance_and_Audit_2026-10-24.
   (`./gradlew :android_version:app:assembleDebug`); the agent container has no Android SDK (dl.google.com is blocked).
 - [ ] backend: decide whether board display names may be cached with the board (opt-out would lag up to 60 s) or wait for
   PostgreSQL; the name lookup is the remaining distance-board tail on SQLite (report 20, section 6).
+
+## Production on Render + Supabase + Cloudflare (2026-10-27)
+Runbook and live status: `docs/deployment/production.md`. Explainer: `docs/architecture/how-it-works.md`.
+Branch `feat/production-hardening`.
+
+- [x] backend: origin lock (`OSIRIS_ORIGIN_SECRET`, `X-Origin-Verify` from Cloudflare; `/healthz` exempt)
+- [x] backend: rate limits per real player IP (`CF-Connecting-IP` when the origin lock is on; before, every player shared
+  Render's proxy address) and shared across instances through Upstash REST, falling back per process
+- [x] backend: v1 account deletion keeps sieged domains (foreign keys on PostgreSQL) and only erases the polygon
+- [x] deploy: nightly encrypted `pg_dump` to R2 (`infrastructure/backup`, Render cron), admin CSP/HSTS/frame headers,
+  new settings in `render.yaml` and `.env.example`; unused Supabase `redis-cache` function removed from the repo
+- [x] app: production builds point at `https://api.osiris.fit`
+- [ ] [human] cloudflare: switch `api` and `admin` to Proxied, Full (strict), add the `X-Origin-Verify` transform rule,
+  then set `OSIRIS_ORIGIN_SECRET` on Render (production.md steps 1-4; this order, or every request gets 403)
+- [ ] [human] render: Blueprint sync (creates `osiris-db-backup`, applies admin headers), R2 bucket + token +
+  `BACKUP_PASSPHRASE`, one manual backup run; Upstash REST URL/token on `osiris-api`
+- [ ] [human] seed the first admin from the Render shell (`python scripts/seed_admin.py`); Cloudflare Access on `admin.`
+- [ ] [human] delete the deployed edge function: `npx supabase functions delete redis-cache --project-ref vhymfishiojgttlzcdgf`
+  and unset its two Upstash secrets
+- [ ] [human] migration: drop the duplicate unique constraint on `run_sessions.finish_idempotency_key` (the unique index
+  `ix_run_sessions_finish_idempotency_key` stays; `models.py` already declares only the index). In `upgrade()`:
+  `if op.get_bind().dialect.name == "postgresql": op.drop_constraint("run_sessions_finish_idempotency_key_key", "run_sessions", type_="unique")`
+- [ ] [human] ci: add `python tests/test_origin_guard.py` and `python tests/test_rate_limits.py` to `.github/workflows/ci.yml`
+- [ ] [human] app links: serve `/.well-known/assetlinks.json` (release signing-key SHA-256) and
+  `/.well-known/apple-app-site-association` (Apple team id) from the API so `https://api.osiris.fit/i/...` opens the app
+- [ ] [human] render: retire the `osiris-data` disk after downloading the old SQLite file (production.md step 10)
