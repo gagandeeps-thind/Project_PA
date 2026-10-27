@@ -43,6 +43,45 @@ services:
         sync: false
       - key: OSIRIS_CORS_ORIGINS # the admin console's URL, e.g. https://osiris-admin.onrender.com
         sync: false
+      # Origin lock: the value Cloudflare adds as X-Origin-Verify (a Transform Rule on api.<domain>).
+      # Set it here only AFTER the Cloudflare rule is live, or every request is refused with 403.
+      # It also makes the rate limiter key on CF-Connecting-IP (the player's IP, not Render's proxy).
+      - key: OSIRIS_ORIGIN_SECRET
+        sync: false
+      # Shared rate-limit counts across instances (Upstash dashboard > database > REST API).
+      # Unset, each instance counts on its own.
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: OSIRIS_METRICS_TOKEN # /metrics answers 404 without it; scrapers send "Authorization: Bearer <value>"
+        generateValue: true
+
+  # Nightly encrypted backup of the database to Cloudflare R2 (infrastructure/backup/backup.sh).
+  - type: cron
+    name: osiris-db-backup
+    runtime: docker
+    region: oregon
+    plan: starter
+    schedule: "17 7 * * *" # 07:17 UTC, a quiet hour for North American players
+    dockerContext: ./infrastructure/backup
+    dockerfilePath: ./infrastructure/backup/Dockerfile
+    envVars:
+      - key: OSIRIS_DATABASE_URL
+        fromService:
+          type: web
+          name: osiris-api
+          envVarKey: OSIRIS_DATABASE_URL
+      - key: R2_ACCOUNT_ID # Cloudflare dashboard > R2 > Account details
+        sync: false
+      - key: R2_BUCKET # e.g. osiris-backups, private, with a 35-day lifecycle rule
+        sync: false
+      - key: R2_ACCESS_KEY_ID # an R2 API token with Object Read & Write on that bucket only
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: BACKUP_PASSPHRASE # keep a copy in your password manager: without it no backup can be restored
+        sync: false
 
   - type: web
     name: osiris-admin
@@ -58,9 +97,30 @@ services:
       - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
+      # The HTML shell is never cached, so a deploy is picked up at once ("/" serves index.html too).
+      - path: /
+        name: Cache-Control
+        value: no-cache
       - path: /index.html
         name: Cache-Control
         value: no-cache
+      # Script: only this site's files, plus the one inline handler that swaps in the web fonts (hash of
+      # `this.media='all'` in index.html; change both together). connect-src: the API only.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.osiris.fit; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
     routes:
       - type: rewrite
         source: /*
