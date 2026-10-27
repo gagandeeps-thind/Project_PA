@@ -58,11 +58,11 @@ struct ExerciseHubView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Your camera stays on your phone")
                 Text("Reps are counted on this device. No video or photos are saved or uploaded; only your rep count and timings are.")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             if !consented {
                 Spacer()
-                Button("ALLOW") { bannerConsent = true }.buttonStyle(.borderless)
+                Button("Allow") { bannerConsent = true }.buttonStyle(.borderless)
             }
         }
     }
@@ -73,7 +73,7 @@ struct ExerciseHubView: View {
             VStack(alignment: .leading) {
                 Text(t.spec.name).foregroundStyle(.white)
                 Text(t.spec.camera == "front" ? "Face the camera" : "Side-on to the camera")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             if let best = t.best {
@@ -86,10 +86,10 @@ struct ExerciseHubView: View {
 
     private func recent(_ r: RecentSetRow) -> some View {
         HStack {
-            Image(systemName: exerciseIcon(r.exerciseKey)).font(.footnote).frame(width: 24)
+            Image(systemName: exerciseIcon(r.exerciseKey)).font(.manrope(.footnote)).frame(width: 24)
             VStack(alignment: .leading) {
                 Text(r.title)
-                Text(r.time).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                Text(r.time).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             Text(r.status).foregroundStyle(Self.color(r.tone))

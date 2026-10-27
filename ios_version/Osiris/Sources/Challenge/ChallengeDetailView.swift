@@ -18,7 +18,7 @@ struct ChallengeDetailView: View {
             content(detail, joining: s.joining)
         }
         .background(OsirisColor.background)
-        .navigationTitle("CHALLENGE")
+        .navigationTitle("Challenge")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -38,8 +38,8 @@ struct ChallengeDetailView: View {
             }
         }
         .alert("Block this player?", isPresented: $confirmBlock) {
-            Button("BLOCK", role: .destructive) { model.vm.blockCreator() }
-            Button("CANCEL", role: .cancel) {}
+            Button("Block", role: .destructive) { model.vm.blockCreator() }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("You won't see this player's challenges. You can unblock them in Settings.")
         }
@@ -57,8 +57,8 @@ struct ChallengeDetailView: View {
         return List {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(c.title).font(.title.bold())
-                    Text("\(c.status.uppercased()) • \(closesIn)").foregroundStyle(OsirisColor.faint)
+                    Text(c.title).font(.manrope(.title).bold())
+                    Text("\(c.status.capitalized) • \(closesIn)").foregroundStyle(OsirisColor.faint)
                 }
             }
             if let route = detail.course?.route, route.count >= 2 {
@@ -69,7 +69,7 @@ struct ChallengeDetailView: View {
                         .accessibilityLabel("Course map")
                 }
             }
-            Section("TERMS") {
+            Section("Terms") {
                 TermRow(label: "Course distance", value: Format.shared.distance(metres: c.courseDistanceM))
                 TermRow(label: "Time to beat", value: Format.shared.duration(seconds: c.targetSeconds))
                 if let closes = IosSupport.shared.closesAtLocal(c: c) { TermRow(label: "Closes", value: "\(closes) (\(closesIn))") }
@@ -78,14 +78,14 @@ struct ChallengeDetailView: View {
                 TermRow(label: "Attempts so far", value: "\(c.attemptCount)")
                 Text("Privacy: the map shows only an approximate area. The exact route is shared "
                      + "with players who join. Results are shown without names.")
-                    .font(.caption).foregroundStyle(OsirisColor.faint)
+                    .font(.manrope(.caption)).foregroundStyle(OsirisColor.faint)
             }
             if let notes = c.safetyNotes, !notes.trimmingCharacters(in: .whitespaces).isEmpty {
                 Section {
                     Label {
                         VStack(alignment: .leading) {
                             Text("Safety notes")
-                            Text(notes).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                            Text(notes).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                         }
                     } icon: { Image(systemName: "cross.case.fill").foregroundStyle(OsirisColor.warning) }
                 }
@@ -104,15 +104,15 @@ struct ChallengeDetailView: View {
                 .foregroundStyle(OsirisColor.faint).multilineTextAlignment(.center).frame(maxWidth: .infinity)
         } else if c.canJoin {
             Button { model.vm.join() } label: {
-                Label(joining ? "JOINING…" : "JOIN CHALLENGE", systemImage: "person.fill.checkmark").frame(maxWidth: .infinity)
+                Label(joining ? "JOINING…" : "Join challenge", systemImage: "person.fill.checkmark").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.key)
             .disabled(joining)
         } else if c.canRun {
             Button { nav.open(.run(challengeId: c.id)) } label: {
-                Label(c.myAttempt?.status == "rejected" ? "TRY AGAIN" : "RUN THIS COURSE", systemImage: "figure.run").frame(maxWidth: .infinity)
+                Label(c.myAttempt?.status == "rejected" ? "Try again" : "Run this course", systemImage: "figure.run").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.key)
         }
     }
 
@@ -120,7 +120,7 @@ struct ChallengeDetailView: View {
         let color: Color = a.outcome == "won" ? OsirisColor.success : (a.status == "rejected" ? OsirisColor.error : OsirisColor.secondary)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("YOUR ATTEMPT").fontWeight(.bold).kerning(1.5)
+                Text("Your attempt").fontWeight(.bold).kerning(1.5)
                 Spacer()
                 Text(a.label).fontWeight(.bold).foregroundStyle(color)
             }
@@ -138,7 +138,7 @@ struct ChallengeDetailView: View {
                         Task { @MainActor in
                             if let text = try? await model.vm.shareResult(attemptId: a.id) { shareText = SharedText(text: text) }
                         }
-                    } label: { Label("SHARE RESULT", systemImage: "square.and.arrow.up") }
+                    } label: { Label("Share result", systemImage: "square.and.arrow.up") }
                     .buttonStyle(.borderless)
                 }
             }

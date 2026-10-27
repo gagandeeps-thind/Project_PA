@@ -68,12 +68,12 @@ data class RunState(
     val dialog: RunDialog? = null,
 ) {
     val recording: Boolean get() = run != null
-    val title: String get() = if (challengeId == null) "RUN" else "CHALLENGE RUN"
+    val title: String get() = if (challengeId == null) "Run" else "Challenge run"
     val canStart: Boolean get() = !busy && !recording && position != null
     val actionLabel: String get() = when {
-        recording -> "FINISH RUN"
-        position != null -> "START RUN"
-        locationProblem != null -> "LOCATION OFF"
+        recording -> "Finish run"
+        position != null -> "Start run"
+        locationProblem != null -> "Location off"
         else -> "LOCATING…"
     }
 }

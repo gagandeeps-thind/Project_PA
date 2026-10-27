@@ -11,7 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
@@ -62,7 +62,7 @@ fun CoursesScreen(graph: AppGraph, onBack: () -> Unit, onOpenChallenge: (Int) ->
         }
     }
 
-    OsirisScaffold("MY COURSES", vm, onBack = onBack) { padding ->
+    OsirisScaffold("My courses", vm, onBack = onBack) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LoadableContent(s.courses, onRetry = vm::refresh) { courses ->
                 if (courses.isEmpty()) {
@@ -73,7 +73,7 @@ fun CoursesScreen(graph: AppGraph, onBack: () -> Unit, onOpenChallenge: (Int) ->
                                 "Your first challenge starts with a run.",
                                 "Challenges are raced on a route you ran yourself. Record a verified run of at least " +
                                     "0.7 km, save it as a course when it ends, then publish it here.",
-                                actionLabel = "START A RUN",
+                                actionLabel = "Start a run",
                                 onAction = onStartRun,
                             )
                         }
@@ -103,9 +103,9 @@ private fun CourseTile(c: CourseSummary, onPublish: () -> Unit, onView: (Int) ->
             trailingContent = {
                 val live = c.openChallengeId
                 when {
-                    c.status != "active" -> Text(c.status.uppercase(), color = OsirisColors.Error)
-                    live != null -> TextButton(onClick = { onView(live) }) { Text("VIEW LIVE") }
-                    else -> Button(onClick = onPublish) { Text("PUBLISH") }
+                    c.status != "active" -> Text(c.status.replaceFirstChar { it.uppercase() }, color = OsirisColors.Error)
+                    live != null -> TextButton(onClick = { onView(live) }) { Text("View live") }
+                    else -> KeyButton(onClick = onPublish) { Text("Publish") }
                 }
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -174,9 +174,9 @@ private fun PublishDialog(course: CourseSummary, vm: CoursesViewModel, busy: Boo
                 Text("Entry is free. Rewards are XP and badges.", color = OsirisColors.Faint, fontSize = 12.sp)
             }
         },
-        dismissButton = { TextButton(onClick = onClose) { Text("CANCEL") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
         confirmButton = {
-            Button(
+            KeyButton(
                 enabled = !busy,
                 onClick = {
                     val notes = safety.trim().ifEmpty { null }
@@ -187,7 +187,7 @@ private fun PublishDialog(course: CourseSummary, vm: CoursesViewModel, busy: Boo
                     // The dialog stays open until it is published, so a retry after a failure reuses the key.
                     if (error == null) vm.publish(d)
                 },
-            ) { Text(if (busy) "PUBLISHING…" else "PUBLISH") }
+            ) { Text(if (busy) "PUBLISHING…" else "Publish") }
         },
     )
 }

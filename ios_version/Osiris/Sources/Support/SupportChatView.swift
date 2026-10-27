@@ -38,7 +38,7 @@ struct SupportChatView: View {
             }
             composer(s)
         }
-        .navigationTitle("SUPPORT")
+        .navigationTitle("Support")
         .navigationBarTitleDisplayMode(.inline)
         .messages(model)
     }
@@ -62,7 +62,7 @@ struct SupportChatView: View {
             HStack {
                 Text(s.error ?? "Chat ended.").foregroundStyle(OsirisColor.muted)
                 Spacer()
-                Button("RECONNECT") { model.vm.connect() }.buttonStyle(.bordered)
+                Button("Reconnect") { model.vm.connect() }.buttonStyle(.raised)
             }
             .padding(16)
         default:

@@ -86,7 +86,11 @@ fun ExerciseHubScreen(graph: AppGraph, onBack: () -> Unit, onOpen: (String) -> U
                                 supportingContent = {
                                     Text("Reps are counted on this device. No video or photos are saved or uploaded; only your rep count and timings are.")
                                 },
-                                trailingContent = if (s.consented) null else { { TextButton(onClick = { bannerConsent = true }) { Text("ALLOW") } } },
+                                trailingContent = if (s.consented) {
+                                    null
+                                } else {
+                                    { TextButton(onClick = { bannerConsent = true }) { Text("Allow") } }
+                                },
                                 colors = clear(),
                             )
                         }

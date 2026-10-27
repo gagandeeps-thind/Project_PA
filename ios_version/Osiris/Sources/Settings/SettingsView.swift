@@ -27,7 +27,7 @@ struct SettingsView: View {
             settings(p, s)
         }
         .background(OsirisColor.background)
-        .navigationTitle("SETTINGS")
+        .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .messages(model)
         .shareSheet(s.share) { vm.shared(completed: $0) }
@@ -48,26 +48,26 @@ struct SettingsView: View {
         )
         .textInputAlert(
             "Your name", isPresented: $editingName, label: "Name", text: $text,
-            confirm: "SAVE", dismiss: "CANCEL",
+            confirm: "Save", dismiss: "Cancel",
             onConfirm: { vm.setDisplayName(name: String($0.prefix(30))) }, onDismiss: {}
         )
         .textInputAlert(
             "Home city", isPresented: $editingCity, label: "City, e.g. Bedford NS", text: $text,
-            confirm: "SAVE", dismiss: "CANCEL",
+            confirm: "Save", dismiss: "Cancel",
             onConfirm: { vm.setCity(city: $0) }, onDismiss: {}
         )
         .alert("Erase your account?", isPresented: $erasing) {
-            Button("ERASE", role: .destructive) {
+            Button("Erase", role: .destructive) {
                 password = ""
                 confirmingErase = true
             }
-            Button("KEEP MY ACCOUNT", role: .cancel) {}
+            Button("Keep my account", role: .cancel) {}
         } message: {
             Text("This deletes your routes, runs, badges, and profile. It cannot be undone. Other players keep their own results.")
         }
         .textInputAlert(
             "Confirm with your password", isPresented: $confirmingErase, label: "Password", text: $password,
-            confirm: "ERASE", dismiss: "CANCEL", secure: true, destructive: true,
+            confirm: "Erase", dismiss: "Cancel", secure: true, destructive: true,
             onConfirm: { typed in
                 let value = String(typed.prefix(128))
                 password = ""
@@ -135,7 +135,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading) {
                     Text("Your invite code: \(r.code)")
                     Text("\(r.rewarded) friends rewarded  •  \(r.pending) waiting for their first run")
-                        .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                        .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                 }
                 Spacer()
                 Button { vm.shareInvite() } label: { Image(systemName: "doc.on.doc") }
@@ -143,7 +143,7 @@ struct SettingsView: View {
                     .accessibilityLabel("Share invite link")
             }
             ForEach(r.rules, id: \.self) { rule in
-                Text(rule).font(.caption).foregroundStyle(OsirisColor.faint)
+                Text(rule).font(.manrope(.caption)).foregroundStyle(OsirisColor.faint)
             }
         } else if let failed = referral as? LoadableFailed {
             Text(failed.message)
@@ -153,7 +153,7 @@ struct SettingsView: View {
     }
 
     private func header(_ text: String) -> some View {
-        Text(text.uppercased()).font(.caption).kerning(1.2).foregroundStyle(OsirisColor.secondary)
+        Text(text).font(.manrope(.footnote).weight(.semibold)).foregroundStyle(OsirisColor.secondary)
     }
 
     private func row(_ icon: String, _ title: String, _ subtitle: String? = nil, color: Color = .white, action: @escaping () -> Void) -> some View {
@@ -162,7 +162,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading) {
                     Text(title).foregroundStyle(color)
                     if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                        Text(subtitle).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                     }
                 }
             } icon: { Image(systemName: icon).foregroundStyle(color) }
@@ -173,7 +173,7 @@ struct SettingsView: View {
         Toggle(isOn: Binding(get: { on }, set: change)) {
             VStack(alignment: .leading) {
                 Text(title)
-                Text(subtitle).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                Text(subtitle).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
         }
     }
@@ -195,13 +195,13 @@ private struct GoalSheet: View {
                 Button { onPick(g) } label: {
                     VStack(alignment: .leading) {
                         Text(g.label).foregroundStyle(g == current ? OsirisColor.secondary : .white)
-                        Text(g.description_).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                        Text(g.description_).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                     }
                 }
             }
             .navigationTitle("Your goal")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("CANCEL") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
     }
@@ -221,7 +221,7 @@ private struct BlocksSheet: View {
                             HStack {
                                 Text(b.name)
                                 Spacer()
-                                Button("UNBLOCK") { model.vm.unblock(id: b.id) }.buttonStyle(.borderless)
+                                Button("Unblock") { model.vm.unblock(id: b.id) }.buttonStyle(.borderless)
                             }
                         }
                     }
@@ -246,7 +246,7 @@ private struct RulesSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if rules == nil { ProgressView().frame(maxWidth: .infinity).padding(12) }
                     ForEach(rules ?? [], id: \.title) { section in
-                        Text(section.title).font(.headline).padding(.top, 16)
+                        Text(section.title).font(.manrope(.headline)).padding(.top, 16)
                         ForEach(section.lines, id: \.self) { line in
                             Text("•  \(line)").padding(.vertical, 4)
                         }
@@ -255,7 +255,7 @@ private struct RulesSheet: View {
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle("RULES")
+            .navigationTitle("Rules")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

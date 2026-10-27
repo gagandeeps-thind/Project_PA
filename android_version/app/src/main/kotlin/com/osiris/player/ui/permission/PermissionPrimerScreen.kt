@@ -22,10 +22,10 @@ import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,7 +43,6 @@ import com.osiris.player.ui.design.FrostBackground
 import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.theme.FrostTheme
 import com.osiris.player.ui.theme.color
-import com.osiris.player.ui.theme.primaryButtonColors
 import com.osiris.shared.core.design.FrostMatte
 import com.osiris.shared.domain.repository.DevicePermission
 import com.osiris.shared.domain.repository.PermissionStatus
@@ -118,7 +117,7 @@ fun PermissionPrimerScreen(graph: AppGraph) {
                     Switch(checked = s.telemetry, onCheckedChange = vm::setTelemetry)
                 }
             }
-            Button(onClick = vm::finish, colors = primaryButtonColors(), modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+            KeyButton(onClick = vm::finish, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
         }
     }
 }
@@ -138,7 +137,7 @@ private fun PermissionCard(item: PermissionItem, onAllow: () -> Unit) {
             when (item.status) {
                 PermissionStatus.GRANTED -> Text("Allowed", color = palette.success.color(), style = MaterialTheme.typography.labelLarge)
                 PermissionStatus.DENIED -> Text("Skipped", color = palette.textMuted.color(), style = MaterialTheme.typography.labelLarge)
-                PermissionStatus.NOT_ASKED -> OutlinedButton(onClick = onAllow) { Text("Allow") }
+                PermissionStatus.NOT_ASKED -> RaisedButton(onClick = onAllow) { Text("Allow") }
             }
         }
     }

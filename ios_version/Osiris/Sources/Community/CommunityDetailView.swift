@@ -17,7 +17,7 @@ struct CommunityDetailView: View {
             content(detail)
         }
         .background(OsirisColor.background)
-        .navigationTitle(name ?? "GROUP")
+        .navigationTitle(name ?? "Group")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -50,7 +50,7 @@ struct CommunityDetailView: View {
                     Label {
                         VStack(alignment: .leading) {
                             Text("Member perk")
-                            Text(perk).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                            Text(perk).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                         }
                     } icon: { Image(systemName: "gift.fill").foregroundStyle(OsirisColor.warning) }
                 }
@@ -60,21 +60,21 @@ struct CommunityDetailView: View {
                     Label {
                         VStack(alignment: .leading) {
                             Text("Join code: \(code)")
-                            Text("Group ID: \(c.slug). Share both with your members.").font(.subheadline).foregroundStyle(OsirisColor.muted)
+                            Text("Group ID: \(c.slug). Share both with your members.").font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                         }
                     } icon: { Image(systemName: "key") }
                 }
             }
             if c.myRole != "owner" {
                 Section {
-                    Button(c.isMember ? "LEAVE GROUP" : "JOIN GROUP") {
+                    Button(c.isMember ? "Leave group" : "Join group") {
                         if c.isMember { model.vm.leave() } else { model.vm.join(joinCode: nil) }
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
             if let goal = c.teamGoal { Section { teamGoal(goal) } }
-            Section("GROUP CHALLENGES") {
+            Section("Group challenges") {
                 if detail.challenges.isEmpty { Text("No featured challenges right now.") }
                 ForEach(detail.challenges, id: \.id) { ch in
                     Button { nav.open(.challenge(ch.id)) } label: {
@@ -83,7 +83,7 @@ struct CommunityDetailView: View {
                             VStack(alignment: .leading) {
                                 Text(ch.title)
                                 Text("\(Format.shared.distance(metres: ch.courseDistanceM))  •  target \(Format.shared.duration(seconds: ch.targetSeconds))  •  free")
-                                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                             }
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(OsirisColor.faint)
@@ -106,12 +106,12 @@ struct CommunityDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "Team goal this week")
             Text("\(Format.shared.fixed(value: goal.progressKm, decimals: 1)) of \(Format.shared.fixed(value: goal.goalKm, decimals: 0)) km together")
-                .font(.headline)
+                .font(.manrope(.headline))
             ProgressView(value: goal.fraction)
             Text(goal.completed
                  ? "Goal reached. Nice work, team."
                  : "\(goal.activeMembers) members active so far. Every verified km counts (up to 10 km a day each).")
-                .font(.footnote).foregroundStyle(OsirisColor.muted)
+                .font(.manrope(.footnote)).foregroundStyle(OsirisColor.muted)
         }
         .padding(.vertical, 6)
     }

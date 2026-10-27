@@ -24,12 +24,12 @@ struct DiscoverView: View {
             }
             .refreshable { model.vm.refresh() }
             Button { nav.open(.courses) } label: {
-                Label("CREATE CHALLENGE", systemImage: "plus").padding(.horizontal, 8)
+                Label("Create challenge", systemImage: "plus").padding(.horizontal, 8)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.key)
             .padding(16)
         }
-        .navigationTitle("DISCOVER")
+        .navigationTitle("Discover")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button { nav.open(.challenges) } label: { Image(systemName: "map") }.accessibilityLabel("Challenges near me")
@@ -47,7 +47,7 @@ struct DiscoverView: View {
                         ForEach(cards, id: \.challengeId) { card in
                             Button { nav.open(.challenge(card.challengeId)) } label: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(card.headline).font(.headline).lineLimit(1)
+                                    Text(card.headline).font(.manrope(.headline)).lineLimit(1)
                                     Text(card.detail).foregroundStyle(OsirisColor.muted).lineLimit(3)
                                 }
                                 .frame(width: 260, height: 112, alignment: .topLeading)

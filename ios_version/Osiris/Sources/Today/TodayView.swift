@@ -17,7 +17,7 @@ struct TodayView: View {
             today(t)
         }
         .background(OsirisColor.background)
-        .navigationTitle("OSIRIS")
+        .navigationTitle("Osiris")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { nav.open(.settings) } label: { Image(systemName: "gearshape") }
@@ -41,7 +41,7 @@ struct TodayView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Hi \(t.displayName)").font(.title2.bold())
+                    Text("Hi \(t.displayName)").font(.manrope(.title2).bold())
                     Text("\(t.performanceRank) \(t.identity)  •  \(t.xp) XP").foregroundStyle(OsirisColor.muted)
                 }
             }
@@ -52,10 +52,10 @@ struct TodayView: View {
                         VStack(alignment: .leading) {
                             Text("Allow location during runs")
                             Text("Needed to verify your distance. Your route is never shown to others.")
-                                .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                                .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                         }
                         Spacer()
-                        Button("ALLOW") { model.vm.grantLocationConsent() }
+                        Button("Allow") { model.vm.grantLocationConsent() }
                     }
                 }
                 .listRowBackground(OsirisColor.secondary.opacity(0.15))
@@ -66,7 +66,7 @@ struct TodayView: View {
                 Label {
                     VStack(alignment: .leading) {
                         Text("Tomorrow")
-                        Text(t.tomorrow.title).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                        Text(t.tomorrow.title).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                     }
                 } icon: { Image(systemName: "sunrise").foregroundStyle(OsirisColor.secondary) }
             }
@@ -79,8 +79,8 @@ struct TodayView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             Section {
-                Label(t.safetyNote, systemImage: "cross.case").font(.caption).foregroundStyle(OsirisColor.faint)
-                Text(t.tagline).font(.caption).foregroundStyle(OsirisColor.faint).frame(maxWidth: .infinity)
+                Label(t.safetyNote, systemImage: "cross.case").font(.manrope(.caption)).foregroundStyle(OsirisColor.faint)
+                Text(t.tagline).font(.manrope(.caption)).foregroundStyle(OsirisColor.faint).frame(maxWidth: .infinity)
             }
             .listRowBackground(Color.clear)
         }
@@ -90,11 +90,11 @@ struct TodayView: View {
     private func quest(_ q: Quest) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(q.heading.uppercased())
+                Text(q.heading)
                 Spacer()
                 Text("+\(q.xp) XP")
             }
-            .font(FrostFont.mono(.caption))
+            .font(FrostFont.manrope(.caption))
             .foregroundStyle(OsirisColor.muted)
             // The screen's focal point: today's quest distance, at hero size; everything else recedes.
             HeroMetric(
@@ -108,14 +108,14 @@ struct TodayView: View {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(OsirisColor.success)
                     Text(q.rewarded ? "Done. +\(q.xp) XP earned." : "Done!")
                     Spacer()
-                    Button("GO AGAIN", action: startRun)
+                    Button("Go again", action: startRun)
                 }
                 .padding(.top, 8)
             } else {
                 Button(action: startRun) {
-                    Label(q.optional ? "START (OPTIONAL)" : "START", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label(q.optional ? "Start (optional)" : "Start", systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.key)
                 .padding(.top, 8)
             }
         }
@@ -150,7 +150,7 @@ struct TodayView: View {
             Text(w.completed
                  ? "Weekly goal met. Enjoy your rest days."
                  : "\(w.activeDays) of \(w.activeDaysTarget) active days. Rest days never break your streak.")
-                .font(.footnote).foregroundStyle(OsirisColor.muted)
+                .font(.manrope(.footnote)).foregroundStyle(OsirisColor.muted)
         }
         .padding(.vertical, 6)
     }
@@ -162,7 +162,7 @@ struct TodayView: View {
             VStack(alignment: .leading) {
                 Text(c.title)
                 Text("\(Format.shared.fixed(value: c.courseDistanceM / 1000, decimals: 1)) km course\(away)  •  free")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             Image(systemName: "chevron.right").foregroundStyle(OsirisColor.faint)
@@ -187,7 +187,7 @@ private struct NavGrid: View {
                 Button { open(item.route) } label: {
                     VStack(spacing: 6) {
                         Image(systemName: item.icon).foregroundStyle(OsirisColor.secondary)
-                        Text(item.label).font(.footnote)
+                        Text(item.label).font(.manrope(.footnote))
                     }
                     .frame(maxWidth: .infinity, minHeight: 84)
                     .background(OsirisColor.surface, in: RoundedRectangle(cornerRadius: 12))

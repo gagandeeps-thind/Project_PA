@@ -23,7 +23,7 @@ struct CommunitiesView: View {
         }
         .refreshable { model.vm.refresh() }
         .background(OsirisColor.background)
-        .navigationTitle("CLUBS & GROUPS")
+        .navigationTitle("Clubs & groups")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -34,12 +34,12 @@ struct CommunitiesView: View {
         .alert("Join a private group", isPresented: $joinWithCode) {
             TextField("Group ID (from the organiser)", text: $slug).textInputAutocapitalization(.never)
             TextField("Join code", text: $code).textInputAutocapitalization(.never)
-            Button("JOIN") {
+            Button("Join") {
                 model.vm.join(slug: slug.trimmingCharacters(in: .whitespaces), joinCode: code.trimmingCharacters(in: .whitespaces))
                 slug = ""
                 code = ""
             }
-            Button("CANCEL", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         }
         .messages(model)
         // Back from a club page: joining or leaving moves it between the lists.
@@ -52,7 +52,7 @@ struct CommunitiesView: View {
         empty: String,
         filter: @escaping ([Community]) -> [Community]
     ) -> some View {
-        Section(title.uppercased()) {
+        Section(title) {
             if let failed = state as? LoadableFailed {
                 Text(failed.message).foregroundStyle(OsirisColor.error)
             } else if let all = state.valueOrNull as? [Community] {
@@ -79,7 +79,7 @@ struct CommunitiesView: View {
                         Image(systemName: "checkmark.seal.fill").foregroundStyle(OsirisColor.secondary).accessibilityLabel("Verified")
                     }
                 }
-                Text("\(c.kindLabel)  •  \(c.memberCount) members").font(.subheadline).foregroundStyle(OsirisColor.muted)
+                Text("\(c.kindLabel)  •  \(c.memberCount) members").font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             Image(systemName: "chevron.right").foregroundStyle(OsirisColor.faint)

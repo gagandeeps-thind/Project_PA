@@ -12,7 +12,8 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.HudPill
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -62,7 +63,7 @@ fun OsirisScaffold(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
-        snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding()) },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding()) { HudPill(it.visuals.message) } },
         // Transparent over the app-wide FrostBackground, so every screen sits on the matte backdrop.
         // Transparent alone would make the default content colour black on the dark backdrop.
         containerColor = Color.Transparent,
@@ -94,7 +95,7 @@ fun <T> LoadableContent(state: Loadable<T>, onRetry: () -> Unit, modifier: Modif
         ) {
             Text(state.message, color = OsirisColors.Error, textAlign = TextAlign.Center)
             if (state.canRetry) {
-                OutlinedButton(onClick = onRetry, modifier = Modifier.padding(top = 12.dp)) { Text("TRY AGAIN") }
+                RaisedButton(onClick = onRetry, modifier = Modifier.padding(top = 12.dp)) { Text("Try again") }
             }
         }
         is Loadable.Ready -> content(state.value)
@@ -104,8 +105,8 @@ fun <T> LoadableContent(state: Loadable<T>, onRetry: () -> Unit, modifier: Modif
 @Composable
 fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
+        text,
+        style = MaterialTheme.typography.titleSmall,
         color = OsirisColors.Muted,
         modifier = modifier.fillMaxWidth().padding(start = 16.dp, top = 20.dp, bottom = 6.dp),
     )

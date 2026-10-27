@@ -154,11 +154,11 @@ class ViewModelTest {
             assertEquals("LOCATING…", vm.state.value.actionLabel)
             vm.onLocationUnavailable(AppError.Validation("Location is off."))
             assertEquals("Location is off.", vm.state.value.locationProblem)
-            assertEquals("LOCATION OFF", vm.state.value.actionLabel)
+            assertEquals("Location off", vm.state.value.actionLabel)
             assertFalse(vm.state.value.canStart)
             vm.onLocation(amsterdam)
             assertNull(vm.state.value.locationProblem)
-            assertEquals("START RUN", vm.state.value.actionLabel)
+            assertEquals("Start run", vm.state.value.actionLabel)
         }
     }
 

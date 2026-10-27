@@ -25,7 +25,7 @@ enum OsirisColor {
     }
 }
 
-/// Shows a view model message as a banner at the top, then reports it shown.
+/// Shows a view model message as a floating HUD pill at the top, then reports it shown.
 struct MessageBanner: ViewModifier {
     let text: String?
     let onShown: () -> Void
@@ -33,10 +33,7 @@ struct MessageBanner: ViewModifier {
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
             if let text {
-                Text(text)
-                    .padding(12)
-                    .frame(maxWidth: .infinity)
-                    .background(OsirisColor.surface, in: RoundedRectangle(cornerRadius: 12))
+                HudPill(text: text)
                     .padding()
                     .task(id: text) {
                         try? await Task.sleep(nanoseconds: 3_000_000_000)

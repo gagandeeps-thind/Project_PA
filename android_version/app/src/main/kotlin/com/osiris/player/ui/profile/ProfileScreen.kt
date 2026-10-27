@@ -47,7 +47,7 @@ import com.osiris.shared.presentation.profile.ProfileSummary
 fun ProfileScreen(graph: AppGraph, actions: @Composable RowScope.() -> Unit = {}) {
     val vm = rememberShared { graph.profile() }
     val state by vm.state.collectAsStateWithLifecycle()
-    OsirisScaffold("PROFILE", vm, actions = actions) { padding ->
+    OsirisScaffold("Profile", vm, actions = actions) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LoadableContent(state, onRetry = vm::refresh) { p ->
                 Column(
@@ -73,7 +73,7 @@ private fun Header(p: ProfileSummary) {
         Spacer(Modifier.width(16.dp))
         Column {
             Text(p.name, style = MaterialTheme.typography.titleLarge)
-            Text("${p.rank}  •  ${p.goal}", color = OsirisColors.Muted, letterSpacing = 1.sp)
+            Text("${p.rank}  •  ${p.goal}", color = OsirisColors.Muted)
         }
     }
 }
@@ -103,7 +103,7 @@ private fun Metrics(p: ProfileSummary) {
         for (m in p.metrics) {
             FrostCard(Modifier.weight(1f)) {
                 Text(m.value, style = MaterialTheme.typography.titleLarge)
-                Text(m.label.uppercase(), color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.sp)
+                Text(m.label, color = OsirisColors.Muted, fontSize = 13.sp)
             }
         }
     }

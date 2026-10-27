@@ -15,7 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -84,7 +84,7 @@ private fun GoalStep(s: OnboardingState, vm: OnboardingViewModel) {
         }
     }
     Spacer(Modifier.height(24.dp))
-    Button(onClick = vm::next, modifier = Modifier.fillMaxWidth()) { Text("CONTINUE") }
+    KeyButton(onClick = vm::next, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
 }
 
 @Composable
@@ -98,7 +98,7 @@ private fun ConsentStep(s: OnboardingState, vm: OnboardingViewModel) {
         Text("Allow location during runs")
     }
     Spacer(Modifier.height(24.dp))
-    Button(onClick = vm::next, modifier = Modifier.fillMaxWidth()) { Text("CONTINUE") }
+    KeyButton(onClick = vm::next, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
 }
 
 @Composable
@@ -110,8 +110,8 @@ private fun AccountStep(s: OnboardingState, vm: OnboardingViewModel) {
     Field("Password", s.password, vm::onPassword, s.fieldErrors[Registration.FIELD_PASSWORD], KeyboardType.Password, secret = true)
     Field("Invite code (optional)", s.referralCode, vm::onReferralCode, null)
     Spacer(Modifier.height(24.dp))
-    Button(onClick = vm::create, enabled = !s.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-        Text(if (s.busy) "CREATING…" else "START MY FIRST QUEST")
+    KeyButton(onClick = vm::create, enabled = !s.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        Text(if (s.busy) "CREATING…" else "Start my first quest")
     }
 }
 

@@ -18,7 +18,7 @@ struct LeaderboardView: View {
                 Divider()
                 row(me)
             }
-            Text(board.scoring).font(.caption).foregroundStyle(OsirisColor.faint).padding(.top, 8)
+            Text(board.scoring).font(.manrope(.caption)).foregroundStyle(OsirisColor.faint).padding(.top, 8)
         }
     }
 
@@ -28,7 +28,7 @@ struct LeaderboardView: View {
             VStack(alignment: .leading) {
                 Text(r.isMe ? "\(r.name) (you)" : r.name).foregroundStyle(r.isMe ? OsirisColor.secondary : .white)
                 Text("\(r.activeDays) active days  •  \(Format.shared.fixed(value: r.distanceKm, decimals: 1)) km")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             Text("\(r.points) pts")

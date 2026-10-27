@@ -37,7 +37,7 @@ struct ChallengeBoardView: View {
             }
         }
         .background(OsirisColor.background)
-        .navigationTitle("CHALLENGES")
+        .navigationTitle("Challenges")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -69,13 +69,13 @@ struct ChallengeTile: View {
     var body: some View {
         let away = c.distanceKm.map { "~\(Format.shared.fixed(value: $0.doubleValue, decimals: 1)) km away • " } ?? ""
         HStack(spacing: 12) {
-            Image(systemName: "trophy.fill").font(.title).foregroundStyle(OsirisColor.warning)
+            Image(systemName: "trophy.fill").font(.manrope(.title)).foregroundStyle(OsirisColor.warning)
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.title).fontWeight(.bold)
                 Text("\(Format.shared.distance(metres: c.courseDistanceM)) • beat \(Format.shared.duration(seconds: c.targetSeconds))")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                 Text("\(away)\(IosSupport.shared.closesIn(c: c)) • \(c.attemptCount) attempts")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {

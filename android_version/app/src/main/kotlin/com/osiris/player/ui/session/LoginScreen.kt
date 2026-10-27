@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,7 +42,7 @@ fun LoginScreen(graph: AppGraph, onCreateAccount: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("OSIRIS", style = MaterialTheme.typography.headlineMedium, color = OsirisColors.Primary, fontSize = 40.sp)
+            Text("Osiris", style = MaterialTheme.typography.headlineMedium, color = OsirisColors.Primary, fontSize = 40.sp)
             Text("Daily quests for runners and walkers", color = OsirisColors.Muted)
             Spacer(Modifier.height(32.dp))
             OutlinedTextField(
@@ -65,8 +65,8 @@ fun LoginScreen(graph: AppGraph, onCreateAccount: () -> Unit) {
             )
             s.error?.let { Text(it, color = OsirisColors.Error, modifier = Modifier.padding(top = 12.dp)) }
             Spacer(Modifier.height(24.dp))
-            Button(onClick = vm::submit, enabled = s.canSubmit, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                if (s.busy) CircularProgressIndicator(Modifier.height(20.dp)) else Text("SIGN IN")
+            KeyButton(onClick = vm::submit, enabled = s.canSubmit, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                if (s.busy) CircularProgressIndicator(Modifier.height(20.dp)) else Text("Sign in")
             }
             TextButton(onClick = onCreateAccount, modifier = Modifier.padding(top = 8.dp)) { Text("New here? Create an account") }
         }

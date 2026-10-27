@@ -68,7 +68,7 @@ private struct ExerciseSession: View {
                 hud(s.hud)
                 if let warning = s.slowWarning {
                     Text(warning)
-                        .font(.footnote)
+                        .font(.manrope(.footnote))
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(OsirisColor.warning.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
@@ -112,8 +112,8 @@ private struct ExerciseSession: View {
             isPresented: Binding(get: { model.state.askLabel }, set: { _ in }),
             label: s.labelPrompt,
             text: $label,
-            confirm: "SAVE",
-            dismiss: "DISCARD",
+            confirm: "Save",
+            dismiss: "Discard",
             keyboard: .decimalPad,
             onConfirm: { value in
                 label = ""
@@ -136,7 +136,7 @@ private struct ExerciseSession: View {
         HStack(spacing: 16) {
             Text(h.count).font(.system(size: 44, weight: .bold)).monospacedDigit()
             VStack(alignment: .leading, spacing: 2) {
-                if let notCounted = h.notCounted { Text(notCounted).font(.caption).foregroundStyle(OsirisColor.warning) }
+                if let notCounted = h.notCounted { Text(notCounted).font(.manrope(.caption)).foregroundStyle(OsirisColor.warning) }
                 Text(h.hint)
             }
             Spacer(minLength: 0)
@@ -151,8 +151,8 @@ private struct ExerciseSession: View {
     private func controls(_ s: ExerciseSessionState, counting: Bool) -> some View {
         if let error = s.cameraError {
             Text(error).foregroundStyle(OsirisColor.error).multilineTextAlignment(.center)
-            Button(action: openAppSettings) { Text("OPEN SETTINGS").frame(maxWidth: .infinity, minHeight: 36) }
-                .buttonStyle(.borderedProminent)
+            Button(action: openAppSettings) { Text("Open settings").frame(maxWidth: .infinity, minHeight: 36) }
+                .buttonStyle(.key)
         } else {
             Button {
                 if counting {
@@ -164,7 +164,7 @@ private struct ExerciseSession: View {
             } label: {
                 Text(s.buttonLabel).fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.key)
             .tint(counting ? OsirisColor.error : OsirisColor.primary)
             .disabled(!(s.phase == .ready || counting))
         }
@@ -233,14 +233,14 @@ private struct ResultSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text(result.title).font(.title2.bold()).foregroundStyle(color)
-                Text(result.amount).font(.title3)
+                Text(result.title).font(.manrope(.title2).bold()).foregroundStyle(color)
+                Text(result.amount).font(.manrope(.title3))
                 if let notCounted = result.notCounted { Text(notCounted) }
                 ForEach(result.reasons, id: \.self) { Text("• \($0)").foregroundStyle(OsirisColor.muted) }
                 Text(result.sync).foregroundStyle(OsirisColor.secondary).padding(.top, 4)
-                if let perf = result.perf { Text("Pose: \(perf)").font(.caption).foregroundStyle(OsirisColor.faint) }
-                Button(action: onDone) { Text("DONE").frame(maxWidth: .infinity) }
-                    .buttonStyle(.bordered)
+                if let perf = result.perf { Text("Pose: \(perf)").font(.manrope(.caption)).foregroundStyle(OsirisColor.faint) }
+                Button(action: onDone) { Text("Done").frame(maxWidth: .infinity) }
+                    .buttonStyle(.raised)
                     .padding(.top, 8)
             }
             .padding(24)

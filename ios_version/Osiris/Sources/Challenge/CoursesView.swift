@@ -21,7 +21,7 @@ struct CoursesView: View {
                         title: "Your first challenge starts with a run.",
                         detail: "Challenges are raced on a route you ran yourself. Record a verified run of at least "
                             + "0.7 km, save it as a course when it ends, then publish it here.",
-                        actionLabel: "START A RUN",
+                        actionLabel: "Start a run",
                         action: { nav.open(.run(challengeId: nil)) }
                     )
                     .listRowBackground(Color.clear)
@@ -31,7 +31,7 @@ struct CoursesView: View {
             .refreshable { model.vm.refresh() }
         }
         .background(OsirisColor.background)
-        .navigationTitle("MY COURSES")
+        .navigationTitle("My courses")
         .navigationBarTitleDisplayMode(.inline)
         .messages(model)
         .sheet(item: Binding(get: { publishing.map(PublishTarget.init) }, set: { if $0 == nil { publishing = nil } })) { target in
@@ -52,15 +52,15 @@ struct CoursesView: View {
             VStack(alignment: .leading) {
                 Text(c.name).fontWeight(.bold)
                 Text("\(Format.shared.distance(metres: c.distanceM)) • your time \(Format.shared.duration(seconds: c.benchmarkSeconds))")
-                    .font(.subheadline).foregroundStyle(OsirisColor.muted)
+                    .font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
             }
             Spacer()
             if c.status != "active" {
-                Text(c.status.uppercased()).foregroundStyle(OsirisColor.error)
+                Text(c.status.capitalized).foregroundStyle(OsirisColor.error)
             } else if let live = c.openChallengeId?.int32Value {
-                Button("VIEW LIVE") { nav.open(.challenge(live)) }.buttonStyle(.borderless)
+                Button("View live") { nav.open(.challenge(live)) }.buttonStyle(.borderless)
             } else {
-                Button("PUBLISH") { publishing = c }.buttonStyle(.borderedProminent)
+                Button("Publish") { publishing = c }.buttonStyle(.key)
             }
         }
     }
@@ -106,7 +106,7 @@ private struct PublishSheet: View {
                 Section {
                     TextField("Title", text: $title)
                         .onChange(of: title) { if $0.count > 80 { title = String($0.prefix(80)) } }
-                    if let error { Text(error).font(.caption).foregroundStyle(OsirisColor.error) }
+                    if let error { Text(error).font(.manrope(.caption)).foregroundStyle(OsirisColor.error) }
                     Picker("Open for", selection: $window) {
                         ForEach(Self.windows, id: \.hours) { Text($0.label).tag($0.hours) }
                     }
@@ -119,9 +119,9 @@ private struct PublishSheet: View {
             .navigationTitle("Publish challenge")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("CANCEL", action: onClose) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onClose) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(busy ? "PUBLISHING…" : "PUBLISH", action: publish).disabled(busy)
+                    Button(busy ? "PUBLISHING…" : "Publish", action: publish).disabled(busy)
                 }
             }
             .messages(model)

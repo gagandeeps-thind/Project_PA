@@ -41,7 +41,7 @@ struct OnboardingView: View {
     }
 
     @ViewBuilder private func goalStep(_ s: OnboardingState) -> some View {
-        Text("What do you want from Osiris?").font(.title2.bold())
+        Text("What do you want from Osiris?").font(.manrope(.title2).bold())
         Text("We use this to size your daily quest. You can change it any time.").foregroundStyle(OsirisColor.muted)
         ForEach(Goal.entries, id: \.wire) { goal in
             let selected = s.goal == goal
@@ -49,7 +49,7 @@ struct OnboardingView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(goal.label).fontWeight(.semibold)
-                        Text(goal.description_).font(.subheadline).foregroundStyle(OsirisColor.muted)
+                        Text(goal.description_).font(.manrope(.subheadline)).foregroundStyle(OsirisColor.muted)
                     }
                     Spacer()
                     if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(OsirisColor.secondary) }
@@ -65,7 +65,7 @@ struct OnboardingView: View {
     }
 
     @ViewBuilder private func consentStep(_ s: OnboardingState) -> some View {
-        Text("Your location, your control").font(.title2.bold())
+        Text("Your location, your control").font(.manrope(.title2).bold())
         Text("Runs need it to be verified. You can change this later in Settings.").foregroundStyle(OsirisColor.muted)
         // Never pre-ticked: the player turns it on.
         Toggle("Allow location during runs", isOn: Binding(get: { s.locationConsent }, set: { model.vm.setLocationConsent(granted: $0) }))
@@ -74,7 +74,7 @@ struct OnboardingView: View {
     }
 
     @ViewBuilder private func accountStep(_ s: OnboardingState) -> some View {
-        Text("Create your account").font(.title2.bold())
+        Text("Create your account").font(.manrope(.title2).bold())
         field("Name others see", s.displayName, error: s.fieldErrors[Registration.companion.FIELD_NAME]) { model.vm.onName(v: $0) }
             .textContentType(.nickname)
         field("Email", s.email, error: s.fieldErrors[Registration.companion.FIELD_EMAIL]) { model.vm.onEmail(v: $0) }
@@ -88,16 +88,16 @@ struct OnboardingView: View {
             .textInputAutocapitalization(.characters)
             .autocorrectionDisabled()
         Button { model.vm.create() } label: {
-            Text(s.busy ? "CREATING…" : "START MY FIRST QUEST").frame(maxWidth: .infinity, minHeight: 36)
+            Text(s.busy ? "CREATING…" : "Start my first quest").frame(maxWidth: .infinity, minHeight: 36)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.key)
         .disabled(s.busy)
         .padding(.top, 12)
     }
 
     private var continueButton: some View {
-        Button { model.vm.next() } label: { Text("CONTINUE").frame(maxWidth: .infinity, minHeight: 36) }
-            .buttonStyle(.borderedProminent)
+        Button { model.vm.next() } label: { Text("Continue").frame(maxWidth: .infinity, minHeight: 36) }
+            .buttonStyle(.key)
             .padding(.top, 12)
     }
 
@@ -116,7 +116,7 @@ struct OnboardingView: View {
             .padding(12)
             .background(OsirisColor.surface, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(error == nil ? Color.clear : OsirisColor.error))
-            if let error { Text(error).font(.caption).foregroundStyle(OsirisColor.error) }
+            if let error { Text(error).font(.manrope(.caption)).foregroundStyle(OsirisColor.error) }
         }
     }
 }

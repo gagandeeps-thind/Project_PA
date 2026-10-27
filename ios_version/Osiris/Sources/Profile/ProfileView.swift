@@ -19,8 +19,8 @@ struct ProfileView: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
                         ForEach(p.metrics, id: \.label) { m in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(m.value).font(.title3.bold())
-                                Text(m.label.uppercased()).font(.caption).kerning(1).foregroundStyle(OsirisColor.muted)
+                                Text(m.value).font(.manrope(.title3).bold())
+                                Text(m.label).font(.manrope(.footnote).weight(.semibold)).foregroundStyle(OsirisColor.muted)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .frostCard()
@@ -32,7 +32,7 @@ struct ProfileView: View {
             }
             .refreshable { model.vm.refresh() }
         }
-        .navigationTitle("PROFILE")
+        .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button { nav.open(.support) } label: { Image(systemName: "bubble.left.and.bubble.right") }
@@ -45,11 +45,11 @@ struct ProfileView: View {
     private func header(_ p: ProfileSummary) -> some View {
         HStack(spacing: 16) {
             Text(String(p.name.prefix(1)).uppercased())
-                .font(.title.bold())
+                .font(.manrope(.title).bold())
                 .frame(width: 64, height: 64)
                 .background(OsirisColor.primary.opacity(0.24), in: Circle())
             VStack(alignment: .leading) {
-                Text(p.name).font(.title2)
+                Text(p.name).font(.manrope(.title2))
                 Text("\(p.rank)  •  \(p.goal)").kerning(1).foregroundStyle(OsirisColor.muted)
             }
         }
@@ -71,7 +71,7 @@ struct ProfileView: View {
         if !p.progression.badges.isEmpty {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
                 ForEach(p.progression.badges, id: \.code) { b in
-                    Label(b.label, systemImage: "checkmark.seal.fill").font(.caption)
+                    Label(b.label, systemImage: "checkmark.seal.fill").font(.manrope(.caption))
                 }
             }
         }

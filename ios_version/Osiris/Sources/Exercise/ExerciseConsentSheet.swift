@@ -13,17 +13,17 @@ struct ExerciseConsentSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Count reps with your camera?").font(.title2.bold()).padding(.bottom, 4)
+                Text("Count reps with your camera?").font(.manrope(.title2).bold()).padding(.bottom, 4)
                 ForEach(Self.points, id: \.icon) { point in
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: point.icon).foregroundStyle(OsirisColor.secondary).frame(width: 24)
                         Text(point.text)
                     }
                 }
-                Button { onAnswer(true) } label: { Text("ALLOW").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent)
+                Button { onAnswer(true) } label: { Text("Allow").frame(maxWidth: .infinity) }
+                    .buttonStyle(.key)
                     .padding(.top, 8)
-                Button { onAnswer(false) } label: { Text("NOT NOW").frame(maxWidth: .infinity) }
+                Button { onAnswer(false) } label: { Text("Not now").frame(maxWidth: .infinity) }
             }
             .padding(24)
         }
@@ -58,9 +58,9 @@ extension View {
         onDelete: @escaping () -> Void
     ) -> some View {
         alert("Stop counting exercises?", isPresented: isPresented) {
-            Button("KEEP MY SETS", action: onKeep)
-            Button("DELETE MY SETS", role: .destructive, action: onDelete)
-            Button("CANCEL", role: .cancel) {}
+            Button("Keep my sets", action: onKeep)
+            Button("Delete my sets", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("Osiris will stop uploading exercise sets. You can also delete your exercise history "
                  + "from Osiris and this phone. XP you already earned stays.")

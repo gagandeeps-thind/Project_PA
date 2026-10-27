@@ -61,7 +61,7 @@ fun ChallengeBoardScreen(graph: AppGraph, onBack: (() -> Unit)?, onOpen: (Int) -
     }
 
     OsirisScaffold(
-        "CHALLENGES",
+        "Challenges",
         vm,
         onBack = onBack,
         actions = {

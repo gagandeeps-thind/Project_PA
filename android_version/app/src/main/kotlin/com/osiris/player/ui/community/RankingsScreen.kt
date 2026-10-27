@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -42,11 +42,11 @@ fun RankingsScreen(graph: AppGraph, onBack: (() -> Unit)?, onSettings: () -> Uni
     val s by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
 
-    OsirisScaffold("RANKINGS", vm, onBack = onBack) { padding ->
+    OsirisScaffold("Rankings", vm, onBack = onBack) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             PrimaryTabRow(selectedTabIndex = tab, containerColor = OsirisColors.Surface) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("THIS WEEK") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("SEASON") })
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("This week") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Season") })
             }
             if (tab == 0) {
                 PullToRefreshBox(isRefreshing = false, onRefresh = vm::refreshLocal) {
@@ -57,7 +57,7 @@ fun RankingsScreen(graph: AppGraph, onBack: (() -> Unit)?, onSettings: () -> Uni
                                 // Usually "set your city first": the way out is Settings.
                                 is Loadable.Failed -> Column {
                                     Text(local.message)
-                                    OutlinedButton(onClick = onSettings, modifier = Modifier.padding(top = 12.dp)) { Text("SET MY CITY") }
+                                    RaisedButton(onClick = onSettings, modifier = Modifier.padding(top = 12.dp)) { Text("Set my city") }
                                 }
                                 is Loadable.Ready -> LeaderboardView(local.value)
                             }
@@ -94,11 +94,16 @@ private fun SeasonCardView(card: SeasonCard, onJoin: () -> Unit) {
             if (season.entered) {
                 Text("You're in. Every active day counts.", color = OsirisColors.Success, modifier = Modifier.padding(top = 12.dp))
             } else {
-                Button(onClick = onJoin, modifier = Modifier.padding(top = 12.dp)) { Text("JOIN THE SEASON") }
+                KeyButton(onClick = onJoin, modifier = Modifier.padding(top = 12.dp)) { Text("Join the season") }
             }
             val board = card.board ?: return@Column
             if (board.communities.isNotEmpty()) {
-                Text("CLUB STANDINGS", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 16.dp))
+                Text(
+                    "Club standings",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = OsirisColors.Muted,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
                 for (c in board.communities) {
                     ListItem(
                         leadingContent = { Text("#${c.rank}") },

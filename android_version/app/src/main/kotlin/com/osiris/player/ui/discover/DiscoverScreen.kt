@@ -47,7 +47,7 @@ import com.osiris.shared.presentation.discover.DiscoverCard
 fun DiscoverScreen(graph: AppGraph, onOpen: (Int) -> Unit, onCreate: () -> Unit, onNearby: () -> Unit) {
     val vm = rememberShared { graph.discover() }
     val state by vm.state.collectAsStateWithLifecycle()
-    OsirisScaffold("DISCOVER", vm, actions = {
+    OsirisScaffold("Discover", vm, actions = {
         IconButton(onClick = onNearby) { Icon(Icons.Outlined.Map, "Challenges near me") }
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -63,7 +63,7 @@ fun DiscoverScreen(graph: AppGraph, onOpen: (Int) -> Unit, onCreate: () -> Unit,
             ExtendedFloatingActionButton(
                 onClick = onCreate,
                 icon = { Icon(Icons.Outlined.Add, null) },
-                text = { Text("CREATE CHALLENGE") },
+                text = { Text("Create challenge") },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
             )
         }

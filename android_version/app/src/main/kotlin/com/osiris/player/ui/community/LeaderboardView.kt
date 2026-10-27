@@ -23,7 +23,7 @@ import com.osiris.shared.domain.model.LeaderboardRow
 fun LeaderboardView(board: Leaderboard, compact: Boolean = false) {
     val rows = if (compact) board.rows.take(10) else board.rows
     Column {
-        if (!compact) Text(board.title.uppercase(), color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp)
+        if (!compact) Text(board.title, color = OsirisColors.Muted, fontSize = 13.sp)
         if (rows.isEmpty()) {
             Text("Nobody has scored yet this week. A short walk puts you on the board.", Modifier.padding(vertical = 12.dp))
         }

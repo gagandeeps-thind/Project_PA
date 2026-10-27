@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -64,16 +64,16 @@ fun CommunitiesScreen(graph: AppGraph, onBack: () -> Unit, onOpen: (String) -> U
     }
 
     OsirisScaffold(
-        "CLUBS & GROUPS",
+        "Clubs & groups",
         vm,
         onBack = onBack,
         actions = { IconButton(onClick = { joinWithCode = true }) { Icon(Icons.Outlined.VpnKey, "Join with a code") } },
     ) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(contentPadding = PaddingValues(16.dp)) {
-                section("YOUR GROUPS", s.mine, "Join your running club, gym, or team to compete together.", onOpen) { it }
+                section("Your groups", s.mine, "Join your running club, gym, or team to compete together.", onOpen) { it }
                 item { Spacer(Modifier.size(24.dp)) }
-                section("NEAR YOU", s.discover, "No other public groups in your city yet. Set your city in Settings.", onOpen) { list ->
+                section("Near you", s.discover, "No other public groups in your city yet. Set your city in Settings.", onOpen) { list ->
                     list.filterNot { it.isMember }
                 }
             }
@@ -97,7 +97,7 @@ private fun LazyListScope.section(
     onOpen: (String) -> Unit,
     filter: (List<Community>) -> List<Community>,
 ) {
-    item { Text(title, color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+    item { Text(title, color = OsirisColors.Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
     when (state) {
         Loadable.Loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         is Loadable.Failed -> item { Text(state.message, color = OsirisColors.Error) }
@@ -145,7 +145,7 @@ private fun JoinWithCodeDialog(onJoin: (String, String) -> Unit, onDismiss: () -
                 OutlinedTextField(code, { code = it }, label = { Text("Join code") }, singleLine = true)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("CANCEL") } },
-        confirmButton = { Button(onClick = { onJoin(slug.trim(), code.trim()) }) { Text("JOIN") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { KeyButton(onClick = { onJoin(slug.trim(), code.trim()) }) { Text("Join") } },
     )
 }

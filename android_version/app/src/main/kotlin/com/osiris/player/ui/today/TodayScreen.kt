@@ -1,15 +1,12 @@
 package com.osiris.player.ui.today
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.osiris.player.ui.design.HeroMetric
-import com.osiris.player.ui.theme.primaryButtonColors
 import com.osiris.shared.core.design.FrostMatte
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,7 +34,7 @@ import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WbTwilight
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -96,7 +93,7 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
     }
 
     OsirisScaffold(
-        "OSIRIS",
+        "Osiris",
         vm,
         actions = { IconButton(onClick = { nav.open(Routes.SETTINGS) }) { Icon(Icons.Outlined.Settings, "Settings") } },
     ) { padding ->
@@ -161,7 +158,7 @@ private fun QuestCard(quest: Quest, onStart: () -> Unit) {
     FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 22.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                quest.heading.uppercase(),
+                quest.heading,
                 style = MaterialTheme.typography.labelMedium,
                 color = OsirisColors.Muted,
                 modifier = Modifier.weight(1f),
@@ -186,13 +183,13 @@ private fun QuestCard(quest: Quest, onStart: () -> Unit) {
                 Icon(Icons.Filled.CheckCircle, null, tint = OsirisColors.Success)
                 Spacer(Modifier.width(8.dp))
                 Text(if (quest.rewarded) "Done. +${quest.xp} XP earned." else "Done!", Modifier.weight(1f))
-                TextButton(onClick = onStart) { Text("GO AGAIN") }
+                TextButton(onClick = onStart) { Text("Go again") }
             }
         } else {
-            Button(onClick = onStart, colors = primaryButtonColors(), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            KeyButton(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                 Icon(Icons.Filled.PlayArrow, null)
                 Spacer(Modifier.width(6.dp))
-                Text(if (quest.optional) "START (OPTIONAL)" else "START")
+                Text(if (quest.optional) "Start (optional)" else "Start")
             }
         }
     }
@@ -226,7 +223,7 @@ private fun WeekStrip(week: WeeklyGoal, streakWeeks: Int) {
             modifier = Modifier.weight(1f),
         )
         if (streakWeeks > 0) {
-            Text("$streakWeeks WK STREAK", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Secondary)
+            Text("$streakWeeks-week streak", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Primary)
         }
     }
 }
@@ -237,7 +234,7 @@ private fun Shortcuts(tomorrow: String, onOpen: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.height(188.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FrostCard(Modifier.weight(1.15f).fillMaxHeight(), radius = FrostMatte.Radius.LARGE) {
-                Text("TOMORROW", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
+                Text("Tomorrow", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Outlined.WbTwilight, null, tint = OsirisColors.Faint)
                 Spacer(Modifier.height(8.dp))
@@ -269,10 +266,8 @@ private fun Shortcut(icon: ImageVector, label: String, modifier: Modifier, onCli
 /** Secondary destinations as outlined pills: an interactive border, no fill to compete with the cards. */
 @Composable
 private fun Pill(icon: ImageVector, label: String, onClick: () -> Unit) {
-    OutlinedButton(
+    RaisedButton(
         onClick = onClick,
-        border = BorderStroke(1.5.dp, OsirisColors.Faint.copy(alpha = 0.6f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = OsirisColors.Muted),
         modifier = Modifier.height(44.dp),
     ) {
         Icon(icon, null, Modifier.size(18.dp))
@@ -288,7 +283,7 @@ private fun ConsentBanner(onAllow: () -> Unit) {
             leadingContent = { Icon(Icons.Outlined.LocationOn, null) },
             headlineContent = { Text("Allow location during runs") },
             supportingContent = { Text("Needed to verify your distance. Your route is never shown to others.") },
-            trailingContent = { TextButton(onClick = onAllow) { Text("ALLOW") } },
+            trailingContent = { TextButton(onClick = onAllow) { Text("Allow") } },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
     }

@@ -19,7 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -58,7 +58,7 @@ fun WalletScreen(graph: AppGraph) {
     val billingState by billingService.state.collectAsStateWithLifecycle()
     var addingChain by rememberSaveable { mutableStateOf<Chain?>(null) }
 
-    OsirisScaffold("WALLET", vm) { padding ->
+    OsirisScaffold("Wallet", vm) { padding ->
         PullToRefreshBox(
             isRefreshing = false,
             onRefresh = {
@@ -80,7 +80,7 @@ fun WalletScreen(graph: AppGraph) {
                     }
                     item {
                         FrostCard(Modifier.fillMaxWidth().padding(16.dp)) {
-                            Text("BALANCE", color = OsirisColors.Muted)
+                            Text("Balance", color = OsirisColors.Muted)
                             for (b in overview.balances) Text(b.format(), style = MaterialTheme.typography.headlineMedium)
                         }
                     }
@@ -106,10 +106,10 @@ fun WalletScreen(graph: AppGraph) {
                             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            OutlinedButton(onClick = vm::addCard, enabled = !s.busy) { Text("ADD CARD") }
-                            OutlinedButton(onClick = vm::linkBank, enabled = !s.busy) { Text("LINK BANK") }
+                            RaisedButton(onClick = vm::addCard, enabled = !s.busy) { Text("Add card") }
+                            RaisedButton(onClick = vm::linkBank, enabled = !s.busy) { Text("Link bank") }
                             for (chain in Chain.entries) {
-                                OutlinedButton(onClick = { addingChain = chain }, enabled = !s.busy) { Text(chain.title.uppercase()) }
+                                RaisedButton(onClick = { addingChain = chain }, enabled = !s.busy) { Text(chain.title) }
                             }
                         }
                     }
@@ -146,12 +146,12 @@ fun WalletScreen(graph: AppGraph) {
             title = "Add ${chain.title} address",
             body = "Paste the address from your wallet app. Payouts sent to a wrong address cannot be recovered.",
             label = "Address",
-            confirm = "SAVE",
+            confirm = "Save",
             onConfirm = {
                 vm.addCryptoWallet(chain, it)
                 addingChain = null
             },
-            dismiss = "CANCEL",
+            dismiss = "Cancel",
             onDismiss = { addingChain = null },
             maxLength = 64,
         )

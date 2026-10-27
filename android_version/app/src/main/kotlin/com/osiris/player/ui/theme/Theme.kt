@@ -1,6 +1,5 @@
 package com.osiris.player.ui.theme
 
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -68,7 +67,7 @@ private fun scheme(mode: FrostMatte.Mode) = FrostMatte.palette(mode).let { p ->
         // stay a raised neutral slate; the accent is kept for each screen's focal item and main action.
         primaryContainer = p.accent.color(),
         onPrimaryContainer = p.onAccent.color(),
-        secondaryContainer = Color(0xFF353A44),
+        secondaryContainer = Color(0xFF2A2E37),
         onSecondaryContainer = p.textPrimary.color(),
         tertiary = p.accentAlt.color(),
         onTertiary = p.onAccent.color(),
@@ -86,24 +85,23 @@ private fun scheme(mode: FrostMatte.Mode) = FrostMatte.palette(mode).let { p ->
     )
 }
 
-/** Both families are variable fonts (res/font, SIL OFL); each weight is one instance of the same file. */
+/** Manrope is a variable font (res/font, SIL OFL); each weight is one instance of the same file. */
 @OptIn(ExperimentalTextApi::class)
 private fun variable(res: Int, vararg weights: Int) = FontFamily(
     weights.map { w -> Font(res, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w))) },
 )
 
-/** Display and body. */
+/** Every style: display, body and labels. */
 val Manrope = variable(R.font.manrope, 400, 500, 600, 700, 800)
 
-/** Small uppercase labels and figures that should recede (units, ranks, section headers). */
-val GeistMono = variable(R.font.geist_mono, 500, 600)
-
-private fun style(s: FrostMatte.TextStyle, letterSpacing: Float = 0f, family: FontFamily = Manrope) = TextStyle(
-    fontFamily = family,
+/** Tabular figures throughout, so distances, paces and ranks hold their columns as they change. */
+private fun style(s: FrostMatte.TextStyle, letterSpacing: Float = 0f) = TextStyle(
+    fontFamily = Manrope,
     fontSize = s.size.sp,
     lineHeight = s.lineHeight.sp,
     fontWeight = FontWeight(s.weight),
     letterSpacing = letterSpacing.sp,
+    fontFeatureSettings = "tnum",
 )
 
 private val type = Typography(
@@ -119,9 +117,9 @@ private val type = Typography(
     bodyLarge = style(FrostMatte.TextStyle.BODY),
     bodyMedium = style(FrostMatte.TextStyle.CALLOUT),
     bodySmall = style(FrostMatte.TextStyle.CAPTION),
-    labelLarge = style(FrostMatte.TextStyle.CALLOUT, letterSpacing = 0.4f).copy(fontWeight = FontWeight.ExtraBold),
-    labelMedium = style(FrostMatte.TextStyle.CAPTION, letterSpacing = 0.5f, family = GeistMono).copy(fontWeight = FontWeight.SemiBold),
-    labelSmall = style(FrostMatte.TextStyle.CAPTION, letterSpacing = 0.3f, family = GeistMono),
+    labelLarge = style(FrostMatte.TextStyle.BODY, letterSpacing = 0.1f).copy(fontWeight = FontWeight.ExtraBold),
+    labelMedium = style(FrostMatte.TextStyle.CAPTION, letterSpacing = 0.2f),
+    labelSmall = style(FrostMatte.TextStyle.CAPTION, letterSpacing = 0.2f).copy(fontWeight = FontWeight.Medium),
 )
 
 @Composable
@@ -130,9 +128,3 @@ fun OsirisTheme(mode: FrostMatte.Mode = FrostMatte.Mode.DARK, content: @Composab
         MaterialTheme(colorScheme = scheme(mode), typography = type, content = content)
     }
 }
-
-@Composable
-fun primaryButtonColors() = ButtonDefaults.buttonColors(
-    containerColor = OsirisColors.Primary,
-    contentColor = FrostMatte.dark.onAccent.color(),
-)

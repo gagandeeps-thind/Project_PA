@@ -13,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.ToggleOff
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -51,8 +51,8 @@ fun ExerciseConsentSheet(onAnswer: (Boolean) -> Unit) {
                     Text(text)
                 }
             }
-            Button(onClick = { onAnswer(true) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("ALLOW") }
-            TextButton(onClick = { onAnswer(false) }, modifier = Modifier.fillMaxWidth()) { Text("NOT NOW") }
+            KeyButton(onClick = { onAnswer(true) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Allow") }
+            TextButton(onClick = { onAnswer(false) }, modifier = Modifier.fillMaxWidth()) { Text("Not now") }
         }
     }
 }
@@ -72,9 +72,9 @@ fun WithdrawExerciseConsentDialog(onKeep: () -> Unit, onDelete: () -> Unit, onCa
         },
         confirmButton = {
             Row {
-                TextButton(onClick = onCancel) { Text("CANCEL") }
-                TextButton(onClick = onKeep) { Text("KEEP MY SETS") }
-                TextButton(onClick = onDelete) { Text("DELETE MY SETS", color = OsirisColors.Error) }
+                TextButton(onClick = onCancel) { Text("Cancel") }
+                TextButton(onClick = onKeep) { Text("Keep my sets") }
+                TextButton(onClick = onDelete) { Text("Delete my sets", color = OsirisColors.Error) }
             }
         },
     )

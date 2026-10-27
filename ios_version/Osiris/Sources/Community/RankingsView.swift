@@ -15,8 +15,8 @@ struct RankingsView: View {
         let s = model.state
         VStack(spacing: 0) {
             Picker("Rankings", selection: $tab) {
-                Text("THIS WEEK").tag(0)
-                Text("SEASON").tag(1)
+                Text("This week").tag(0)
+                Text("Season").tag(1)
             }
             .pickerStyle(.segmented)
             .padding()
@@ -26,7 +26,7 @@ struct RankingsView: View {
             .refreshable { if tab == 0 { model.vm.refreshLocal() } else { model.vm.refreshSeasons() } }
         }
         .background(OsirisColor.background)
-        .navigationTitle("RANKINGS")
+        .navigationTitle("Rankings")
         .navigationBarTitleDisplayMode(.inline)
         .messages(model)
     }
@@ -38,7 +38,7 @@ struct RankingsView: View {
             // Usually "set your city first": the way out is Settings.
             VStack(alignment: .leading, spacing: 12) {
                 Text(failed.message)
-                Button("SET MY CITY") { nav.open(.settings) }.buttonStyle(.bordered)
+                Button("Set my city") { nav.open(.settings) }.buttonStyle(.raised)
             }
         } else {
             ProgressView().frame(maxWidth: .infinity)
@@ -63,14 +63,14 @@ struct RankingsView: View {
     private func seasonCard(_ card: SeasonCard) -> some View {
         let season = card.season
         return VStack(alignment: .leading, spacing: 8) {
-            Text(season.name).font(.title3.bold())
+            Text(season.name).font(.manrope(.title3).bold())
             Text(card.status).foregroundStyle(OsirisColor.muted)
             if let description = season.description_ { Text(description) }
             if season.entered {
                 Text("You're in. Every active day counts.").foregroundStyle(OsirisColor.success)
             } else {
-                Button("JOIN THE SEASON") { model.vm.joinSeason(slug: season.slug) }
-                    .buttonStyle(.borderedProminent)
+                Button("Join the season") { model.vm.joinSeason(slug: season.slug) }
+                    .buttonStyle(.key)
             }
             if let board = card.board {
                 if !board.communities.isEmpty {

@@ -82,22 +82,22 @@ struct PermissionPrimerView: View {
         let palette = FrostPalette(scheme)
         ScrollView {
             VStack(alignment: .leading, spacing: CGFloat(FrostMatte.Spacing.shared.M)) {
-                Text("Before you start").font(.title2.bold()).foregroundStyle(palette.textPrimary)
+                Text("Before you start").font(.manrope(.title2).bold()).foregroundStyle(palette.textPrimary)
                 Text("Osiris works without any of these. Allow what you want now; we ask again when you use the feature.")
-                    .font(.callout).foregroundStyle(palette.textSecondary)
+                    .font(.manrope(.callout)).foregroundStyle(palette.textSecondary)
                 ForEach(model.state.items, id: \.permission) { item in
                     row(item, palette: palette)
                 }
                 Toggle(isOn: Binding(get: { model.state.telemetry }, set: { vm.setTelemetry(granted: $0) })) {
                     VStack(alignment: .leading) {
-                        Text("Share crash reports").font(.headline)
+                        Text("Share crash reports").font(.manrope(.headline))
                         Text("Anonymous diagnostics that help us fix crashes. Off unless you turn it on.")
-                            .font(.caption).foregroundStyle(palette.textSecondary)
+                            .font(.manrope(.caption)).foregroundStyle(palette.textSecondary)
                     }
                 }
                 .frostCard()
                 Button("Continue") { vm.finish() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.key)
                     .frame(maxWidth: .infinity)
             }
             .padding(CGFloat(FrostMatte.Spacing.shared.XL))
@@ -119,14 +119,14 @@ struct PermissionPrimerView: View {
         HStack(spacing: CGFloat(FrostMatte.Spacing.shared.M)) {
             Image(systemName: symbol(item.permission)).foregroundStyle(palette.accent)
             VStack(alignment: .leading) {
-                Text(item.title).font(.headline)
-                Text(item.purpose).font(.caption).foregroundStyle(palette.textSecondary)
+                Text(item.title).font(.manrope(.headline))
+                Text(item.purpose).font(.manrope(.caption)).foregroundStyle(palette.textSecondary)
             }
             Spacer()
             switch item.status {
-            case .granted: Text("Allowed").font(.callout.bold()).foregroundStyle(palette.success)
-            case .denied: Text("Skipped").font(.callout.bold()).foregroundStyle(palette.textMuted)
-            default: Button("Allow") { vm.request(permission: item.permission) }.buttonStyle(.bordered)
+            case .granted: Text("Allowed").font(.manrope(.callout).bold()).foregroundStyle(palette.success)
+            case .denied: Text("Skipped").font(.manrope(.callout).bold()).foregroundStyle(palette.textMuted)
+            default: Button("Allow") { vm.request(permission: item.permission) }.buttonStyle(.raised)
             }
         }
         .frostCard()

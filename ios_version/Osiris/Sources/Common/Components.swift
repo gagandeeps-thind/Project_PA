@@ -14,7 +14,7 @@ struct LoadableContent<T, Content: View>: View {
         } else if let failed = state as? LoadableFailed {
             VStack(spacing: 12) {
                 Text(failed.message).foregroundStyle(OsirisColor.error).multilineTextAlignment(.center)
-                if failed.canRetry { Button("TRY AGAIN", action: onRetry).buttonStyle(.bordered) }
+                if failed.canRetry { Button("Try again", action: onRetry).buttonStyle(.raised) }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -38,7 +38,7 @@ struct EmptyState: View {
             Text(title).multilineTextAlignment(.center)
             if let detail { Text(detail).foregroundStyle(OsirisColor.faint).multilineTextAlignment(.center) }
             if let actionLabel, let action {
-                Button(actionLabel, action: action).buttonStyle(.borderedProminent).padding(.top, 4)
+                Button(actionLabel, action: action).buttonStyle(.key).padding(.top, 4)
             }
         }
         .padding(32)
@@ -53,7 +53,7 @@ struct Chip: View {
 
     var body: some View {
         Text(label)
-            .font(.caption2)
+            .font(.manrope(.caption2))
             .foregroundStyle(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
@@ -80,7 +80,7 @@ struct SectionLabel: View {
     let text: String
 
     var body: some View {
-        Text(text.uppercased()).font(.caption).kerning(1.2).foregroundStyle(OsirisColor.muted)
+        Text(text).font(.manrope(.footnote).weight(.semibold)).foregroundStyle(OsirisColor.muted)
     }
 }
 

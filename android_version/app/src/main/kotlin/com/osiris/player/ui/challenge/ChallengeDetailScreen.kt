@@ -18,7 +18,7 @@ import androidx.compose.material.icons.filled.HowToReg
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.PersonAddAlt
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -84,7 +84,7 @@ fun ChallengeDetailScreen(graph: AppGraph, id: Int, onBack: () -> Unit, onRun: (
     }
 
     OsirisScaffold(
-        "CHALLENGE",
+        "Challenge",
         vm,
         onBack = onBack,
         actions = {
@@ -118,12 +118,12 @@ fun ChallengeDetailScreen(graph: AppGraph, id: Int, onBack: () -> Unit, onRun: (
         ConfirmDialog(
             title = "Block this player?",
             body = "You won't see this player's challenges. You can unblock them in Settings.",
-            confirm = "BLOCK",
+            confirm = "Block",
             onConfirm = {
                 confirmBlock = false
                 vm.blockCreator()
             },
-            dismiss = "CANCEL",
+            dismiss = "Cancel",
             onDismiss = { confirmBlock = false },
             destructive = true,
         )
@@ -137,14 +137,14 @@ private fun Content(detail: ChallengeDetail, joining: Boolean, vm: ChallengeDeta
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text(c.title, style = MaterialTheme.typography.headlineMedium)
-            Text("${c.status.uppercase()} • ${c.closesIn(now)}", color = OsirisColors.Faint)
+            Text("${c.status.replaceFirstChar { it.uppercase() }} • ${c.closesIn(now)}", color = OsirisColors.Faint)
         }
         val route = detail.course?.route.orEmpty()
         if (route.size >= 2) item { CoursePreview(route) }
         item {
             FrostCard(contentPadding = 0.dp) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("TERMS", fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Text("Terms", fontWeight = FontWeight.Bold)
                     Gap(8)
                     TermRow("Course distance", Format.distance(c.courseDistanceM))
                     TermRow("Time to beat", Format.duration(c.targetSeconds))
@@ -184,15 +184,15 @@ private fun Content(detail: ChallengeDetail, joining: Boolean, vm: ChallengeDeta
                     color = OsirisColors.Faint,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                c.canJoin -> Button(onClick = vm::join, enabled = !joining, modifier = Modifier.fillMaxWidth()) {
+                c.canJoin -> KeyButton(onClick = vm::join, enabled = !joining, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.HowToReg, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (joining) "JOINING…" else "JOIN CHALLENGE")
+                    Text(if (joining) "JOINING…" else "Join challenge")
                 }
-                c.canRun -> Button(onClick = { onRun(c.id) }, modifier = Modifier.fillMaxWidth()) {
+                c.canRun -> KeyButton(onClick = { onRun(c.id) }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.AutoMirrored.Filled.DirectionsRun, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (c.myAttempt?.status == "rejected") "TRY AGAIN" else "RUN THIS COURSE")
+                    Text(if (c.myAttempt?.status == "rejected") "Try again" else "Run this course")
                 }
             }
         }
@@ -211,7 +211,7 @@ private fun AttemptCard(a: AttemptSummary, vm: ChallengeDetailViewModel) {
     FrostCard(contentPadding = 0.dp) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("YOUR ATTEMPT", fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.weight(1f))
+                Text("Your attempt", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text(a.label, color = color, fontWeight = FontWeight.Bold)
             }
             val elapsed = a.elapsedSeconds
@@ -228,7 +228,7 @@ private fun AttemptCard(a: AttemptSummary, vm: ChallengeDetailViewModel) {
                 ) {
                     Icon(Icons.Filled.IosShare, null)
                     Spacer(Modifier.width(4.dp))
-                    Text("SHARE RESULT")
+                    Text("Share result")
                 }
             }
             for (r in a.reasonCodes) Text("• ${ReasonCopy.explain(r)}", color = OsirisColors.Muted, modifier = Modifier.padding(top = 6.dp))

@@ -12,13 +12,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -51,15 +50,13 @@ import com.osiris.shared.presentation.common.Loadable
 fun SocialScreen(graph: AppGraph, onLocal: () -> Unit, onCommunities: () -> Unit) {
     val vm = rememberShared { graph.globalBoards() }
     val s by vm.state.collectAsStateWithLifecycle()
-    OsirisScaffold("SOCIAL", vm) { padding ->
+    OsirisScaffold("Social", vm) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Neutral, so the accent stays on the player's own rank.
-                        val quiet = ButtonDefaults.outlinedButtonColors(contentColor = OsirisColors.Muted)
-                        OutlinedButton(onClick = onLocal, colors = quiet, modifier = Modifier.weight(1f)) { Text("LOCAL & SEASONS") }
-                        OutlinedButton(onClick = onCommunities, colors = quiet, modifier = Modifier.weight(1f)) { Text("COMMUNITIES") }
+                        RaisedButton(onClick = onLocal, modifier = Modifier.weight(1f)) { Text("Local & seasons") }
+                        RaisedButton(onClick = onCommunities, modifier = Modifier.weight(1f)) { Text("Communities") }
                     }
                 }
                 item { Chips(BoardKind.entries, s.kind, { it.title }) { vm.select(it) } }

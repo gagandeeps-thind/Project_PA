@@ -22,12 +22,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.outlined.FiberManualRecord
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -173,13 +172,13 @@ private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalo
                 if (error != null) {
                     Text(error, color = OsirisColors.Error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
-                    Button(
+                    KeyButton(
                         onClick = context::openAppSettings,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
-                    ) { Text("OPEN SETTINGS") }
+                    ) { Text("Open settings") }
                 } else {
                     val counting = s.phase == ExerciseSessionState.Phase.COUNTING
-                    Button(
+                    KeyButton(
                         onClick = {
                             if (counting) {
                                 vm.finish(perf(analyzer))
@@ -189,7 +188,6 @@ private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalo
                             }
                         },
                         enabled = s.phase == ExerciseSessionState.Phase.READY || counting,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (counting) OsirisColors.Error else OsirisColors.Primary),
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                     ) { Text(s.buttonLabel) }
                 }
@@ -202,9 +200,9 @@ private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalo
             title = "QA: label this recording",
             body = null,
             label = s.labelPrompt,
-            confirm = "SAVE",
+            confirm = "Save",
             onConfirm = vm::labelRecording,
-            dismiss = "DISCARD",
+            dismiss = "Discard",
             onDismiss = { vm.labelRecording(null) },
             maxLength = 6,
             keyboard = KeyboardType.Decimal,
@@ -282,7 +280,7 @@ private fun ResultSheet(r: SetResult, onDone: () -> Unit) {
             Text(r.sync, color = OsirisColors.Secondary)
             r.perf?.let { Text("Pose: $it", color = OsirisColors.Faint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
             Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("DONE") }
+            RaisedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Done") }
         }
     }
 }

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +55,7 @@ fun EmptyState(
         }
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onAction) { Text(actionLabel) }
+            KeyButton(onClick = onAction) { Text(actionLabel) }
         }
     }
 }
@@ -67,16 +68,17 @@ fun Notice(text: String, modifier: Modifier = Modifier, color: Color = OsirisCol
     }
 }
 
-/** A small rounded label. */
+/** A small pill-shaped label. */
 @Composable
 fun Chip(label: String, color: Color) {
     Text(
         label,
         color = color,
-        fontSize = 11.sp,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier
-            .background(color.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .background(color.copy(alpha = 0.14f), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
     )
 }
 

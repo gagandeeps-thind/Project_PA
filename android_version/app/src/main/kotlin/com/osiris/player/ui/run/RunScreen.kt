@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -160,7 +160,7 @@ private fun LocationOff(problem: String, onOpenSettings: () -> Unit, modifier: M
         Spacer(Modifier.height(8.dp))
         Text("Runs need your location to be verified.", color = OsirisColors.Faint, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onOpenSettings) { Text("OPEN SETTINGS") }
+        KeyButton(onClick = onOpenSettings) { Text("Open settings") }
     }
 }
 
@@ -174,10 +174,11 @@ private fun Metrics(s: RunState) {
         HeroMetric(value, unit = unit.ifEmpty { null }, label = if (s.paused) "Paused" else "Distance")
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Metric("MOVING", s.moving)
-            Metric("PACE /KM", s.pace?.removeSuffix(" /km") ?: "--")
-            s.climb?.let { Metric("CLIMB", it) }
-            Metric(if (s.offline) "OFFLINE" else "SYNCED", "${run.uploaded}/${run.nextSequence}", if (s.offline) OsirisColors.Warning else null)
+            Metric("Moving", s.moving)
+            Metric("Pace /km", s.pace?.removeSuffix(" /km") ?: "--")
+            s.climb?.let { Metric("Climb", it) }
+            val sync = "${run.uploaded}/${run.nextSequence}"
+            Metric(if (s.offline) "Offline" else "Synced", sync, if (s.offline) OsirisColors.Warning else null)
         }
     }
 }
@@ -191,7 +192,7 @@ private fun StartOptions(s: RunState, vm: RunViewModel) {
                 FilterChip(selected = s.sport == sport, onClick = { vm.selectSport(sport) }, label = { Text(sport.label) })
             }
         }
-        Text("AUTO-PAUSE", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Faint)
+        Text("Auto-pause", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Faint)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (setting in AutoPause.entries) {
                 FilterChip(selected = s.autoPause == setting, onClick = { vm.setAutoPause(setting) }, label = { Text(setting.label) })
@@ -261,26 +262,26 @@ private fun Dialogs(dialog: RunDialog?, vm: RunViewModel) {
         RunDialog.StaleRun -> ConfirmDialog(
             title = "Unfinished run found",
             body = "A run you started a while ago was never finished. Submit what was recorded, or discard it and start fresh?",
-            confirm = "SUBMIT IT",
+            confirm = "Submit it",
             onConfirm = vm::finish,
-            dismiss = "DISCARD",
+            dismiss = "Discard",
             onDismiss = vm::discard,
         )
         RunDialog.LowLight -> ConfirmDialog(
             title = "It's dark out",
             body = "Run on lit routes you know, wear something bright or reflective, " +
                 "and tell someone your route and when you expect to be back.",
-            confirm = "START ANYWAY",
+            confirm = "Start anyway",
             onConfirm = { vm.start(confirmedLowLight = true) },
-            dismiss = "NOT NOW",
+            dismiss = "Not now",
             onDismiss = vm::dismissDialog,
         )
         RunDialog.ConfirmDiscard -> ConfirmDialog(
             title = "Discard this run?",
             body = "The recorded route is deleted from this phone and the run will not count.",
-            confirm = "DISCARD",
+            confirm = "Discard",
             onConfirm = vm::discard,
-            dismiss = "KEEP RUNNING",
+            dismiss = "Keep running",
             onDismiss = vm::dismissDialog,
             destructive = true,
         )
@@ -289,9 +290,9 @@ private fun Dialogs(dialog: RunDialog?, vm: RunViewModel) {
             title = "Make it a challenge?",
             body = "Register this route as a course others can challenge? The first and last 150 m are trimmed off for your privacy.",
             label = "Course name",
-            confirm = "REGISTER",
+            confirm = "Register",
             onConfirm = { name -> vm.registerCourse(dialog.runId, name) },
-            dismiss = "NOT NOW",
+            dismiss = "Not now",
             onDismiss = vm::dismissDialog,
         )
         is RunDialog.Info -> InfoDialog(dialog.title, dialog.body, vm::dismissDialog)
@@ -325,9 +326,9 @@ private fun Celebrate(d: RunDialog.Celebrate, vm: RunViewModel) {
             TextButton(onClick = { scope.launch { vm.shareRun(d.runId)?.let { share(context, it) } } }) {
                 Icon(Icons.Filled.Share, null)
                 Spacer(Modifier.size(4.dp))
-                Text("SHARE")
+                Text("Share")
             }
         },
-        confirmButton = { Button(onClick = vm::dismissDialog) { Text("NICE") } },
+        confirmButton = { KeyButton(onClick = vm::dismissDialog) { Text("Nice") } },
     )
 }

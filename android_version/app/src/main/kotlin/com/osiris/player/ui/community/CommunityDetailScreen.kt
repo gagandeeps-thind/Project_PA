@@ -21,7 +21,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.VpnKey
-import androidx.compose.material3.Button
+import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -65,7 +65,7 @@ fun CommunityDetailScreen(graph: AppGraph, slug: String, onBack: () -> Unit, onO
     val name = s.detail.valueOrNull?.community?.name
 
     OsirisScaffold(
-        name ?: "GROUP",
+        name ?: "Group",
         vm,
         onBack = onBack,
         actions = {
@@ -128,14 +128,19 @@ private fun Content(detail: CommunityDetail, vm: CommunityDetailViewModel, onOpe
         }
         if (c.myRole != "owner") {
             item {
-                Button(onClick = { if (c.isMember) vm.leave() else vm.join() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    Text(if (c.isMember) "LEAVE GROUP" else "JOIN GROUP")
+                KeyButton(onClick = { if (c.isMember) vm.leave() else vm.join() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    Text(if (c.isMember) "Leave group" else "Join group")
                 }
             }
         }
         c.teamGoal?.let { goal -> item { TeamGoalCard(goal) } }
         item {
-            Text("GROUP CHALLENGES", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                "Group challenges",
+                style = MaterialTheme.typography.titleSmall,
+                color = OsirisColors.Muted,
+                modifier = Modifier.padding(top = 8.dp),
+            )
             if (detail.challenges.isEmpty()) Text("No featured challenges right now.", Modifier.padding(vertical = 8.dp))
         }
         items(detail.challenges, key = { it.id }) { ch ->
@@ -163,7 +168,7 @@ private fun Content(detail: CommunityDetail, vm: CommunityDetailViewModel, onOpe
 private fun TeamGoalCard(goal: TeamGoal) {
     FrostCard(Modifier.padding(top = 8.dp), contentPadding = 0.dp) {
         Column(Modifier.padding(16.dp)) {
-            Text("TEAM GOAL THIS WEEK", color = OsirisColors.Muted, fontSize = 12.sp, letterSpacing = 1.2.sp)
+            Text("Team goal this week", color = OsirisColors.Muted, fontSize = 12.sp)
             Text(
                 "${Format.fixed(goal.progressKm, 1)} of ${Format.fixed(goal.goalKm, 0)} km together",
                 style = MaterialTheme.typography.titleMedium,

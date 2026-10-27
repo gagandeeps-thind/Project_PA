@@ -54,9 +54,9 @@ data class Quest(
     /** Card heading: first quest, recovery day, or an ordinary day. */
     val heading: String
         get() = when (kind) {
-            "starter" -> "YOUR FIRST QUEST"
-            "recovery" -> "RECOVERY DAY"
-            else -> "TODAY'S QUEST"
+            "starter" -> "Your first quest"
+            "recovery" -> "Recovery day"
+            else -> "Today's quest"
         }
 }
 

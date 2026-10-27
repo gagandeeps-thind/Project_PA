@@ -19,7 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
+import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,7 +48,7 @@ fun SupportChatScreen(graph: AppGraph, onBack: () -> Unit) {
     val list = rememberLazyListState()
     LaunchedEffect(s.lines.size) { if (s.lines.isNotEmpty()) list.animateScrollToItem(s.lines.lastIndex) }
 
-    OsirisScaffold("SUPPORT", vm, onBack = onBack) { padding ->
+    OsirisScaffold("Support", vm, onBack = onBack) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -75,7 +75,7 @@ fun SupportChatScreen(graph: AppGraph, onBack: () -> Unit) {
                 Status.CONNECTING -> Text("Connecting…", color = OsirisColors.Faint, modifier = Modifier.padding(16.dp))
                 Status.CLOSED -> Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(s.error ?: "Chat ended.", color = OsirisColors.Muted, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = vm::connect) { Text("RECONNECT") }
+                    RaisedButton(onClick = vm::connect) { Text("Reconnect") }
                 }
                 Status.OPEN -> Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(

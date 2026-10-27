@@ -67,10 +67,10 @@ data class ExerciseSessionState(
 
     val buttonLabel: String
         get() = when (phase) {
-            Phase.READY -> "START"
-            Phase.COUNTING -> "FINISH"
+            Phase.READY -> "Start"
+            Phase.COUNTING -> "Finish"
             Phase.SAVING -> "SAVING…"
-            Phase.DONE -> "DONE"
+            Phase.DONE -> "Done"
         }
     val labelPrompt: String get() = if (spec.isHold) "Seconds of good plank hold" else "Reps that should count"
     val slowWarning: String?

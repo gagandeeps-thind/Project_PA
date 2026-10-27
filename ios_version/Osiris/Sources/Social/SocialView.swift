@@ -15,8 +15,8 @@ struct SocialView: View {
         List {
             Section {
                 HStack {
-                    Button("LOCAL & SEASONS") { nav.open(.rankings) }.buttonStyle(.bordered)
-                    Button("COMMUNITIES") { nav.open(.clubs) }.buttonStyle(.bordered)
+                    Button("Local & seasons") { nav.open(.rankings) }.buttonStyle(.raised)
+                    Button("Communities") { nav.open(.clubs) }.buttonStyle(.raised)
                 }
                 chips(BoardKind.entries, selected: s.kind, label: \.title) { model.vm.select(kind: $0) }
                 chips(BoardPeriod.entries, selected: s.period, label: \.title) { model.vm.select(period: $0) }
@@ -29,7 +29,7 @@ struct SocialView: View {
         }
         .scrollContentBackground(.hidden)
         .refreshable { model.vm.refresh() }
-        .navigationTitle("SOCIAL")
+        .navigationTitle("Social")
         .navigationBarTitleDisplayMode(.inline)
         .messages(model)
     }
@@ -71,7 +71,7 @@ struct SocialView: View {
                 ForEach(options.indices, id: \.self) { i in
                     let o = options[i]
                     Button(o[keyPath: label]) { onSelect(o) }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.raised)
                         .tint(o == selected ? OsirisColor.primary : OsirisColor.muted)
                 }
             }

@@ -24,10 +24,13 @@ The dev environment points the simulator at `http://localhost:8000`. Choose anot
 
 FrostMatte tokens (colors, blur, radii, spacing) come from the shared core (`FrostMatte`), so both apps
 use one set of values. `Common/Frost.swift` maps them to SwiftUI: `FrostBackground` and `.frostCard()`
-(system `.ultraThinMaterial` blur plus the token fill, hairline and shadow).
-Type is Manrope and Geist Mono, the same files as Android (`android_version/app/src/main/res/font/`,
-added to the bundle by `project.yml` and registered with `UIAppFonts`): `FrostFont` sets each
-weight on the variable `wght` axis, and `HeroMetric` is the 72 pt focal number.
+(system `.ultraThinMaterial` blur plus the token sheen, rim and shadows), the `.key` / `.raised` button
+styles and `HudPill`. `Light` reads gravity from Core Motion so shadows and rims follow the phone's tilt
+(at rest with Reduce Motion on).
+Type is Manrope, the same file as Android (`android_version/app/src/main/res/font/`, added to the
+bundle by `project.yml` and registered with `UIAppFonts`): `FrostFont` sets each weight on the variable
+`wght` axis, `Font.manrope(_:)` stands in for the system text styles, and every face uses tabular figures.
+`HeroMetric` is the 72 pt focal number.
 
 ## How Swift talks to the shared code
 

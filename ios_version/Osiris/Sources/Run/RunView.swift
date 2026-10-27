@@ -75,7 +75,7 @@ struct RunView: View {
         VStack(spacing: 8) {
             Text(problem).multilineTextAlignment(.center)
             Text("Runs need your location to be verified.").foregroundStyle(OsirisColor.faint).multilineTextAlignment(.center)
-            Button("OPEN SETTINGS", action: openAppSettings).buttonStyle(.borderedProminent).padding(.top, 8)
+            Button("Open settings", action: openAppSettings).buttonStyle(.key).padding(.top, 8)
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,10 +83,10 @@ struct RunView: View {
 
     private func metrics(_ s: RunState, _ run: ActiveRun) -> some View {
         HStack {
-            metric("TIME", s.elapsed)
-            metric("DISTANCE", s.distance)
+            metric("Time", s.elapsed)
+            metric("Distance", s.distance)
             metric("PACE /km", s.pace.map { $0.replacingOccurrences(of: " /km", with: "") } ?? "--")
-            metric(s.offline ? "OFFLINE" : "SYNCED", "\(run.uploaded)/\(run.nextSequence)", color: s.offline ? OsirisColor.warning : nil)
+            metric(s.offline ? "Offline" : "Synced", "\(run.uploaded)/\(run.nextSequence)", color: s.offline ? OsirisColor.warning : nil)
         }
         .padding(12)
         .background(OsirisColor.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 12))
@@ -95,8 +95,8 @@ struct RunView: View {
 
     private func metric(_ label: String, _ value: String, color: Color? = nil) -> some View {
         VStack {
-            Text(value).font(.headline.monospacedDigit()).foregroundStyle(color ?? .white)
-            Text(label).font(.caption2).foregroundStyle(color ?? OsirisColor.faint)
+            Text(value).font(.manrope(.headline).monospacedDigit()).foregroundStyle(color ?? .white)
+            Text(label).font(.manrope(.caption2)).foregroundStyle(color ?? OsirisColor.faint)
         }
         .frame(maxWidth: .infinity)
     }
@@ -143,21 +143,21 @@ private struct RunDialogs: ViewModifier {
     func body(content: Content) -> some View {
         content
             .alert("Unfinished run found", isPresented: showing(RunDialogStaleRun.self)) {
-                Button("SUBMIT IT") { vm.finish() }
-                Button("DISCARD", role: .destructive) { vm.discard() }
+                Button("Submit it") { vm.finish() }
+                Button("Discard", role: .destructive) { vm.discard() }
             } message: {
                 Text("A run you started a while ago was never finished. Submit what was recorded, or discard it and start fresh?")
             }
             .alert("It's dark out", isPresented: showing(RunDialogLowLight.self)) {
-                Button("START ANYWAY") { vm.start(confirmedLowLight: true) }
-                Button("NOT NOW", role: .cancel) { vm.dismissDialog() }
+                Button("Start anyway") { vm.start(confirmedLowLight: true) }
+                Button("Not now", role: .cancel) { vm.dismissDialog() }
             } message: {
                 Text("Run on lit routes you know, wear something bright or reflective, "
                      + "and tell someone your route and when you expect to be back.")
             }
             .alert("Discard this run?", isPresented: showing(RunDialogConfirmDiscard.self)) {
-                Button("DISCARD", role: .destructive) { vm.discard() }
-                Button("KEEP RUNNING", role: .cancel) { vm.dismissDialog() }
+                Button("Discard", role: .destructive) { vm.discard() }
+                Button("Keep running", role: .cancel) { vm.dismissDialog() }
             } message: {
                 Text("The recorded route is deleted from this phone and the run will not count.")
             }
@@ -172,8 +172,8 @@ private struct RunDialogs: ViewModifier {
                 message: "Register this route as a course others can challenge? The first and last 150 m are trimmed off for your privacy.",
                 label: "Course name",
                 text: $courseName,
-                confirm: "REGISTER",
-                dismiss: "NOT NOW",
+                confirm: "Register",
+                dismiss: "Not now",
                 onConfirm: { name in
                     if let offer = dialog as? RunDialogOfferCourse { vm.registerCourse(runId: offer.runId, name: name) }
                     courseName = ""
@@ -188,7 +188,7 @@ private struct RunDialogs: ViewModifier {
 
     private func celebrate(_ d: RunDialogCelebrate) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(d.title, systemImage: "trophy.fill").font(.title2.bold()).foregroundStyle(OsirisColor.gold)
+            Label(d.title, systemImage: "trophy.fill").font(.manrope(.title2).bold()).foregroundStyle(OsirisColor.gold)
             Text(d.summary)
             Text(d.xp).foregroundStyle(OsirisColor.secondary)
             if let week = d.week { Text(week).padding(.top, 4) }
@@ -198,9 +198,9 @@ private struct RunDialogs: ViewModifier {
                     Task { @MainActor in
                         if let text = try? await vm.shareRun(runId: d.runId) { shareText = SharedText(text: text) }
                     }
-                } label: { Label("SHARE", systemImage: "square.and.arrow.up") }
+                } label: { Label("Share", systemImage: "square.and.arrow.up") }
                 Spacer()
-                Button("NICE") { vm.dismissDialog() }.buttonStyle(.borderedProminent)
+                Button("Nice") { vm.dismissDialog() }.buttonStyle(.key)
             }
             .padding(.top, 12)
         }

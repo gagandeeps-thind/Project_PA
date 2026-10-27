@@ -24,10 +24,10 @@ struct LoginView: View {
             if let error = s.error {
                 Text(error).foregroundStyle(OsirisColor.error)
             }
-            Button(s.busy ? "SIGNING IN…" : "SIGN IN") { model.vm.submit() }
+            Button(s.busy ? "SIGNING IN…" : "Sign in") { model.vm.submit() }
                 .disabled(!s.canSubmit)
             NavigationLink("New here? Create an account") { OnboardingView(graph: graph) }
         }
-        .navigationTitle("OSIRIS")
+        .navigationTitle("Osiris")
     }
 }

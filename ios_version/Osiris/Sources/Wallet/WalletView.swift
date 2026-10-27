@@ -23,7 +23,7 @@ struct WalletView: View {
                 Section {
                     VStack(alignment: .leading) {
                         SectionLabel(text: "Balance")
-                        ForEach(overview.balances, id: \.currency) { Text($0.format()).font(.largeTitle.bold()) }
+                        ForEach(overview.balances, id: \.currency) { Text($0.format()).font(.manrope(.largeTitle).bold()) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frostCard()
@@ -41,13 +41,13 @@ struct WalletView: View {
                     }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
-                            Button("ADD CARD") { model.vm.addCard() }
-                            Button("LINK BANK") { model.vm.linkBank() }
+                            Button("Add card") { model.vm.addCard() }
+                            Button("Link bank") { model.vm.linkBank() }
                             ForEach(Chain.entries, id: \.title) { chain in
-                                Button(chain.title.uppercased()) { address = ""; addingChain = chain }
+                                Button(chain.title) { address = ""; addingChain = chain }
                             }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.raised)
                         .disabled(s.busy)
                     }
                 }
@@ -66,7 +66,7 @@ struct WalletView: View {
                             VStack(alignment: .leading) {
                                 Text(t.description_)
                                 Text("\(t.kind.title)  •  \(IosSupport.shared.localMinute(at: t.at))\(t.status == .pending ? "  •  pending" : "")")
-                                    .font(.footnote).foregroundStyle(OsirisColor.muted)
+                                    .font(.manrope(.footnote)).foregroundStyle(OsirisColor.muted)
                             }
                             Spacer()
                             Text(t.amount.format()).foregroundStyle(t.amount.minor < 0 ? OsirisColor.muted : OsirisColor.success)
@@ -78,7 +78,7 @@ struct WalletView: View {
             .scrollContentBackground(.hidden)
             .refreshable { model.vm.refresh() }
         }
-        .navigationTitle("WALLET")
+        .navigationTitle("Wallet")
         .navigationBarTitleDisplayMode(.inline)
         .messages(model)
         .textInputAlert(
@@ -87,8 +87,8 @@ struct WalletView: View {
             message: "Paste the address from your wallet app. Payouts sent to a wrong address cannot be recovered.",
             label: "Address",
             text: $address,
-            confirm: "SAVE",
-            dismiss: "CANCEL",
+            confirm: "Save",
+            dismiss: "Cancel",
             onConfirm: { value in
                 if let chain = addingChain { model.vm.addCryptoWallet(chain: chain, address: value) }
                 addingChain = nil
@@ -98,6 +98,6 @@ struct WalletView: View {
     }
 
     private func filter(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(title, action: action).buttonStyle(.bordered).tint(selected ? OsirisColor.primary : OsirisColor.muted)
+        Button(title, action: action).buttonStyle(.raised).tint(selected ? OsirisColor.primary : OsirisColor.muted)
     }
 }

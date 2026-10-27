@@ -30,7 +30,23 @@ class DesignTokensTest {
                 assertTrue(ratio >= 4.5, "text ${text.toString(16)} on ${surface.toString(16)} is only $ratio:1")
             }
         }
-        assertTrue(contrast(p.onAccent, p.accent) >= 7.0, "dark text on the lime accent must stay AAA")
+        // No ink reaches AAA on safety orange (black tops out near 5.7:1), so key labels hold AA.
+        assertTrue(contrast(p.onAccent, p.accent) >= 4.5, "ink on the ember accent must stay AA")
+        assertTrue(contrast(p.accent, p.background) >= 4.5, "ember used as text on the slate must stay AA")
+    }
+
+    @Test
+    fun shadowsFallDownTheScreenAndSwingWithTheTilt() {
+        val upright = FrostMatte.Depth.fall(0f, 1f)
+        val flat = FrostMatte.Depth.fall(0f, 0f)
+        assertTrue(upright.y > flat.y, "an upright phone throws longer shadows than one lying flat")
+        assertTrue(flat.y > 0f, "depth never vanishes, even flat on a table")
+        val left = FrostMatte.Depth.fall(-1f, 0.7f)
+        val right = FrostMatte.Depth.fall(1f, 0.7f)
+        assertTrue(left.x < FrostMatte.Depth.REST.x && right.x > FrostMatte.Depth.REST.x)
+        val extreme = FrostMatte.Depth.fall(5f, 5f)
+        assertEquals(1f, extreme.x)
+        assertEquals(1f, extreme.y)
     }
 
     @Test

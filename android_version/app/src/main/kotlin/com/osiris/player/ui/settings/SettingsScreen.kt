@@ -71,7 +71,7 @@ fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
     var open by remember { mutableStateOf<Open?>(null) }
     ShareEffect(s.share, vm::shared)
 
-    OsirisScaffold("SETTINGS", vm, onBack = onBack) { padding ->
+    OsirisScaffold("Settings", vm, onBack = onBack) { padding ->
         LoadableContent(s.profile, onRetry = vm::refresh, modifier = Modifier.padding(padding)) { p ->
             Settings(p, s, vm, Modifier.padding(padding)) { open = it }
         }
@@ -81,8 +81,14 @@ fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
     val close = { open = null }
     when (open) {
         null -> Unit
-        Open.NAME -> TextInputDialog("Your name", null, "Name", "SAVE", { vm.setDisplayName(it); close() }, "CANCEL", close, initial = profile?.displayName.orEmpty(), maxLength = 30)
-        Open.CITY -> TextInputDialog("Home city", null, "City, e.g. Bedford NS", "SAVE", { vm.setCity(it); close() }, "CANCEL", close, initial = profile?.city.orEmpty())
+        Open.NAME -> TextInputDialog(
+            "Your name", null, "Name", "Save", { vm.setDisplayName(it); close() }, "Cancel", close,
+            initial = profile?.displayName.orEmpty(), maxLength = 30,
+        )
+        Open.CITY -> TextInputDialog(
+            "Home city", null, "City, e.g. Bedford NS", "Save", { vm.setCity(it); close() }, "Cancel", close,
+            initial = profile?.city.orEmpty(),
+        )
         Open.GOAL -> GoalDialog(Goal.fromWire(profile?.goal ?: Goal.FITNESS.wire), onPick = { vm.setGoal(it); close() }, onDismiss = close)
         Open.EXERCISE_ON -> ExerciseConsentSheet { allow -> if (allow) vm.setExerciseConsent(true); close() }
         Open.EXERCISE_OFF -> WithdrawExerciseConsentDialog(
@@ -95,15 +101,15 @@ fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
         Open.ERASE -> ConfirmDialog(
             title = "Erase your account?",
             body = "This deletes your routes, runs, badges, and profile. It cannot be undone. Other players keep their own results.",
-            confirm = "ERASE",
+            confirm = "Erase",
             onConfirm = { open = Open.ERASE_PASSWORD },
-            dismiss = "KEEP MY ACCOUNT",
+            dismiss = "Keep my account",
             onDismiss = close,
             destructive = true,
         )
         Open.ERASE_PASSWORD -> TextInputDialog(
-            "Confirm with your password", null, "Password", "ERASE",
-            { if (it.isNotEmpty()) vm.erase(it); close() }, "CANCEL", close, maxLength = 128, secret = true,
+            "Confirm with your password", null, "Password", "Erase",
+            { if (it.isNotEmpty()) vm.erase(it); close() }, "Cancel", close, maxLength = 128, secret = true,
         )
     }
 }
@@ -165,10 +171,9 @@ private fun clear() = ListItemDefaults.colors(containerColor = Color.Transparent
 @Composable
 private fun Header(text: String) {
     Text(
-        text.uppercase(),
+        text,
+        style = MaterialTheme.typography.titleSmall,
         color = OsirisColors.Secondary,
-        fontSize = 12.sp,
-        letterSpacing = 1.2.sp,
         modifier = Modifier.padding(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 4.dp),
     )
 }
@@ -213,7 +218,7 @@ private fun GoalDialog(current: Goal, onPick: (Goal) -> Unit, onDismiss: () -> U
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("CANCEL") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
@@ -229,7 +234,7 @@ private fun BlocksSheet(s: SettingsState, vm: SettingsViewModel, onDismiss: () -
                 else -> for (b in blocks) {
                     ListItem(
                         headlineContent = { Text(b.name) },
-                        trailingContent = { TextButton(onClick = { vm.unblock(b.id) }) { Text("UNBLOCK") } },
+                        trailingContent = { TextButton(onClick = { vm.unblock(b.id) }) { Text("Unblock") } },
                         colors = clear(),
                     )
                 }
@@ -242,7 +247,7 @@ private fun BlocksSheet(s: SettingsState, vm: SettingsViewModel, onDismiss: () -
 private fun RulesSheet(s: SettingsState, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = OsirisColors.Surface) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp).navigationBarsPadding()) {
-            Text("RULES", style = MaterialTheme.typography.titleLarge)
+            Text("Rules", style = MaterialTheme.typography.titleLarge)
             val rules = s.rules
             if (rules == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(12.dp))
             for (section in rules.orEmpty()) {
