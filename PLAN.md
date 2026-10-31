@@ -357,3 +357,9 @@ Branch `feat/production-hardening`.
 - [ ] [human] app links: serve `/.well-known/assetlinks.json` (release signing-key SHA-256) and
   `/.well-known/apple-app-site-association` (Apple team id) from the API so `https://api.osiris.fit/i/...` opens the app
 - [ ] [human] render: retire the `osiris-data` disk after downloading the old SQLite file (production.md step 10)
+- [x] deps: pip-audit (gate) flags CVEs in `Osiris_backend/requirements.lock.txt`; bump PyJWT 2.12.1→2.15.0,
+  starlette 1.0.0→1.3.1 (check fastapi 0.135.2 allows it), urllib3 2.7.0→2.8.0, anyio→4.14.2, certifi→2026.10.18,
+  dnspython→2.9.0, idna→3.15; reinstall the venv, then re-run the gate (venv pip 26.0.1→26.2.0 too)
+- [ ] [human] migration: `alembic check` (gate) fails. Fresh DB: `crystal_purchases` indexes (`id`, `status`,
+  unique `stripe_payment_intent_id`, `user_id`) declared in `models.py` but missing from migrations. Local
+  `fitness_mvp.db` also has `merchants.payment_status`/`payment_provider_id` as TEXT (migrations say String)
