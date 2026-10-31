@@ -38,7 +38,14 @@ def is_dev_env() -> bool:
 
 
 def database_url(default: str) -> str:
-    return secret("OSIRIS_DATABASE_URL") or default
+    """`OSIRIS_DATABASE_URL`, else `default`. A bare `postgres://` or `postgresql://` URL, the form
+    Supabase and most hosts hand out, is pinned to psycopg 3: SQLAlchemy would otherwise load
+    psycopg2, which the image does not ship. An explicit `postgresql+<driver>://` is kept."""
+    url = secret("OSIRIS_DATABASE_URL") or default
+    for scheme in ("postgres://", "postgresql://"):
+        if url.startswith(scheme):
+            return "postgresql+psycopg://" + url[len(scheme):]
+    return url
 
 
 def run_scheduler() -> bool:

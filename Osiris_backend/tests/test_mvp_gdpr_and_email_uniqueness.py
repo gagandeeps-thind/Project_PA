@@ -88,6 +88,16 @@ def test_gdpr_and_email_uniqueness():
     points_before = db.query(models.RoutePoint).filter(models.RoutePoint.run_session_id == run_id).count()
     _check("Run recorded route points before deletion", points_before == 4)
 
+    # 5b. A territory another player has sieged: the siege log points at the domain. On
+    # PostgreSQL, deleting the domain row violated sieges_log_target_domain_id_fkey (2026-10-27).
+    domain = models.Domain(owner_id=user_id, geometry_json='[{"lat": 44.6, "lng": -63.6}]', area_sqkm=0.1)
+    db.add(domain)
+    db.flush()
+    siege = models.SiegeLog(challenger_id=None, target_domain_id=domain.id)
+    db.add(siege)
+    db.commit()
+    domain_id, siege_id = domain.id, siege.id
+
     # 6. Delete account (GDPR Erasure)
     del_resp = client.delete(f"/api/v1/users/{user_id}", headers=headers)
     _check("GDPR account deletion returns 200", del_resp.status_code == 200)
@@ -102,6 +112,9 @@ def test_gdpr_and_email_uniqueness():
     ledger_sum = sum(r.delta for r in db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == user_id))
     _check("Crystal ledger retained and still reconciles", db_user is not None and
            ledger_sum == db_user.mana_crystals and ledger_sum > 0)
+    kept = db.query(models.Domain).filter(models.Domain.id == domain_id).first()
+    _check("Sieged domain row kept, so the siege log still points at a real row (FK holds)", kept is not None)
+    _check("Domain polygon erased", kept is not None and kept.geometry_json is None)
     relogin = client.post("/api/v1/auth/login", json={
         "email": test_email, "password": "password123", "device_timestamp": now})
     _check("Deleted account can no longer log in", relogin.status_code == 401)
@@ -116,6 +129,8 @@ def test_gdpr_and_email_uniqueness():
     db.query(models.RunSession).filter(models.RunSession.user_id == user_id).delete(synchronize_session=False)
     db.query(models.AuditEvent).filter(models.AuditEvent.actor_id == user_id).delete(synchronize_session=False)
     growth_api.delete_growth_data(db, [user_id])
+    db.query(models.SiegeLog).filter(models.SiegeLog.id == siege_id).delete(synchronize_session=False)
+    db.query(models.Domain).filter(models.Domain.id == domain_id).delete(synchronize_session=False)
     db.query(models.CrystalLedger).filter(models.CrystalLedger.user_id == user_id).delete(synchronize_session=False)
     db.query(models.User).filter(models.User.id == user_id).delete(synchronize_session=False)
     db.commit()

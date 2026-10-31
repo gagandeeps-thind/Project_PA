@@ -5,10 +5,9 @@ Wires Alembic up to:
     so dev databases stay consistent without a separate config knob.
   - The full `models.Base.metadata` so `--autogenerate` can diff against it.
 
-If you ever switch to PostgreSQL, override the URL via the standard Alembic
-`-x sqlalchemy.url=...` flag or the `OSIRIS_DATABASE_URL` env var (read below).
+For PostgreSQL set `OSIRIS_DATABASE_URL` (or `OSIRIS_DATABASE_URL_FILE`); it is resolved by
+`settings.database_url`, exactly as the app resolves it.
 """
-import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -27,10 +26,10 @@ import models    # noqa: E402,F401 — needed so Base.metadata sees every table
 
 config = context.config
 
-# Allow OSIRIS_DATABASE_URL to win over alembic.ini so prod (Postgres) doesn't have
-# to edit a checked-in file. Falls back to whatever the app already uses.
-db_url = os.environ.get("OSIRIS_DATABASE_URL", database.SQLALCHEMY_DATABASE_URL)
-config.set_main_option("sqlalchemy.url", db_url)
+# Migrate the database the app connects to (OSIRIS_DATABASE_URL wins over alembic.ini).
+# The config is a ConfigParser: `%` in a URL-encoded password must be doubled.
+db_url = database.SQLALCHEMY_DATABASE_URL
+config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

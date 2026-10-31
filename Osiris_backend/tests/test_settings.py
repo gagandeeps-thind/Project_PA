@@ -73,8 +73,12 @@ def test_database_url_override():
     previous = os.environ.pop("OSIRIS_DATABASE_URL", None)
     try:
         assert settings.database_url("sqlite:///default.db") == "sqlite:///default.db"
-        os.environ["OSIRIS_DATABASE_URL"] = "postgresql://osiris@db/osiris"
-        assert settings.database_url("sqlite:///default.db") == "postgresql://osiris@db/osiris"
+        # Host-issued URLs carry no driver; they must resolve to psycopg 3, the one the image ships.
+        for given in ("postgresql://osiris@db/osiris", "postgres://osiris@db/osiris"):
+            os.environ["OSIRIS_DATABASE_URL"] = given
+            assert settings.database_url("sqlite:///default.db") == "postgresql+psycopg://osiris@db/osiris"
+        os.environ["OSIRIS_DATABASE_URL"] = "postgresql+psycopg://osiris@db/osiris?sslmode=require"
+        assert settings.database_url("sqlite:///x.db") == "postgresql+psycopg://osiris@db/osiris?sslmode=require"
     finally:
         os.environ.pop("OSIRIS_DATABASE_URL", None)
         if previous is not None:
