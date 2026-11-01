@@ -172,7 +172,6 @@ dependencies {
     "implementation"(libs.play.services.location)
     "implementation"(libs.play.billing.ktx)
     "implementation"(libs.osmdroid)
-    "implementation"(libs.haze)
 
     "testImplementation"(libs.junit)
     "testImplementation"(libs.kotlinx.coroutines.test)

@@ -59,7 +59,7 @@ the shape of every loaded screen. `AppGraph` is the composition root both apps c
 session goes straight to Home. `DeepLinkParser` accepts `osiris://…` and the backend's public
 `https://<links.webHost>/i/…` and `/join/…` pages only; a link opened while signed out waits for
 sign-in, and invite/referral links prefill account creation. FrostMatte design tokens live in
-`shared/core` (`FrostMatte`), so Compose (Haze backdrop blur, matte fallback below Android 12) and
+`shared/core` (`FrostMatte`), so Compose (translucent glass over a pitch-black floor, no backdrop blur) and
 SwiftUI (system materials) draw from one set of values. The tabs are Home, Discover, Social, Wallet and Profile; Wallet exists only
 in builds with `features.walletDemo` (dev, staging), backed by `MockWalletRepository`: card and bank
 entry stand in for the payment provider's own sheet, so no card number ever reaches the app.
