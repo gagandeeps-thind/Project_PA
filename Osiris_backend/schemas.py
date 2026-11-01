@@ -364,6 +364,33 @@ class CrystalPurchaseIntentResponse(BaseModel):
     publishable_key: Optional[str] = None
     status: str
 
+
+class GooglePlayVerifyRequest(BaseModel):
+    """A purchase the app got from Play Billing. The server derives the product's kind and the
+    crystal grant from `product_id`; the pattern keeps both values safe inside the Google API URL."""
+    product_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9_.]+$")
+    purchase_token: str = Field(min_length=1, max_length=4096, pattern=r"^[A-Za-z0-9._\-]+$")
+
+
+class GooglePlayVerifyResponse(BaseModel):
+    product_id: str
+    kind: str                         # consumable | non_consumable | subscription
+    state: str                        # credited | owned | pending | canceled | active | in_grace_period | ...
+    crystals_credited: int = 0        # crystals granted by THIS call (0 on a repeat)
+    balance: Optional[int] = None     # crystal balance after the call
+    expires_at: Optional[datetime] = None
+    consume: bool = False             # True: the app should now call consumeAsync so the pack can be bought again
+    entitled: bool = False            # the purchase currently grants its product
+
+
+class GooglePlayEntitlementsResponse(BaseModel):
+    osiris_pass: bool
+    osiris_pass_product_id: Optional[str] = None
+    osiris_pass_state: Optional[str] = None
+    osiris_pass_expires_at: Optional[datetime] = None
+    founder_pack: bool
+
+
 class PaymentWebhookRequest(BaseModel):
     """Payload from the payment provider when a payment terminal-state is reached.
 

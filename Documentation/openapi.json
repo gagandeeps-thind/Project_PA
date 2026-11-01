@@ -2927,6 +2927,144 @@
         "title": "GlobalBoard",
         "type": "object"
       },
+      "GooglePlayEntitlementsResponse": {
+        "properties": {
+          "founder_pack": {
+            "title": "Founder Pack",
+            "type": "boolean"
+          },
+          "osiris_pass": {
+            "title": "Osiris Pass",
+            "type": "boolean"
+          },
+          "osiris_pass_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Osiris Pass Expires At"
+          },
+          "osiris_pass_product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Osiris Pass Product Id"
+          },
+          "osiris_pass_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Osiris Pass State"
+          }
+        },
+        "required": [
+          "osiris_pass",
+          "founder_pack"
+        ],
+        "title": "GooglePlayEntitlementsResponse",
+        "type": "object"
+      },
+      "GooglePlayVerifyRequest": {
+        "description": "A purchase the app got from Play Billing. The server derives the product's kind and the\ncrystal grant from `product_id`; the pattern keeps both values safe inside the Google API URL.",
+        "properties": {
+          "product_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z0-9_.]+$",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "purchase_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._\\-]+$",
+            "title": "Purchase Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "purchase_token"
+        ],
+        "title": "GooglePlayVerifyRequest",
+        "type": "object"
+      },
+      "GooglePlayVerifyResponse": {
+        "properties": {
+          "balance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance"
+          },
+          "consume": {
+            "default": false,
+            "title": "Consume",
+            "type": "boolean"
+          },
+          "crystals_credited": {
+            "default": 0,
+            "title": "Crystals Credited",
+            "type": "integer"
+          },
+          "entitled": {
+            "default": false,
+            "title": "Entitled",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "kind",
+          "state"
+        ],
+        "title": "GooglePlayVerifyResponse",
+        "type": "object"
+      },
       "GpsSample": {
         "properties": {
           "accuracy_m": {
@@ -9906,6 +10044,74 @@
           }
         ],
         "summary": "My Today"
+      }
+    },
+    "/api/v2/payments/google-play/entitlements": {
+      "get": {
+        "description": "What the player's verified Google Play purchases unlock now.",
+        "operationId": "google_play_entitlements_api_v2_payments_google_play_entitlements_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GooglePlayEntitlementsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Google Play Entitlements"
+      }
+    },
+    "/api/v2/payments/google-play/verify": {
+      "post": {
+        "description": "Verify a Play Billing purchase with Google and grant it. Crystal packs are credited through\nthe ledger once per purchase token; repeating the call is safe and grants nothing more. The app\ncalls consumeAsync only after this answers `consume: true`.",
+        "operationId": "verify_google_play_purchase_api_v2_payments_google_play_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GooglePlayVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GooglePlayVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Verify Google Play Purchase"
       }
     },
     "/api/v2/public/players/{code}": {

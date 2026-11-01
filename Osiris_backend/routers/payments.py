@@ -1,5 +1,6 @@
 """Payments: merchant payment intents, provider webhooks, and player crystal top-ups.
 Money path: every crystal movement goes through services.ledger.apply_crystal_delta."""
+import logging
 import os
 from datetime import datetime
 from typing import List, Optional
@@ -17,13 +18,17 @@ from schemas import (
     CrystalPackInfo,
     CrystalPurchaseIntentRequest,
     CrystalPurchaseIntentResponse,
+    GooglePlayEntitlementsResponse,
+    GooglePlayVerifyRequest,
+    GooglePlayVerifyResponse,
     PaymentIntentResponse,
     PaymentWebhookRequest,
     PaymentWebhookResponse,
 )
-from services import ledger, stripe_gateway
+from services import google_play, ledger, stripe_gateway
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -489,4 +494,213 @@ def create_crystal_purchase_intent(
         client_secret=intent.client_secret,
         publishable_key=stripe_gateway.STRIPE_PUBLISHABLE_KEY,
         status=purchase.status,
+    )
+
+
+# --- Google Play Billing (Android) ---
+#
+# The app buys through Play Billing and sends the purchase token here; only the server asks Google
+# whether it is real and only the server grants. Product ids are the ones created in Play Console.
+# Crystal grants reuse CRYSTAL_PACKS; Play Console sets the (localized) prices.
+PLAY_CRYSTAL_PRODUCTS = {f"osiris_crystals_{pack_id}": pack_id for pack_id in CRYSTAL_PACKS}
+PLAY_FOUNDER_PACK = "osiris_founder_pack"
+PLAY_PASS_PRODUCTS = frozenset({"osiris_pass_monthly", "osiris_pass_annual"})
+_SUB_STATES = {
+    "SUBSCRIPTION_STATE_PENDING": "pending",
+    "SUBSCRIPTION_STATE_ACTIVE": "active",
+    "SUBSCRIPTION_STATE_PAUSED": "paused",
+    "SUBSCRIPTION_STATE_IN_GRACE_PERIOD": "in_grace_period",
+    "SUBSCRIPTION_STATE_ON_HOLD": "on_hold",
+    "SUBSCRIPTION_STATE_CANCELED": "canceled",  # auto-renew off; the paid period still counts
+    "SUBSCRIPTION_STATE_EXPIRED": "expired",
+    "SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED": "canceled",
+}
+_PASS_ENTITLED = frozenset({"active", "in_grace_period", "canceled"})
+
+
+def _play_kind(product_id: str) -> str:
+    if product_id in PLAY_CRYSTAL_PRODUCTS:
+        return "consumable"
+    if product_id == PLAY_FOUNDER_PACK:
+        return "non_consumable"
+    if product_id in PLAY_PASS_PRODUCTS:
+        return "subscription"
+    raise HTTPException(status_code=404, detail=f"Unknown Google Play product {product_id!r}.")
+
+
+def _pass_entitled(row: models.GooglePlayPurchase, now: datetime) -> bool:
+    return row.state in _PASS_ENTITLED and row.expires_at is not None and row.expires_at > now
+
+
+def _apply_subscription(row: models.GooglePlayPurchase, sub: dict) -> None:
+    """Copy Google's subscriptionsv2 state onto `row`; a token that is not for this product is invalid."""
+    items = [i for i in sub.get("lineItems") or [] if i.get("productId") == row.product_id]
+    if not items:
+        raise google_play.InvalidPurchaseError("This subscription token is for a different product.")
+    expiries = [t for t in (google_play.parse_time(i.get("expiryTime")) for i in items) if t]
+    row.state = _SUB_STATES.get(sub.get("subscriptionState"), "pending")
+    row.expires_at = max(expiries, default=None)
+    row.order_id = sub.get("latestOrderId") or row.order_id
+
+
+def _commit_play_row(
+    db: Session, row: models.GooglePlayPurchase, user_id: int,
+) -> tuple[models.GooglePlayPurchase, bool]:
+    """Commit `row`. Returns (row, False) when a concurrent call stored this token first: the
+    unique index rolled this call back, crystals included, so nothing is granted twice."""
+    token = row.purchase_token
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        stored = db.query(models.GooglePlayPurchase).filter(
+            models.GooglePlayPurchase.purchase_token == token,
+        ).first()
+        if stored is None or stored.user_id != user_id:
+            raise HTTPException(status_code=409, detail="This purchase is linked to another account.")
+        return stored, False
+    db.refresh(row)
+    return row, True
+
+
+def _acknowledge(kind: str, product_id: str, token: str, ack_needed: bool) -> None:
+    """Acknowledge after the grant is committed, or Google refunds the purchase after 3 days.
+    A failure is only logged: the app's consumeAsync also acknowledges, and a re-verify retries."""
+    if not ack_needed:
+        return
+    try:
+        if kind == "subscription":
+            google_play.acknowledge_subscription(product_id, token)
+        else:
+            google_play.acknowledge_product(product_id, token)
+    except google_play.GooglePlayError as exc:
+        logger.warning("google play acknowledge failed for %s: %s", product_id, exc)
+
+
+def _play_response(
+    db: Session, row: models.GooglePlayPurchase, user_id: int, crystals: int,
+) -> GooglePlayVerifyResponse:
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if row.kind == "subscription":
+        entitled = _pass_entitled(row, _now_naive_utc())
+    else:
+        entitled = row.state in ("credited", "owned")
+    return GooglePlayVerifyResponse(
+        product_id=row.product_id, kind=row.kind, state=row.state, crystals_credited=crystals,
+        balance=user.mana_crystals if user else None, expires_at=row.expires_at,
+        consume=row.kind == "consumable" and row.state == "credited", entitled=entitled,
+    )
+
+
+def _verify_product(
+    db: Session, req: GooglePlayVerifyRequest, kind: str, user_id: int, row,
+) -> GooglePlayVerifyResponse:
+    purchase = google_play.get_product_purchase(req.product_id, req.purchase_token)
+    state = {0: "purchased", 1: "canceled", 2: "pending"}.get(purchase.get("purchaseState"), "pending")
+    if state != "purchased":
+        # Nothing is granted; Play Billing re-delivers a pending purchase once it completes.
+        if row:  # a refunded founder pack stops unlocking
+            row.state = state
+            db.commit()
+        return GooglePlayVerifyResponse(product_id=req.product_id, kind=kind, state=state)
+    row = row or models.GooglePlayPurchase(
+        user_id=user_id, purchase_token=req.purchase_token, product_id=req.product_id, kind=kind, state="owned",
+    )
+    row.order_id = purchase.get("orderId")
+    crystals = 0
+    if kind == "consumable":
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        pack_id = PLAY_CRYSTAL_PRODUCTS[req.product_id]
+        crystals = CRYSTAL_PACKS[pack_id]["crystals"]
+        test = " (license test)" if purchase.get("purchaseType") == 0 else ""
+        entry = ledger.apply_crystal_delta(
+            db, user, crystals, "crystal_purchase", note=f"Google Play {row.order_id} ({pack_id}){test}",
+        )
+        db.flush()
+        row.crystal_ledger_id = entry.id
+        row.state = "credited"
+    row, fresh = _commit_play_row(db, row, user_id)
+    _acknowledge(kind, req.product_id, req.purchase_token, purchase.get("acknowledgementState") == 0)
+    return _play_response(db, row, user_id, crystals if fresh else 0)
+
+
+def _verify_subscription(
+    db: Session, req: GooglePlayVerifyRequest, user_id: int, row,
+) -> GooglePlayVerifyResponse:
+    sub = google_play.get_subscription(req.purchase_token)
+    row = row or models.GooglePlayPurchase(
+        user_id=user_id, purchase_token=req.purchase_token, product_id=req.product_id,
+        kind="subscription", state="pending",
+    )
+    _apply_subscription(row, sub)
+    row, _ = _commit_play_row(db, row, user_id)
+    ack_needed = sub.get("acknowledgementState") == "ACKNOWLEDGEMENT_STATE_PENDING" and row.state in _PASS_ENTITLED
+    _acknowledge("subscription", req.product_id, req.purchase_token, ack_needed)
+    return _play_response(db, row, user_id, 0)
+
+
+@router.post("/api/v2/payments/google-play/verify", response_model=GooglePlayVerifyResponse)
+def verify_google_play_purchase(
+    req: GooglePlayVerifyRequest,
+    token_data: dict = Depends(get_active_player),
+    db: Session = Depends(get_db),
+):
+    """Verify a Play Billing purchase with Google and grant it. Crystal packs are credited through
+    the ledger once per purchase token; repeating the call is safe and grants nothing more. The app
+    calls consumeAsync only after this answers `consume: true`."""
+    kind = _play_kind(req.product_id)
+    user_id = token_data["id"]
+    row = db.query(models.GooglePlayPurchase).filter(
+        models.GooglePlayPurchase.purchase_token == req.purchase_token,
+    ).first()
+    if row and (row.user_id != user_id or row.product_id != req.product_id):
+        raise HTTPException(status_code=409, detail="This purchase is linked to another account.")
+    if row and row.state == "credited":
+        return _play_response(db, row, user_id, 0)
+    try:
+        if kind == "subscription":
+            return _verify_subscription(db, req, user_id, row)
+        return _verify_product(db, req, kind, user_id, row)
+    except google_play.GooglePlayNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except google_play.InvalidPurchaseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except google_play.GooglePlayError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.get("/api/v2/payments/google-play/entitlements", response_model=GooglePlayEntitlementsResponse)
+def google_play_entitlements(
+    token_data: dict = Depends(get_active_player),
+    db: Session = Depends(get_db),
+):
+    """What the player's verified Google Play purchases unlock now."""
+    user_id = token_data["id"]
+    now = _now_naive_utc()
+    rows = db.query(models.GooglePlayPurchase).filter(
+        models.GooglePlayPurchase.user_id == user_id,
+        models.GooglePlayPurchase.kind.in_(("subscription", "non_consumable")),
+    ).all()
+    passes = [r for r in rows if r.kind == "subscription"]
+    # shortcut: no Real-time Developer Notifications yet, so a pass past its stored expiry is re-read
+    # from Google here (renewed or lapsed). Add an RTDN Pub/Sub endpoint before refunds must revoke at once.
+    for r in passes:
+        if r.state != "expired" and (r.expires_at is None or r.expires_at <= now):
+            try:
+                _apply_subscription(r, google_play.get_subscription(r.purchase_token))
+            except google_play.InvalidPurchaseError:
+                r.state = "expired"
+            except (google_play.GooglePlayError, google_play.GooglePlayNotConfiguredError) as exc:
+                logger.warning("google play refresh failed for purchase %s: %s", r.id, exc)
+    db.commit()
+    active = max((r for r in passes if _pass_entitled(r, now)), key=lambda r: r.expires_at, default=None)
+    return GooglePlayEntitlementsResponse(
+        osiris_pass=active is not None,
+        osiris_pass_product_id=active.product_id if active else None,
+        osiris_pass_state=active.state if active else None,
+        osiris_pass_expires_at=active.expires_at if active else None,
+        founder_pack=any(r.kind == "non_consumable" and r.state == "owned" for r in rows),
     )

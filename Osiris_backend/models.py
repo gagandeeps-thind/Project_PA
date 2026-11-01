@@ -401,6 +401,28 @@ class CrystalPurchase(Base):
     fulfilled_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class GooglePlayPurchase(Base):
+    """A Google Play purchase the server has verified with the Play Developer API.
+
+    RED LINE — no double-mint: `purchase_token` is UNIQUE, so a crystal pack is credited once per
+    token however often the app (or anyone else) re-sends it, and a token belongs to one account.
+    Subscriptions keep their latest Google state and expiry here; entitlement is read from it."""
+    __tablename__ = "google_play_purchases"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    purchase_token: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    product_id: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)    # consumable | non_consumable | subscription
+    state: Mapped[str] = mapped_column(String, nullable=False)   # see routers/payments.py _SUB_STATES
+    order_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    expires_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)  # subscriptions
+    crystal_ledger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("crystal_ledger.id"), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=_default_now_naive_utc, onupdate=_default_now_naive_utc, nullable=False,
+    )
+
+
 class ProofConsumed(Base):
     """Idempotency / replay-attack guard. One row per `ActivityProof` ever consumed by an
     action endpoint (domain claim, siege resolve, bounty complete). The `proof_key` is a

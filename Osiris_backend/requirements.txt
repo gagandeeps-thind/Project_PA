@@ -11,4 +11,5 @@ apscheduler>=3.10.0
 pydantic[email]>=2.0.0
 PyJWT>=2.8.0
 stripe>=15.0.0
+google-auth>=2.30  # Google Play Developer API (purchase verification)
 python-dotenv>=1.0.0

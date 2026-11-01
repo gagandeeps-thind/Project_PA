@@ -39,6 +39,8 @@ services:
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY
         sync: false
+      - key: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON # Play Developer API key (JSON); verify answers 503 without it
+        sync: false
       - key: OSIRIS_PUBLIC_BASE_URL # e.g. https://osiris-api.onrender.com; share/invite links answer 503 without it
         sync: false
       - key: OSIRIS_CORS_ORIGINS # the admin console's URL, e.g. https://osiris-admin.onrender.com
