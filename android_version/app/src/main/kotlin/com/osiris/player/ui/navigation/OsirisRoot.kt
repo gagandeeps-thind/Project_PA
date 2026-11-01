@@ -1,5 +1,14 @@
 package com.osiris.player.ui.navigation
 
+import android.provider.Settings
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,8 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -126,7 +137,7 @@ fun OsirisRoot(graph: AppGraph, link: String?, onLinkHandled: () -> Unit) {
 private fun SignedOutNav(graph: AppGraph, state: RootState.SignedOut) {
     val nav = rememberNavController()
     val start = if (state.invite != null || state.referral != null) Routes.ONBOARD else Routes.LOGIN
-    NavHost(nav, startDestination = start) {
+    GlassNavHost(nav, startDestination = start) {
         composable(Routes.LOGIN) { LoginScreen(graph, onCreateAccount = { nav.navigate(Routes.ONBOARD) }) }
         composable(Routes.ONBOARD) {
             OnboardingScreen(
@@ -169,7 +180,7 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
 
 @Composable
 private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
-    NavHost(nav, startDestination = Routes.TODAY) {
+    GlassNavHost(nav, startDestination = Routes.TODAY) {
         composable(Routes.TODAY) { TodayScreen(graph, nav) }
         composable(
             Routes.RUN,
@@ -233,6 +244,42 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
         composable(Routes.EXERCISE_CAMERA, arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
             ExerciseCameraScreen(graph, key = entry.arguments!!.getString("key")!!, onDone = nav::popBackStack)
         }
+    }
+}
+
+/** How long a screen takes to surface out of the black, and to sink back into it. */
+private val surface = tween<Float>(durationMillis = 320, easing = FastOutSlowInEasing)
+private val sink = tween<Float>(durationMillis = 180, easing = FastOutSlowInEasing)
+
+/**
+ * A NavHost whose screens surface out of the black: the new one grows from slightly small as the old
+ * one swells and fades past the viewer; going back runs the same motion in reverse. Cuts instead when
+ * the system has animations turned off.
+ */
+@Composable
+private fun GlassNavHost(nav: NavHostController, startDestination: String, builder: NavGraphBuilder.() -> Unit) {
+    val context = LocalContext.current
+    val still = remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
+    if (still) {
+        NavHost(
+            nav,
+            startDestination,
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            builder = builder,
+        )
+    } else {
+        NavHost(
+            nav,
+            startDestination,
+            enterTransition = { fadeIn(surface) + scaleIn(surface, initialScale = 0.96f) },
+            exitTransition = { fadeOut(sink) + scaleOut(surface, targetScale = 1.03f) },
+            popEnterTransition = { fadeIn(surface) + scaleIn(surface, initialScale = 1.03f) },
+            popExitTransition = { fadeOut(sink) + scaleOut(surface, targetScale = 0.96f) },
+            builder = builder,
+        )
     }
 }
 

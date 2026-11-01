@@ -9,7 +9,14 @@ import android.hardware.display.DisplayManager
 import android.provider.Settings
 import android.view.Display
 import android.view.Surface
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -40,8 +47,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -64,12 +73,16 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -77,17 +90,11 @@ import com.osiris.player.ui.theme.FrostTheme
 import com.osiris.player.ui.theme.color
 import com.osiris.shared.core.design.FrostMatte
 import com.osiris.shared.core.design.FrostMatte.Depth
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.random.Random
-
-/** The backdrop that frosted surfaces blur. Null outside a [FrostBackground] (previews, dialogs). */
-val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
 
 private val lightAtRest: State<FrostMatte.Fall> = mutableStateOf(Depth.REST)
 
@@ -154,49 +161,15 @@ private fun rememberLight(): State<FrostMatte.Fall> {
 }
 
 /**
- * The floor of the Z-axis: slate with a pool of light in the top left and grain over it. It is the
- * source that [FrostCard] and [FrostBar] blur, and it owns the [LocalLight] every pane casts by.
+ * The floor of the Z-axis: pitch black with nothing on it, so every pane reads as floating. It owns
+ * the [LocalLight] every pane casts by. There is no backdrop blur: blurring black is black, and
+ * skipping it keeps long lists scrolling at full frame rate.
  */
 @Composable
 fun FrostBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val palette = FrostTheme.palette
-    val haze = rememberHazeState()
-    CompositionLocalProvider(LocalHazeState provides haze, LocalLight provides rememberLight()) {
-        Box(modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .hazeSource(haze)
-                    .background(palette.background.color())
-                    .drawBehind {
-                        drawRect(
-                            Brush.radialGradient(
-                                0f to palette.backgroundAccent.color(),
-                                0.6f to palette.background.color(),
-                                1f to palette.backgroundAccentAlt.color(),
-                                center = Offset(size.width * 0.2f, 0f),
-                                radius = size.maxDimension * 1.1f,
-                            ),
-                        )
-                        drawRect(grain, alpha = FrostMatte.GRAIN_ALPHA)
-                    },
-            )
-            content()
-        }
+    CompositionLocalProvider(LocalLight provides rememberLight()) {
+        Box(modifier.fillMaxSize().background(FrostTheme.palette.background.color()), content = content)
     }
-}
-
-/** HazeStyle for a glass pane. Below Android 12 Haze cannot blur and draws the fallback tint. */
-@Composable
-fun frostStyle(): HazeStyle {
-    val palette = FrostTheme.palette
-    return HazeStyle(
-        backgroundColor = palette.background.color(),
-        tint = HazeTint(palette.glassFill.color()),
-        blurRadius = FrostMatte.BLUR_RADIUS.dp,
-        noiseFactor = FrostMatte.GRAIN_ALPHA,
-        fallbackTint = HazeTint(palette.glassFallback.color()),
-    )
 }
 
 /**
@@ -232,17 +205,22 @@ fun Modifier.depth(shape: Shape, height: Float, shadow: Color, light: State<Fros
             },
         )
 
+/** The dull bronze of a bezel all the way round; the polished edge facing the light is drawn over it. */
+private val BEZEL = Color(0x8C5C3A1E)
+
 /**
- * Specular rim: the edge facing the light is bright and the far edge fades out. Drawn inside the
- * clip, so the stroke is twice the visible width.
+ * Brass bezel: a dull bronze ring all round, polished bright on the edge facing the light and fading
+ * on the far edge. Drawn inside the clip, so each stroke is twice its visible width.
  */
 private fun Modifier.rim(shape: Shape, rim: Color, light: State<FrostMatte.Fall>): Modifier = drawWithContent {
     drawContent()
     val fall = light.value
     val half = Offset(fall.x * size.width, fall.y * size.height) / 2f
     val center = Offset(size.width / 2, size.height / 2)
+    val outline = shape.createOutline(size, layoutDirection, this)
+    drawOutline(outline, BEZEL, style = Stroke(FrostMatte.BORDER_WIDTH.dp.toPx() * 3))
     drawOutline(
-        shape.createOutline(size, layoutDirection, this),
+        outline,
         Brush.linearGradient(
             0f to rim,
             0.45f to rim.copy(alpha = rim.alpha * 0.12f),
@@ -254,10 +232,39 @@ private fun Modifier.rim(shape: Shape, rim: Color, light: State<FrostMatte.Fall>
     )
 }
 
-/** A glass pane: depth, backdrop blur (or opaque [fill]), a sheen brighter at the top, grain, rim. */
+/**
+ * Inflation: the glass bulges like a pillow. The edge facing the light glows, the far edge sinks into
+ * shade and a soft specular bloom sits towards the light, all moving as the phone tilts.
+ */
+private fun Modifier.inflate(shape: Shape, light: State<FrostMatte.Fall>): Modifier = this
+    .drawBehind {
+        val fall = light.value
+        drawRect(
+            Brush.radialGradient(
+                0f to Color.White.copy(alpha = 0.10f),
+                1f to Color.Transparent,
+                center = Offset(size.width * (0.5f - fall.x * 0.3f), size.height * (0.5f - fall.y * 0.45f)),
+                radius = min(size.width, size.height).coerceAtLeast(1f) * 0.9f,
+            ),
+        )
+    }
+    .innerShadow(shape) {
+        val fall = light.value
+        color = Color.White
+        alpha = 0.16f
+        radius = 8.dp.toPx()
+        offset = Offset(fall.x, fall.y) * 5.dp.toPx()
+    }
+    .innerShadow(shape) {
+        val fall = light.value
+        color = Color.Black
+        alpha = 0.6f
+        radius = 14.dp.toPx()
+        offset = -Offset(fall.x, fall.y) * 7.dp.toPx()
+    }
+
+/** A glass pane: a navy glow on the floor, translucent navy glass (or opaque [fill]), inflation, grain, bezel. */
 fun Modifier.frost(
-    haze: HazeState?,
-    style: HazeStyle,
     palette: FrostMatte.Palette,
     shape: Shape,
     light: State<FrostMatte.Fall>,
@@ -268,14 +275,9 @@ fun Modifier.frost(
     this
         .depth(shape, height, palette.shadow.color(), light, ring)
         .clip(shape)
-        .then(
-            when {
-                fill != null -> Modifier.background(fill)
-                haze != null -> Modifier.hazeEffect(haze, style)
-                else -> Modifier.background(palette.glassFallback.color())
-            },
-        )
+        .then(if (fill != null) Modifier.background(fill) else Modifier)
         .background(Brush.verticalGradient(0f to palette.glassSheen.color(), 1f to palette.glassFill.color()))
+        .inflate(shape, light)
         .drawWithContent {
             drawContent()
             drawRect(grain, alpha = FrostMatte.GRAIN_ALPHA / 2)
@@ -317,8 +319,6 @@ fun FrostCard(
                 scaleY = scale
             }
             .frost(
-                LocalHazeState.current,
-                frostStyle(),
                 FrostTheme.palette,
                 shape,
                 LocalLight.current,
@@ -361,21 +361,38 @@ fun HeroMetric(value: String, modifier: Modifier = Modifier, unit: String? = nul
 
 class FrostBarItem(val label: String, val icon: ImageVector, val selected: Boolean, val onClick: () -> Unit)
 
+/** How the firebox key travels between tabs: quick, with a little overshoot, like a sprung lever. */
+private val leverSpring = spring<Float>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+
 /**
  * Floating tab bar: a glass slab hovering highest above the floor, ringed so it stays crisp over
- * any content. The current tab is an ember key with its label; the others are icons only, named for
- * screen readers.
+ * any content. The current tab sits on a firebox key that slides from tab to tab; the others are
+ * icons only, named for screen readers.
  */
 @Composable
 fun FrostBar(items: List<FrostBarItem>, modifier: Modifier = Modifier) {
     val palette = FrostTheme.palette
-    Row(
+    val key = RoundedCornerShape(18.dp)
+    // Each tab's x and width in px as laid out, so the key can travel between them.
+    val slots = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
+    val target = slots[items.indexOfFirst { it.selected }]
+    val keyX = remember { Animatable(0f) }
+    val keyWidth = remember { Animatable(0f) }
+    LaunchedEffect(target) {
+        if (target == null) return@LaunchedEffect
+        if (keyWidth.value == 0f) {
+            keyX.snapTo(target.first)
+            keyWidth.snapTo(target.second)
+        } else {
+            launch { keyX.animateTo(target.first, leverSpring) }
+            keyWidth.animateTo(target.second, leverSpring)
+        }
+    }
+    Box(
         modifier
             .fillMaxWidth()
             .padding(horizontal = FrostMatte.Spacing.L.dp, vertical = FrostMatte.Spacing.S.dp)
             .frost(
-                LocalHazeState.current,
-                frostStyle(),
                 palette,
                 RoundedCornerShape(FrostMatte.Radius.LARGE.dp),
                 LocalLight.current,
@@ -384,32 +401,52 @@ fun FrostBar(items: List<FrostBarItem>, modifier: Modifier = Modifier) {
             )
             .height(68.dp)
             .padding(horizontal = FrostMatte.Spacing.S.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.CenterStart,
     ) {
-        items.forEach { item ->
-            val key = RoundedCornerShape(18.dp)
-            Row(
+        if (target != null) {
+            // Read in the layout phase, so the slide moves the key without recomposing the bar.
+            Box(
                 Modifier
-                    .then(if (item.selected) Modifier.accentKey(key) else Modifier.clip(key))
-                    .selectable(selected = item.selected, role = Role.Tab, onClick = item.onClick)
-                    .height(48.dp)
-                    .padding(horizontal = if (item.selected) 16.dp else 14.dp)
-                    .semantics(mergeDescendants = true) { contentDescription = item.label },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val tint = if (item.selected) palette.onAccent.color() else palette.textMuted.color()
-                Icon(item.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-                if (item.selected) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(item.label, color = tint, style = MaterialTheme.typography.labelLarge)
+                    .layout { measurable, _ ->
+                        val width = keyWidth.value.roundToInt()
+                        val placeable = measurable.measure(Constraints.fixed(width, 48.dp.roundToPx()))
+                        layout(width, placeable.height) { placeable.place(keyX.value.roundToInt(), 0) }
+                    }
+                    .accentKey(key),
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            items.forEachIndexed { index, item ->
+                val tint by animateColorAsState(
+                    if (item.selected) palette.onAccent.color() else palette.textMuted.color(),
+                    label = "tab tint",
+                )
+                Row(
+                    Modifier
+                        .onPlaced { slots[index] = it.positionInParent().x to it.size.width.toFloat() }
+                        .clip(key)
+                        .selectable(selected = item.selected, role = Role.Tab, onClick = item.onClick)
+                        .height(48.dp)
+                        .padding(horizontal = 14.dp)
+                        .semantics(mergeDescendants = true) { contentDescription = item.label },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(item.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                    AnimatedVisibility(item.selected, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+                        Text(
+                            item.label,
+                            color = tint,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** An ember face standing on its darker base, like a key: the active tab and the player's own row. */
+/** A deep-orange face standing on its red-hot base, like a key: the active tab and the player's own row. */
 fun Modifier.accentKey(shape: Shape): Modifier = this
     .drawBehind {
         val outline = shape.createOutline(size, layoutDirection, this)
@@ -420,7 +457,7 @@ fun Modifier.accentKey(shape: Shape): Modifier = this
 
 /**
  * A chunky physical key. The face is lit from the top and stands [Depth.KEY] on its base; pressing
- * shrinks it and sinks it onto the base. [primary] keys are ember, the rest raised slate.
+ * shrinks it and sinks it onto the base. [primary] keys are deep orange, the rest raised navy.
  */
 @Composable
 private fun Key(
@@ -440,9 +477,9 @@ private fun Key(
     val face = if (primary) {
         Brush.verticalGradient(0f to Color(FrostMatte.ACCENT_TOP), 1f to palette.accent.color())
     } else {
-        Brush.verticalGradient(0f to Color(0xFF2C3039), 1f to Color(0xFF21242B))
+        Brush.verticalGradient(0f to Color(0xFF2A4384), 1f to Color(0xFF172757))
     }
-    val base = if (primary) Color(FrostMatte.ACCENT_BASE) else Color(0xFF0E1014)
+    val base = if (primary) Color(FrostMatte.ACCENT_BASE) else Color(0xFF0A1330)
     val ink = if (primary) palette.onAccent.color() else palette.textPrimary.color()
     Row(
         modifier
@@ -477,12 +514,12 @@ private fun Key(
     }
 }
 
-/** The screen's main action, as an ember key. */
+/** The screen's main action, as a firebox key. */
 @Composable
 fun KeyButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     Key(onClick, modifier, enabled, primary = true, content)
 
-/** A secondary action, as a raised slate key. */
+/** A secondary action, as a raised navy key. */
 @Composable
 fun RaisedButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     Key(onClick, modifier, enabled, primary = false, content)
@@ -498,7 +535,7 @@ fun HudPill(text: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.titleSmall,
             color = palette.textPrimary.color(),
             modifier = Modifier
-                .frost(LocalHazeState.current, frostStyle(), palette, pill, LocalLight.current, Color(0xF2252932), Depth.FLOAT, ring = true)
+                .frost(palette, pill, LocalLight.current, Color(0xF2142347), Depth.FLOAT, ring = true)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         )
     }

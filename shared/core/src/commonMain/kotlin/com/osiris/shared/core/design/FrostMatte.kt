@@ -1,11 +1,12 @@
 package com.osiris.shared.core.design
 
 /**
- * FrostMatte design tokens, "Dusk" edition: glass panes stacked above a charcoal slate floor, lit by
- * one light that stays fixed in the world. Tilting the phone moves each pane's shadow and the bright
- * edge of its rim ([Depth.fall]), so the panes read as objects in the hand rather than pictures on
- * glass. Colours come from a run at dusk: ember for effort, lichen, dune and clay for state, a cool
- * dusk blue as the one counterpoint. Each screen has a single dominant number ([TextStyle.HERO]).
+ * FrostMatte design tokens, "Boiler glass" edition: inflated panes of navy glass floating over a
+ * pitch-black floor, each set in a brass bezel that catches one light fixed in the world. Tilting the
+ * phone moves each pane's glow and the bright edge of its rim ([Depth.fall]). On black a dark shadow
+ * vanishes, so a pane casts navy light instead, like tinted glass throwing colour onto the floor.
+ * Colours come from a steam engine: deep-orange firebox for effort, a red-hot base under every key,
+ * navy glass and gaslight blue as the cool counterpoint. One dominant number per screen ([TextStyle.HERO]).
  *
  * The single source for both apps. Colors are ARGB (`0xAARRGGBB`) so Compose reads them with
  * `Color(argb)` and SwiftUI with `Color(argb:)`; lengths are density-independent points.
@@ -42,29 +43,29 @@ object FrostMatte {
     )
 
     val dark = Palette(
-        background = 0xFF111318, // slate floor, never pure black
-        backgroundAccent = 0xFF1E222A, // the pool of light the floor catches
-        backgroundAccentAlt = 0xFF0D0F13, // the far, unlit corner
-        glassFill = 0x08FFFFFF, // rgba(255,255,255,0.03)
-        glassSheen = 0x12FFFFFF, // rgba(255,255,255,0.07)
-        glassFallback = 0xFF1B1E25,
-        glassBorder = 0x59FFFFFF,
-        shadow = 0xFF050608,
-        textPrimary = 0xFFECEDEF,
-        textSecondary = 0xFFA4AAB4,
-        textMuted = 0xFF868D98,
-        accent = 0xFFFC4C02, // ember, the safety orange of effort
-        onAccent = 0xFF1A0D06, // ink on ember: dark, because white on this orange fails AA
-        accentAlt = 0xFF8FB3D9, // dusk blue, the cool counterpoint to ember
-        success = 0xFF8DBF8B, // lichen
-        warning = 0xFFE9A23B, // amber
-        danger = 0xFFE0614F, // clay
-        gold = 0xFFE2B65C, // dune, for crystals and podiums
+        background = 0xFF000000, // pitch black: the panes float on nothing
+        backgroundAccent = 0xFF000000,
+        backgroundAccentAlt = 0xFF000000,
+        glassFill = 0x3D1A2B5C, // navy glass at its bottom edge
+        glassSheen = 0x6B2A4384, // and at its top, where it catches more light
+        glassFallback = 0xFF0F1A33,
+        glassBorder = 0xCCE9B872, // polished brass bezel
+        shadow = 0xFF1F3A8A, // navy light thrown onto the floor
+        textPrimary = 0xFFF2E8D9, // parchment
+        textSecondary = 0xFFBDB2A3,
+        textMuted = 0xFF9A9282,
+        accent = 0xFFFC4C02, // deep orange, the firebox
+        onAccent = 0xFF1A0D06, // ink on deep orange: dark, because white on this orange fails AA
+        accentAlt = 0xFF6F8FE0, // gaslight blue, navy lit enough to read on black
+        success = 0xFF6CC3A0, // verdigris
+        warning = 0xFFF2A33A, // amber
+        danger = 0xFFFF4A4A, // boiler red
+        gold = 0xFFD9A54A, // brass, for crystals and podiums
     )
 
-    /** The ember key's lit top face and its darker base: an accent fill drawn as a material, not a flat glow. */
+    /** The firebox key's lit top face and the red-hot base it stands on. */
     const val ACCENT_TOP = 0xFFFF7536
-    const val ACCENT_BASE = 0xFF8F2A00
+    const val ACCENT_BASE = 0xFFA3170F
 
     val light = Palette(
         background = 0xFFE9EAEE,
@@ -80,7 +81,7 @@ object FrostMatte {
         textMuted = 0x8C15171C,
         accent = 0xFFB83800,
         onAccent = 0xFFFFFFFF,
-        accentAlt = 0xFF2F5F8F,
+        accentAlt = 0xFF1F3A8A,
         success = 0xFF3E7B44,
         warning = 0xFFB26A00,
         danger = 0xFFB3261E,
@@ -109,14 +110,14 @@ object FrostMatte {
         const val FLOAT = 18f
         const val KEY = 4f
 
-        /** The soft ambient shadow's blur, per point of height, and its strength. */
+        /** The soft ambient glow's blur, per point of height, and its strength. */
         const val AMBIENT_BLUR_PER_HEIGHT = 2.6f
-        const val AMBIENT_ALPHA = 0.5f
+        const val AMBIENT_ALPHA = 0.45f
 
         /** The tight contact shadow right under the edge: a short offset and a small blur. */
         const val CONTACT_SHARE = 0.2f
         const val CONTACT_BLUR = 3f
-        const val CONTACT_ALPHA = 0.7f
+        const val CONTACT_ALPHA = 0.35f
 
         /** A pressed key shrinks to this and sinks onto its base. */
         const val PRESS_SCALE = 0.95f
@@ -155,7 +156,7 @@ object FrostMatte {
         const val XXL = 32f
     }
 
-    /** Type scale in points: size to line height. All styles use Manrope with tabular figures. */
+    /** Type scale in points: size to line height. Display styles are a soft serif, the rest Manrope; all tabular. */
     enum class TextStyle(val size: Float, val lineHeight: Float, val weight: Int) {
         /** The one focal number per screen. Set with tight tracking ([HERO_TRACKING_EM]). */
         HERO(72f, 68f, 800),

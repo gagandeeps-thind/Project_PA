@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The Slate palette keeps every text pairing readable: WCAG 2.1 AA, 4.5:1 for body text. */
+/** The Boiler glass palette keeps every text pairing readable: WCAG 2.1 AA, 4.5:1 for body text. */
 class DesignTokensTest {
     private fun luminance(argb: Long): Double {
         fun channel(shift: Int): Double {
@@ -32,7 +32,14 @@ class DesignTokensTest {
         }
         // No ink reaches AAA on safety orange (black tops out near 5.7:1), so key labels hold AA.
         assertTrue(contrast(p.onAccent, p.accent) >= 4.5, "ink on the ember accent must stay AA")
-        assertTrue(contrast(p.accent, p.background) >= 4.5, "ember used as text on the slate must stay AA")
+        assertTrue(contrast(p.accent, p.background) >= 4.5, "deep orange used as text on black must stay AA")
+        assertTrue(contrast(p.danger, p.glassFallback) >= 4.5, "boiler red used as text on glass must stay AA")
+    }
+
+    @Test
+    fun theFloorIsPitchBlack() {
+        val p = FrostMatte.dark
+        assertEquals(listOf(0xFF000000, 0xFF000000, 0xFF000000), listOf(p.background, p.backgroundAccent, p.backgroundAccentAlt))
     }
 
     @Test

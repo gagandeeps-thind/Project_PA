@@ -64,10 +64,10 @@ private fun scheme(mode: FrostMatte.Mode) = FrostMatte.palette(mode).let { p ->
         error = p.danger.color(),
         onError = p.onAccent.color(),
         // Material's defaults for these are purple. Selected chips and indicators are controls, so they
-        // stay a raised neutral slate; the accent is kept for each screen's focal item and main action.
+        // stay a raised navy; the accent is kept for each screen's focal item and main action.
         primaryContainer = p.accent.color(),
         onPrimaryContainer = p.onAccent.color(),
-        secondaryContainer = Color(0xFF2A2E37),
+        secondaryContainer = Color(0xFF1C2A50),
         onSecondaryContainer = p.textPrimary.color(),
         tertiary = p.accentAlt.color(),
         onTertiary = p.onAccent.color(),
@@ -91,12 +91,35 @@ private fun variable(res: Int, vararg weights: Int) = FontFamily(
     weights.map { w -> Font(res, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w))) },
 )
 
-/** Every style: display, body and labels. */
+/** Body, titles and labels. */
 val Manrope = variable(R.font.manrope, 400, 500, 600, 700, 800)
 
+/**
+ * Fraunces (res/font, SIL OFL) at full softness: rounded, inflated serifs with the cut of an engine
+ * maker's plate. [opticalSize] matches the size it is set at, so large type keeps its fine contrast.
+ */
+@OptIn(ExperimentalTextApi::class)
+private fun fraunces(opticalSize: Float) = FontFamily(
+    listOf(600, 700, 800).map { w ->
+        Font(
+            R.font.fraunces,
+            FontWeight(w),
+            variationSettings = FontVariation.Settings(
+                FontVariation.weight(w),
+                FontVariation.Setting("opsz", opticalSize),
+                FontVariation.Setting("SOFT", 100f),
+            ),
+        )
+    },
+)
+
+/** Display type: the hero number and screen headings. */
+private val FrauncesDisplay = fraunces(72f)
+private val FrauncesTitle = fraunces(24f)
+
 /** Tabular figures throughout, so distances, paces and ranks hold their columns as they change. */
-private fun style(s: FrostMatte.TextStyle, letterSpacing: Float = 0f) = TextStyle(
-    fontFamily = Manrope,
+private fun style(s: FrostMatte.TextStyle, letterSpacing: Float = 0f, family: FontFamily = Manrope) = TextStyle(
+    fontFamily = family,
     fontSize = s.size.sp,
     lineHeight = s.lineHeight.sp,
     fontWeight = FontWeight(s.weight),
@@ -105,12 +128,13 @@ private fun style(s: FrostMatte.TextStyle, letterSpacing: Float = 0f) = TextStyl
 )
 
 private val type = Typography(
-    displayLarge = style(FrostMatte.TextStyle.HERO).copy(letterSpacing = FrostMatte.HERO_TRACKING_EM.em),
-    displayMedium = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -1f).copy(fontWeight = FontWeight.ExtraBold),
-    displaySmall = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.8f),
-    headlineLarge = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.8f),
-    headlineMedium = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.6f),
-    headlineSmall = style(FrostMatte.TextStyle.TITLE, letterSpacing = -0.3f),
+    // Fraunces is wider than Manrope, so the hero keeps half the shared tracking to stop numerals touching.
+    displayLarge = style(FrostMatte.TextStyle.HERO, family = FrauncesDisplay).copy(letterSpacing = (FrostMatte.HERO_TRACKING_EM / 2).em),
+    displayMedium = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.6f, FrauncesDisplay).copy(fontWeight = FontWeight.ExtraBold),
+    displaySmall = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.4f, FrauncesDisplay),
+    headlineLarge = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.4f, FrauncesDisplay),
+    headlineMedium = style(FrostMatte.TextStyle.DISPLAY, letterSpacing = -0.3f, FrauncesDisplay),
+    headlineSmall = style(FrostMatte.TextStyle.TITLE, letterSpacing = -0.2f, FrauncesTitle),
     titleLarge = style(FrostMatte.TextStyle.HEADLINE),
     titleMedium = style(FrostMatte.TextStyle.CALLOUT).copy(fontWeight = FontWeight.Bold),
     titleSmall = style(FrostMatte.TextStyle.CALLOUT),
