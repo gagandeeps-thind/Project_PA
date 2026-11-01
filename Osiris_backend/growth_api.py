@@ -716,6 +716,15 @@ def admin_funnel(
                                 rate_from_previous=_rate(len(users), prev) if prev is not None else None))
         prev = len(users)
 
+    # One query for every accepted run of the cohort since its first sign-up (was one query per player per week).
+    runs_by_user: dict[int, list[datetime]] = {}
+    if cohort:
+        for uid, finished_at in db.query(models.RunSession.user_id, models.RunSession.finished_at).filter(
+            models.RunSession.user_id.in_(cohort), models.RunSession.verification_status == "accepted",
+            models.RunSession.finished_at >= min(signup_at.values()),
+        ):
+            runs_by_user.setdefault(uid, []).append(finished_at)
+
     def retention(week: int) -> Optional[float]:
         eligible = {u for u, at in signup_at.items() if at + timedelta(days=7 * week + 7) <= now}
         if not eligible:
@@ -723,10 +732,8 @@ def admin_funnel(
         active = 0
         for uid in eligible:
             start = signup_at[uid] + timedelta(days=7 * week)
-            if db.query(models.RunSession.id).filter(
-                models.RunSession.user_id == uid, models.RunSession.verification_status == "accepted",
-                models.RunSession.finished_at >= start, models.RunSession.finished_at < start + timedelta(days=7),
-            ).first():
+            end = start + timedelta(days=7)
+            if any(start <= t < end for t in runs_by_user.get(uid, ())):
                 active += 1
         return _rate(active, len(eligible))
 
