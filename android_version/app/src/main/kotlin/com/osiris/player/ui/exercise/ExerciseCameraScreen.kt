@@ -75,7 +75,14 @@ import com.osiris.shared.presentation.exercise.ExerciseSessionViewModel
 import com.osiris.shared.presentation.exercise.SetResult
 
 @Composable
-fun ExerciseCameraScreen(graph: AppGraph, key: String, onDone: () -> Unit) {
+fun ExerciseCameraScreen(
+    graph: AppGraph,
+    key: String,
+    sets: Int = 1,
+    reps: Int = 0,
+    holdS: Int = 0,
+    onDone: () -> Unit,
+) {
     // The catalog is cached by the repository (bundled copy offline), so this is immediate.
     val loaded by produceState<Loadable<Pair<ExerciseSpec, ExerciseCatalog>>>(Loadable.Loading, key) {
         value = when (val c = graph.data.exercises.catalog()) {
@@ -85,16 +92,27 @@ fun ExerciseCameraScreen(graph: AppGraph, key: String, onDone: () -> Unit) {
         }
     }
     when (val l = loaded) {
-        is Loadable.Ready -> Session(graph, l.value.first, l.value.second, onDone)
+        is Loadable.Ready -> Session(graph, l.value.first, l.value.second, sets, reps, holdS, onDone)
         else -> OsirisScaffold("Bodyweight", null, onBack = onDone) { padding ->
             LoadableContent(l, onRetry = {}, modifier = Modifier.padding(padding)) {}
         }
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
-private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalog, onDone: () -> Unit) {
-    val vm = rememberShared(key = "exercise-${spec.key}") { graph.exerciseSession(spec, catalog) }
+private fun Session(
+    graph: AppGraph,
+    spec: ExerciseSpec,
+    catalog: ExerciseCatalog,
+    sets: Int,
+    reps: Int,
+    holdS: Int,
+    onDone: () -> Unit,
+) {
+    val vm = rememberShared(key = "exercise-${spec.key}-$sets-$reps-$holdS") {
+        graph.exerciseSession(spec, catalog, totalSets = sets, targetRepsPerSet = reps, targetHoldSecondsPerSet = holdS)
+    }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var frame by remember { mutableStateOf<PoseFrame?>(null) }
@@ -208,7 +226,7 @@ private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalo
             keyboard = KeyboardType.Decimal,
         )
     }
-    s.result?.let { ResultSheet(it, onDone) }
+    s.result?.let { ResultSheet(it, onNextSet = vm::nextSet, onShareToFeed = { vm.shareWorkoutToFeed() }, onDone = onDone) }
 }
 
 /** Debug builds only: the pose timing read-out for the result sheet. */
@@ -223,6 +241,7 @@ private fun Hud(s: ExerciseSessionState) {
         Text(s.hud.count, fontSize = 44.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(Modifier.width(16.dp))
         Column(verticalArrangement = Arrangement.Center) {
+            s.planBanner?.let { Text(it, color = OsirisColors.Secondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             s.hud.notCounted?.let { Text(it, color = OsirisColors.Warning, fontSize = 12.sp) }
             Text(s.hud.hint, color = Color.White, fontSize = 15.sp)
         }
@@ -258,7 +277,12 @@ private fun Skeleton(frame: () -> PoseFrame?, image: PoseImage?, minLikelihood: 
 }
 
 @Composable
-private fun ResultSheet(r: SetResult, onDone: () -> Unit) {
+private fun ResultSheet(
+    r: SetResult,
+    onNextSet: () -> Unit,
+    onShareToFeed: () -> Unit,
+    onDone: () -> Unit,
+) {
     val color = when (r.verdict) {
         Verdict.VERIFIED -> OsirisColors.Success
         Verdict.REVIEW -> OsirisColors.Warning
@@ -271,6 +295,9 @@ private fun ResultSheet(r: SetResult, onDone: () -> Unit) {
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp).navigationBarsPadding()) {
             Text(r.title, color = color, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            if (r.totalSets > 1) {
+                Text("Set ${r.currentSet} of ${r.totalSets}", color = OsirisColors.Secondary, fontSize = 14.sp)
+            }
             Spacer(Modifier.height(8.dp))
             Text(r.amount, fontSize = 18.sp)
             r.notCounted?.let { Text(it) }
@@ -280,6 +307,22 @@ private fun ResultSheet(r: SetResult, onDone: () -> Unit) {
             Text(r.sync, color = OsirisColors.Secondary)
             r.perf?.let { Text("Pose: $it", color = OsirisColors.Faint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
             Spacer(Modifier.height(16.dp))
+            if (r.canStartNextSet) {
+                KeyButton(onClick = onNextSet, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                    Text("Next Set (${r.currentSet + 1}/${r.totalSets})")
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            if (r.canShareToFeed) {
+                RaisedButton(
+                    onClick = onShareToFeed,
+                    enabled = !r.postedToFeed,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) {
+                    Text(if (r.postedToFeed) "Posted to People's Posts ✓" else "Post Workout to People's Posts")
+                }
+                Spacer(Modifier.height(10.dp))
+            }
             RaisedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Done") }
         }
     }

@@ -15,9 +15,10 @@ final class PoseCamera: NSObject, ObservableObject {
     let front: Bool
     let stats = PoseStats()
 
-    private let queue = DispatchQueue(label: "com.osiris.player.pose")
+    private let queue = DispatchQueue(label: "com.osiris.player.pose", qos: .userInteractive)
     private let output = AVCaptureVideoDataOutput()
     private let request = VNDetectHumanBodyPoseRequest()
+    private let sequenceHandler = VNSequenceRequestHandler()
     private var configured = false
     private var onFrame: ((PoseFrame, CGSize) -> Void)?
     private var onFailed: ((AppError) -> Void)?
@@ -121,9 +122,8 @@ extension PoseCamera: AVCaptureVideoDataOutputSampleBufferDelegate {
         // continues the timeline.
         let tMs = Int64((CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds * 1000).rounded())
         let started = DispatchTime.now().uptimeNanoseconds
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up, options: [:])
         do {
-            try handler.perform([request])
+            try sequenceHandler.perform([request], on: pixels, orientation: .up)
         } catch {
             stats.fail()
             return

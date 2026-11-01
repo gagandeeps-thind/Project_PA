@@ -15,10 +15,17 @@ import com.osiris.shared.domain.model.BoardKind
 import com.osiris.shared.domain.model.BoardPeriod
 import com.osiris.shared.domain.model.Community
 import com.osiris.shared.domain.model.ExerciseHistory
+import com.osiris.shared.domain.model.FeedPost
+import com.osiris.shared.domain.model.FollowStatus
 import com.osiris.shared.domain.model.GlobalBoard
 import com.osiris.shared.domain.model.HubChallenge
 import com.osiris.shared.domain.model.HubSection
 import com.osiris.shared.domain.model.Leaderboard
+import com.osiris.shared.domain.model.NotificationItem
+import com.osiris.shared.domain.model.NotificationsData
+import com.osiris.shared.domain.model.PostCommentItem
+import com.osiris.shared.domain.model.PostCreateDraft
+import com.osiris.shared.domain.model.PostShareResult
 import com.osiris.shared.domain.model.Season
 import com.osiris.shared.domain.model.SeasonLeaderboard
 import com.osiris.shared.domain.model.PlayerProfile
@@ -30,6 +37,8 @@ import com.osiris.shared.domain.model.ReportReason
 import com.osiris.shared.domain.model.RunResult
 import com.osiris.shared.domain.model.SetOutcome
 import com.osiris.shared.domain.model.ShareCard
+import com.osiris.shared.domain.model.SuggestedChallenge
+import com.osiris.shared.domain.model.SuggestedOsirian
 import com.osiris.shared.domain.model.TodayData
 import com.osiris.shared.domain.model.UserProfile
 import com.osiris.shared.domain.model.WeeklyGoal
@@ -89,10 +98,12 @@ fun quest(completed: Boolean = false) = Quest(key = "q", kind = "daily", title =
 
 val today = TodayData(today = quest(completed = true), tomorrow = quest().copy(title = "Run 2 km"), week = WeeklyGoal(activeDays = 2))
 
+@Suppress("TooManyFunctions")
 class FakePlayer : PlayerRepository {
     val events = mutableListOf<Pair<String, Map<String, String>>>()
     var todayResult: Outcome<TodayData> = ok(today)
     val todayPositions = mutableListOf<LatLng?>()
+    val createdPosts = mutableListOf<PostCreateDraft>()
     override suspend fun today(position: LatLng?) = todayResult.also { todayPositions += position }
     override suspend fun profile() = ok(PlayerProfile(userId = 7, identity = "athlete"))
     override suspend fun updateProfile(changes: JsonObject) = ok(PlayerProfile(userId = 7))
@@ -100,6 +111,61 @@ class FakePlayer : PlayerRepository {
     override suspend fun progression() = progressionResult
     override suspend fun referrals() = ok(ReferralSummary(code = "ABC", url = "https://osiris.example/r/ABC"))
     override suspend fun shareAchievement(kind: String, entityId: Int) = ok(ShareCard("t", "https://osiris.example/s/t"))
+    override suspend fun notifications() = ok(
+        NotificationsData(
+            unreadCount = 1,
+            items = listOf(NotificationItem(id = 1, kind = "feature_suggestion", title = "Try Push-ups", body = "10 x 3", read = false)),
+        ),
+    )
+    override suspend fun markNotificationRead(id: Int) = ok(NotificationItem(id = id, read = true))
+    override suspend fun markAllNotificationsRead() = ok(Unit)
+    override suspend fun suggestedChallenges() = ok(
+        listOf(
+            SuggestedChallenge(
+                id = 3, title = "Global 5K", description = "Complete 5 km from anywhere.",
+                courseDistanceM = 5000.0, winXp = 100, participants = 12,
+            ),
+        ),
+    )
+    override suspend fun suggestedOsirians() = ok(
+        listOf(
+            SuggestedOsirian(
+                userId = 42, handle = "osirian_42", displayName = "Aria Vance",
+                rank = "Gold", trendingReason = "14d streak",
+            ),
+        ),
+    )
+    override suspend fun trendingOsirians() = ok(
+        listOf(
+            SuggestedOsirian(
+                userId = 42, handle = "osirian_42", displayName = "Aria Vance",
+                rank = "Gold", trendingReason = "14d streak",
+            ),
+        ),
+    )
+    override suspend fun followOsirian(userId: Int) = ok(FollowStatus(userId = userId, following = true, followersCount = 10))
+    override suspend fun unfollowOsirian(userId: Int) = ok(FollowStatus(userId = userId, following = false, followersCount = 9))
+    override suspend fun dismissOsirian(userId: Int) = ok(Unit)
+    override suspend fun feedPosts(limit: Int, offset: Int) = ok(
+        listOf(FeedPost(id = 101, userId = 42, authorName = "Aria Vance", kind = "workout", caption = "Push-ups 10 x 3 done!")),
+    )
+    override suspend fun createPost(draft: PostCreateDraft): Outcome<FeedPost> {
+        createdPosts += draft
+        return ok(FeedPost(id = 102, userId = 7, authorName = "Me", kind = draft.kind, caption = draft.caption))
+    }
+    override suspend fun reactToPost(postId: Int, reaction: String) = ok(
+        FeedPost(
+            id = postId, userId = 42, authorName = "Aria Vance",
+            reactions = mapOf(reaction to 1), totalReactions = 1, myReaction = reaction,
+        ),
+    )
+    override suspend fun postComments(postId: Int) = ok(emptyList<PostCommentItem>())
+    override suspend fun addPostComment(postId: Int, body: String) = ok(
+        PostCommentItem(id = 1, postId = postId, userId = 7, authorName = "Me", body = body),
+    )
+    override suspend fun sharePost(postId: Int) = ok(
+        PostShareResult(postId = postId, shareCount = 1, shareText = "Check this out", shareUrl = "https://osiris.example/p/$postId"),
+    )
     override suspend fun track(event: String, properties: Map<String, String>) {
         events += event to properties
     }

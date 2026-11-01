@@ -1,6 +1,7 @@
 package com.osiris.shared.presentation.exercise
 
 import com.osiris.shared.core.error.AppError
+import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.exercise.EngineUpdate
 import com.osiris.shared.domain.exercise.ExerciseCatalog
 import com.osiris.shared.domain.exercise.ExerciseCopy
@@ -8,13 +9,14 @@ import com.osiris.shared.domain.exercise.ExerciseSpec
 import com.osiris.shared.domain.exercise.FrameRateMeter
 import com.osiris.shared.domain.exercise.PoseFrame
 import com.osiris.shared.domain.exercise.PoseRecorder
+import com.osiris.shared.domain.exercise.RepEngine
 import com.osiris.shared.domain.exercise.SessionSummary
 import com.osiris.shared.domain.exercise.SlowTrackingDetector
-import com.osiris.shared.domain.exercise.RepEngine
 import com.osiris.shared.domain.exercise.Verdict
-import com.osiris.shared.domain.common.Format
+import com.osiris.shared.domain.model.PostCreateDraft
 import com.osiris.shared.domain.model.SetOutcome
 import com.osiris.shared.domain.repository.ExerciseRepository
+import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.presentation.common.SharedViewModel
 import com.osiris.shared.presentation.common.UiMessage
 import kotlin.math.floor
@@ -47,12 +49,21 @@ data class SetResult(
     val sync: String,
     /** Debug builds: pose timing read-out from the platform. */
     val perf: String?,
+    val currentSet: Int = 1,
+    val totalSets: Int = 1,
+    val canStartNextSet: Boolean = false,
+    val canShareToFeed: Boolean = true,
+    val postedToFeed: Boolean = false,
 )
 
 data class ExerciseSessionState(
     val spec: ExerciseSpec,
     val phase: Phase = Phase.READY,
     val hud: ExerciseHud,
+    val currentSet: Int = 1,
+    val totalSets: Int = 1,
+    val targetRepsPerSet: Int = 0,
+    val targetHoldSecondsPerSet: Int = 0,
     /** Set while tracking is too slow for this exercise: the frames per second, for the warning. */
     val slowFps: Int? = null,
     val cameraError: String? = null,
@@ -67,20 +78,34 @@ data class ExerciseSessionState(
 
     val buttonLabel: String
         get() = when (phase) {
-            Phase.READY -> "Start"
-            Phase.COUNTING -> "Finish"
+            Phase.READY -> if (totalSets > 1) "Start Set $currentSet/$totalSets" else "Start"
+            Phase.COUNTING -> if (totalSets > 1) "Finish Set $currentSet/$totalSets" else "Finish"
             Phase.SAVING -> "SAVING…"
             Phase.DONE -> "Done"
         }
+
+    val planBanner: String?
+        get() = when {
+            spec.isHold && targetHoldSecondsPerSet > 0 ->
+                "Set $currentSet/$totalSets  •  Target ${targetHoldSecondsPerSet}s × $totalSets"
+            !spec.isHold && targetRepsPerSet > 0 ->
+                "Set $currentSet/$totalSets  •  Target $targetRepsPerSet × $totalSets"
+            totalSets > 1 ->
+                "Set $currentSet of $totalSets"
+            else -> null
+        }
+
     val labelPrompt: String get() = if (spec.isHold) "Seconds of good plank hold" else "Reps that should count"
     val slowWarning: String?
-        get() = slowFps?.let { "This phone is tracking $it frames a second; ${spec.name.lowercase()} needs ${spec.minPoseFps.roundToInt()}. Some reps may not count. More light or closing other apps can help." }
+        get() = slowFps?.let {
+            "This phone is tracking $it frames a second; ${spec.name.lowercase()} needs ${spec.minPoseFps.roundToInt()}. " +
+                "Some reps may not count. More light or closing other apps can help."
+        }
 }
 
 /**
- * One camera set. The platform owns the camera and pose model and passes every [PoseFrame] to
- * [onFrame]; counting runs here, in shared code, identically on both phones. Only the summary is
- * saved and uploaded; frames and landmarks never leave the phone (except labeled QA recordings).
+ * One camera set (or multi-set Streak Start plan). The platform owns the camera and pose model and passes
+ * every [PoseFrame] to [onFrame]; counting runs here, in shared code, identically on both phones.
  */
 class ExerciseSessionViewModel(
     private val spec: ExerciseSpec,
@@ -89,9 +114,21 @@ class ExerciseSessionViewModel(
     recordingAllowed: Boolean = false,
     private val clock: Clock = Clock.System,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val totalSets: Int = 1,
+    private val targetRepsPerSet: Int = 0,
+    private val targetHoldSecondsPerSet: Int = 0,
+    private val player: PlayerRepository? = null,
 ) : SharedViewModel(dispatcher) {
     private val _state = MutableStateFlow(
-        ExerciseSessionState(spec = spec, hud = idleHud(), recordingAllowed = recordingAllowed),
+        ExerciseSessionState(
+            spec = spec,
+            hud = idleHud(),
+            currentSet = 1,
+            totalSets = totalSets.coerceAtLeast(1),
+            targetRepsPerSet = targetRepsPerSet.coerceAtLeast(0),
+            targetHoldSecondsPerSet = targetHoldSecondsPerSet.coerceAtLeast(0),
+            recordingAllowed = recordingAllowed,
+        ),
     )
     val state: StateFlow<ExerciseSessionState> = _state.asStateFlow()
 
@@ -102,6 +139,10 @@ class ExerciseSessionViewModel(
     private var recorder: PoseRecorder? = null
     private var lastUpdate: EngineUpdate? = null
     private var pending: Pair<SessionSummary, String?>? = null
+    private var cumulativeReps = 0
+    private var cumulativeHoldS = 0.0
+    private var cumulativeDurationS = 0.0
+    private var cumulativeXp = 0
 
     /** The camera (re)started: a reopened camera warms up again, so the rate window restarts. */
     fun onCameraStarted() {
@@ -137,7 +178,7 @@ class ExerciseSessionViewModel(
         recorder = if (_state.value.recordingAllowed && _state.value.recordLandmarks) PoseRecorder() else null
         startedAt = clock.now()
         lastUpdate = null
-        _state.update { it.copy(phase = ExerciseSessionState.Phase.COUNTING, hud = hud(null)) }
+        _state.update { it.copy(phase = ExerciseSessionState.Phase.COUNTING, hud = hud(null), result = null) }
     }
 
     /** [perf] is the platform's pose timing read-out (debug builds), shown on the result sheet. */
@@ -151,6 +192,48 @@ class ExerciseSessionViewModel(
             _state.update { it.copy(phase = ExerciseSessionState.Phase.SAVING, askLabel = true) }
         } else {
             save(summary, perf)
+        }
+    }
+
+    /** Advances to the next set in a multi-set Streak Start plan. */
+    fun nextSet() {
+        val s = _state.value
+        if (s.phase != ExerciseSessionState.Phase.DONE || s.currentSet >= s.totalSets) return
+        _state.update {
+            it.copy(
+                phase = ExerciseSessionState.Phase.READY,
+                currentSet = s.currentSet + 1,
+                hud = idleHud(),
+                result = null,
+            )
+        }
+    }
+
+    /** Posts the completed camera-verified workout to People's Posts (`POST /api/v2/feed/posts`). */
+    fun shareWorkoutToFeed(caption: String = "") {
+        val p = player ?: return
+        val s = _state.value
+        val r = s.result
+        if (r == null || r.postedToFeed) return
+        scope.launch {
+            val setsDone = s.currentSet.coerceAtLeast(1)
+            val repsPerSet = if (s.targetRepsPerSet > 0) s.targetRepsPerSet else (cumulativeReps / setsDone).coerceAtLeast(1)
+            val draft = PostCreateDraft(
+                kind = "workout",
+                caption = caption.ifBlank {
+                    "Completed camera-verified ${spec.name} on Osiris!"
+                },
+                exerciseKey = spec.key,
+                sets = setsDone,
+                repsPerSet = if (spec.isHold) 0 else repsPerSet,
+                totalReps = cumulativeReps,
+                holdS = cumulativeHoldS,
+                durationS = cumulativeDurationS,
+                xpEarned = cumulativeXp,
+            )
+            p.createPost(draft).orShow() ?: return@launch
+            _state.update { it.copy(result = it.result?.copy(postedToFeed = true)) }
+            show("Workout shared to People's Posts!", UiMessage.Kind.SUCCESS)
         }
     }
 
@@ -181,6 +264,10 @@ class ExerciseSessionViewModel(
         _state.update { it.copy(phase = ExerciseSessionState.Phase.SAVING) }
         scope.launch {
             val outcome = exercises.saveSet(summary, startedAt ?: clock.now()).getOrNull()
+            cumulativeReps += summary.repsValid
+            cumulativeHoldS += summary.holdS
+            cumulativeDurationS += summary.durationS
+            cumulativeXp += outcome?.xpAwarded ?: 0
             _state.update { it.copy(phase = ExerciseSessionState.Phase.DONE, result = result(summary, outcome, perf)) }
         }
     }
@@ -196,18 +283,27 @@ class ExerciseSessionViewModel(
         )
     }
 
-    private fun result(s: SessionSummary, outcome: SetOutcome?, perf: String?) = SetResult(
-        title = ExerciseCopy.verdictTitle(s.verdict),
-        verdict = s.verdict,
-        amount = "${spec.name}: ${ExerciseCopy.amount(spec, s.repsValid, s.holdS)}",
-        notCounted = if (!spec.isHold && s.repsAttempted > s.repsValid) "${s.repsAttempted - s.repsValid} reps did not count" else null,
-        reasons = s.reasons.map(ExerciseCopy::reason),
-        sync = when {
-            outcome == null -> "This set could not be saved on your phone."
-            outcome.uploaded && outcome.xpAwarded > 0 -> "+${outcome.xpAwarded} XP"
-            outcome.uploaded -> "Uploaded. No XP for this set."
-            else -> "Saved on your phone. It will upload when you are online."
-        },
-        perf = perf,
-    )
+    private fun result(s: SessionSummary, outcome: SetOutcome?, perf: String?): SetResult {
+        val cur = _state.value.currentSet
+        val tot = _state.value.totalSets
+        return SetResult(
+            title = ExerciseCopy.verdictTitle(s.verdict),
+            verdict = s.verdict,
+            amount = "${spec.name}: ${ExerciseCopy.amount(spec, s.repsValid, s.holdS)}",
+            notCounted = if (!spec.isHold && s.repsAttempted > s.repsValid) "${s.repsAttempted - s.repsValid} reps did not count" else null,
+            reasons = s.reasons.map(ExerciseCopy::reason),
+            sync = when {
+                outcome == null -> "This set could not be saved on your phone."
+                outcome.uploaded && outcome.xpAwarded > 0 -> "+${outcome.xpAwarded} XP"
+                outcome.uploaded -> "Uploaded. No XP for this set."
+                else -> "Saved on your phone. It will upload when you are online."
+            },
+            perf = perf,
+            currentSet = cur,
+            totalSets = tot,
+            canStartNextSet = cur < tot,
+            canShareToFeed = player != null && (s.repsValid > 0 || s.holdS > 0.0),
+            postedToFeed = false,
+        )
+    }
 }

@@ -46,12 +46,12 @@ import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.exercise.RecentSetRow
 
 fun exerciseIcon(key: String): ImageVector = when (key) {
-    "pushup" -> Icons.Filled.FitnessCenter
-    "squat" -> Icons.Filled.AirlineSeatLegroomExtra
+    "pushup", "shoulder_press", "tricep_dip" -> Icons.Filled.FitnessCenter
+    "squat", "wall_sit", "glute_bridge", "calf_raise" -> Icons.Filled.AirlineSeatLegroomExtra
     "lunge" -> Icons.AutoMirrored.Filled.DirectionsWalk
-    "situp" -> Icons.Filled.AirlineSeatFlatAngled
-    "jumping_jack" -> Icons.Filled.AccessibilityNew
-    "high_knees" -> Icons.AutoMirrored.Filled.DirectionsRun
+    "situp", "leg_raise" -> Icons.Filled.AirlineSeatFlatAngled
+    "jumping_jack", "side_jack", "burpee" -> Icons.Filled.AccessibilityNew
+    "high_knees", "mountain_climber" -> Icons.AutoMirrored.Filled.DirectionsRun
     "plank" -> Icons.Filled.HorizontalRule
     else -> Icons.Filled.SportsGymnastics
 }

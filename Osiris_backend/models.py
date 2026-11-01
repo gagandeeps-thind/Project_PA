@@ -647,6 +647,8 @@ class PlayerProfile(Base):
     # G4: v2 registrations must grant location consent before recording a run. Players from
     # the legacy v1 onboarding predate the consent screen and are not blocked (False).
     consent_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    bio: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
 
@@ -878,3 +880,81 @@ class ExerciseSession(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "client_session_id", name="uq_exercise_sessions_user_client"),
     )
+
+
+# --- Home screen & social community feed (notifications, follows, suggestions, posts) --------
+
+class PlayerNotification(Base):
+    """In-app Osiris notification (feature suggestions, app updates, challenge outcomes,
+    social follows, post reactions and comments)."""
+    __tablename__ = "player_notifications"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    action_route: Mapped[str | None] = mapped_column(String, nullable=True)
+    read_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+
+class UserFollow(Base):
+    """One Osirian following another."""
+    __tablename__ = "user_follows"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    follower_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    followed_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("follower_id", "followed_id", name="uq_user_follows_pair"),)
+
+
+class DismissedSuggestion(Base):
+    """Records when a player taps 'x' on a Suggested Osirian card so they are not suggested again."""
+    __tablename__ = "dismissed_suggestions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    dismissed_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "dismissed_user_id", name="uq_dismissed_suggestions_pair"),)
+
+
+class SocialPost(Base):
+    """A post in People's Posts (workouts, runs, domains acquired, streaks, crystal earnings)."""
+    __tablename__ = "social_posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String, nullable=False, index=True)  # workout | run | domain_claim | streak | crystal_earn | custom
+    caption: Mapped[str] = mapped_column(String, nullable=False, default="")
+    media_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    workout_summary_json: Mapped[str] = mapped_column(String, nullable=False, default="{}")
+    related_run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("run_sessions.id"), nullable=True)
+    related_exercise_session_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("exercise_sessions.id"), nullable=True)
+    related_domain_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("domains.id"), nullable=True)
+    visibility: Mapped[str] = mapped_column(String, nullable=False, default="public", index=True)
+    share_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+
+class PostReaction(Base):
+    """One reaction per (post, user): fire | like | clap | crown."""
+    __tablename__ = "post_reactions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reaction: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (UniqueConstraint("post_id", "user_id", name="uq_post_reactions_post_user"),)
+
+
+class PostComment(Base):
+    """A comment on a SocialPost."""
+    __tablename__ = "post_comments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+

@@ -2270,6 +2270,24 @@
         "title": "CrystalPurchaseIntentResponse",
         "type": "object"
       },
+      "DismissOut": {
+        "properties": {
+          "dismissed": {
+            "title": "Dismissed",
+            "type": "boolean"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "dismissed"
+        ],
+        "title": "DismissOut",
+        "type": "object"
+      },
       "DomainCreate": {
         "properties": {
           "coordinates": {
@@ -2731,6 +2749,143 @@
         "title": "ExerciseSessionOut",
         "type": "object"
       },
+      "FeedPostOut": {
+        "properties": {
+          "author_avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Avatar Url"
+          },
+          "author_handle": {
+            "title": "Author Handle",
+            "type": "string"
+          },
+          "author_name": {
+            "title": "Author Name",
+            "type": "string"
+          },
+          "author_rank": {
+            "title": "Author Rank",
+            "type": "string"
+          },
+          "author_title": {
+            "title": "Author Title",
+            "type": "string"
+          },
+          "caption": {
+            "title": "Caption",
+            "type": "string"
+          },
+          "comment_count": {
+            "title": "Comment Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "media_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Url"
+          },
+          "my_reaction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Reaction"
+          },
+          "reactions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Reactions",
+            "type": "object"
+          },
+          "recent_comments": {
+            "items": {
+              "$ref": "#/components/schemas/PostCommentOut"
+            },
+            "title": "Recent Comments",
+            "type": "array"
+          },
+          "share_count": {
+            "title": "Share Count",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PostWorkoutSummary"
+          },
+          "total_reactions": {
+            "title": "Total Reactions",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "author_name",
+          "author_handle",
+          "author_rank",
+          "author_title",
+          "kind",
+          "caption",
+          "summary",
+          "reactions",
+          "total_reactions",
+          "comment_count",
+          "share_count",
+          "created_at"
+        ],
+        "title": "FeedPostOut",
+        "type": "object"
+      },
+      "FeedPostsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FeedPostOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FeedPostsResponse",
+        "type": "object"
+      },
       "Finisher": {
         "properties": {
           "elapsed_seconds": {
@@ -2752,6 +2907,29 @@
           "elapsed_seconds"
         ],
         "title": "Finisher",
+        "type": "object"
+      },
+      "FollowStatusOut": {
+        "properties": {
+          "followers_count": {
+            "title": "Followers Count",
+            "type": "integer"
+          },
+          "following": {
+            "title": "Following",
+            "type": "boolean"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "following",
+          "followers_count"
+        ],
+        "title": "FollowStatusOut",
         "type": "object"
       },
       "FunnelResponse": {
@@ -3742,6 +3920,161 @@
         "title": "MerchantResponse",
         "type": "object"
       },
+      "NotificationOut": {
+        "properties": {
+          "action_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Route"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "read": {
+            "title": "Read",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "read",
+          "created_at"
+        ],
+        "title": "NotificationOut",
+        "type": "object"
+      },
+      "NotificationsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "unread_count": {
+            "title": "Unread Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread_count",
+          "items"
+        ],
+        "title": "NotificationsResponse",
+        "type": "object"
+      },
+      "OsirianSuggestionOut": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "domains_claimed": {
+            "title": "Domains Claimed",
+            "type": "integer"
+          },
+          "followers_count": {
+            "title": "Followers Count",
+            "type": "integer"
+          },
+          "following": {
+            "title": "Following",
+            "type": "boolean"
+          },
+          "handle": {
+            "title": "Handle",
+            "type": "string"
+          },
+          "identity": {
+            "title": "Identity",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "string"
+          },
+          "streak_days": {
+            "title": "Streak Days",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trending_reason": {
+            "title": "Trending Reason",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "verified_workouts": {
+            "title": "Verified Workouts",
+            "type": "integer"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "handle",
+          "display_name",
+          "rank",
+          "title",
+          "identity",
+          "xp",
+          "streak_days",
+          "domains_claimed",
+          "verified_workouts",
+          "followers_count",
+          "following",
+          "trending_reason"
+        ],
+        "title": "OsirianSuggestionOut",
+        "type": "object"
+      },
       "PartyRoleResponse": {
         "properties": {
           "agi_stat": {
@@ -3958,6 +4291,373 @@
           "rep_count"
         ],
         "title": "PoseSummary",
+        "type": "object"
+      },
+      "PostCommentIn": {
+        "properties": {
+          "body": {
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "PostCommentIn",
+        "type": "object"
+      },
+      "PostCommentOut": {
+        "properties": {
+          "author_avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Avatar Url"
+          },
+          "author_name": {
+            "title": "Author Name",
+            "type": "string"
+          },
+          "author_rank": {
+            "title": "Author Rank",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "post_id",
+          "user_id",
+          "author_name",
+          "author_rank",
+          "body",
+          "created_at"
+        ],
+        "title": "PostCommentOut",
+        "type": "object"
+      },
+      "PostCreateIn": {
+        "properties": {
+          "caption": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Caption",
+            "type": "string"
+          },
+          "crystals_earned": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Crystals Earned",
+            "type": "integer"
+          },
+          "distance_m": {
+            "default": 0.0,
+            "maximum": 500000.0,
+            "minimum": 0.0,
+            "title": "Distance M",
+            "type": "number"
+          },
+          "domain_area_sqkm": {
+            "default": 0.0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Domain Area Sqkm",
+            "type": "number"
+          },
+          "duration_s": {
+            "default": 0.0,
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Duration S",
+            "type": "number"
+          },
+          "exercise_key": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Key"
+          },
+          "hold_s": {
+            "default": 0.0,
+            "maximum": 36000.0,
+            "minimum": 0.0,
+            "title": "Hold S",
+            "type": "number"
+          },
+          "kind": {
+            "default": "workout",
+            "enum": [
+              "workout",
+              "run",
+              "domain_claim",
+              "streak",
+              "crystal_earn",
+              "custom"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "media_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Url"
+          },
+          "related_domain_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Domain Id"
+          },
+          "related_exercise_session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Exercise Session Id"
+          },
+          "related_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Run Id"
+          },
+          "reps_per_set": {
+            "default": 0,
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Reps Per Set",
+            "type": "integer"
+          },
+          "sets": {
+            "default": 1,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Sets",
+            "type": "integer"
+          },
+          "streak_days": {
+            "default": 0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Streak Days",
+            "type": "integer"
+          },
+          "total_reps": {
+            "default": 0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Total Reps",
+            "type": "integer"
+          },
+          "visibility": {
+            "default": "public",
+            "enum": [
+              "public",
+              "followers"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          },
+          "xp_earned": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Xp Earned",
+            "type": "integer"
+          }
+        },
+        "title": "PostCreateIn",
+        "type": "object"
+      },
+      "PostReactionIn": {
+        "properties": {
+          "reaction": {
+            "enum": [
+              "fire",
+              "like",
+              "clap",
+              "crown"
+            ],
+            "title": "Reaction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reaction"
+        ],
+        "title": "PostReactionIn",
+        "type": "object"
+      },
+      "PostShareOut": {
+        "properties": {
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "share_count": {
+            "title": "Share Count",
+            "type": "integer"
+          },
+          "share_text": {
+            "title": "Share Text",
+            "type": "string"
+          },
+          "share_url": {
+            "title": "Share Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "post_id",
+          "share_count",
+          "share_text",
+          "share_url"
+        ],
+        "title": "PostShareOut",
+        "type": "object"
+      },
+      "PostWorkoutSummary": {
+        "properties": {
+          "crystals_earned": {
+            "default": 0,
+            "title": "Crystals Earned",
+            "type": "integer"
+          },
+          "distance_m": {
+            "default": 0.0,
+            "title": "Distance M",
+            "type": "number"
+          },
+          "domain_area_sqkm": {
+            "default": 0.0,
+            "title": "Domain Area Sqkm",
+            "type": "number"
+          },
+          "duration_s": {
+            "default": 0.0,
+            "title": "Duration S",
+            "type": "number"
+          },
+          "exercise_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Key"
+          },
+          "exercise_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Name"
+          },
+          "hold_s": {
+            "default": 0.0,
+            "title": "Hold S",
+            "type": "number"
+          },
+          "measure_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Label"
+          },
+          "reps_per_set": {
+            "default": 0,
+            "title": "Reps Per Set",
+            "type": "integer"
+          },
+          "sets": {
+            "default": 1,
+            "title": "Sets",
+            "type": "integer"
+          },
+          "streak_days": {
+            "default": 0,
+            "title": "Streak Days",
+            "type": "integer"
+          },
+          "total_reps": {
+            "default": 0,
+            "title": "Total Reps",
+            "type": "integer"
+          },
+          "xp_earned": {
+            "default": 0,
+            "title": "Xp Earned",
+            "type": "integer"
+          }
+        },
+        "title": "PostWorkoutSummary",
         "type": "object"
       },
       "ProfileOut": {
@@ -5260,6 +5960,59 @@
           "message"
         ],
         "title": "SiegeResolveResponse",
+        "type": "object"
+      },
+      "SuggestedChallengeOut": {
+        "properties": {
+          "course_distance_m": {
+            "title": "Course Distance M",
+            "type": "number"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_global": {
+            "default": true,
+            "title": "Is Global",
+            "type": "boolean"
+          },
+          "joined": {
+            "title": "Joined",
+            "type": "boolean"
+          },
+          "participants": {
+            "title": "Participants",
+            "type": "integer"
+          },
+          "target_seconds": {
+            "title": "Target Seconds",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "win_xp": {
+            "title": "Win Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "course_distance_m",
+          "target_seconds",
+          "win_xp",
+          "participants",
+          "joined"
+        ],
+        "title": "SuggestedChallengeOut",
         "type": "object"
       },
       "TeamGoal": {
@@ -8421,6 +9174,58 @@
         "summary": "Nearby Challenges"
       }
     },
+    "/api/v2/challenges/suggested": {
+      "get": {
+        "description": "Returns global challenges that any player can join from anywhere, formatted for the\nHome screen's circular-floating card deck with a 1-line description and join state.",
+        "operationId": "suggested_global_challenges_api_v2_challenges_suggested_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 30,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SuggestedChallengeOut"
+                  },
+                  "title": "Response Suggested Global Challenges Api V2 Challenges Suggested Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Suggested Global Challenges"
+      }
+    },
     "/api/v2/challenges/{challenge_id}": {
       "get": {
         "operationId": "get_challenge_api_v2_challenges__challenge_id__get",
@@ -9327,6 +10132,315 @@
         "summary": "List Exercises"
       }
     },
+    "/api/v2/feed/posts": {
+      "get": {
+        "operationId": "list_feed_posts_api_v2_feed_posts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPostsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Feed Posts"
+      },
+      "post": {
+        "operationId": "create_feed_post_api_v2_feed_posts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Feed Post"
+      }
+    },
+    "/api/v2/feed/posts/{post_id}/comments": {
+      "get": {
+        "operationId": "list_post_comments_api_v2_feed_posts__post_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PostCommentOut"
+                  },
+                  "title": "Response List Post Comments Api V2 Feed Posts  Post Id  Comments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Post Comments"
+      },
+      "post": {
+        "operationId": "add_post_comment_api_v2_feed_posts__post_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCommentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostCommentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Add Post Comment"
+      }
+    },
+    "/api/v2/feed/posts/{post_id}/react": {
+      "post": {
+        "operationId": "react_to_post_api_v2_feed_posts__post_id__react_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostReactionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "React To Post"
+      }
+    },
+    "/api/v2/feed/posts/{post_id}/share": {
+      "post": {
+        "operationId": "share_post_api_v2_feed_posts__post_id__share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostShareOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Share Post"
+      }
+    },
     "/api/v2/invites/{token}": {
       "get": {
         "description": "Public preview of an invite. No coordinates: the exact course is shown only to\nplayers who join, as for any challenge.",
@@ -9757,6 +10871,118 @@
         "summary": "My Invites"
       }
     },
+    "/api/v2/me/notifications": {
+      "get": {
+        "operationId": "list_my_notifications_api_v2_me_notifications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List My Notifications"
+      }
+    },
+    "/api/v2/me/notifications/read-all": {
+      "post": {
+        "operationId": "mark_all_notifications_read_api_v2_me_notifications_read_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Mark All Notifications Read"
+      }
+    },
+    "/api/v2/me/notifications/{notification_id}/read": {
+      "post": {
+        "operationId": "mark_notification_read_api_v2_me_notifications__notification_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "title": "Notification Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Mark Notification Read"
+      }
+    },
     "/api/v2/me/password": {
       "post": {
         "operationId": "change_password_api_v2_me_password_post",
@@ -10044,6 +11270,241 @@
           }
         ],
         "summary": "My Today"
+      }
+    },
+    "/api/v2/osirians/suggested": {
+      "get": {
+        "description": "Instagram-style suggested Osirians carousel. Excludes the viewer, blocked users,\nalready-followed users, and anyone the viewer dismissed via the top-right 'x' button.",
+        "operationId": "suggested_osirians_api_v2_osirians_suggested_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 15,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OsirianSuggestionOut"
+                  },
+                  "title": "Response Suggested Osirians Api V2 Osirians Suggested Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Suggested Osirians"
+      }
+    },
+    "/api/v2/osirians/trending": {
+      "get": {
+        "description": "Backs the 'See All' option next to Suggested Osirians: shows influential and trending\nOsirians ranked by their verified workouts, domains, followers, and XP.",
+        "operationId": "trending_osirians_api_v2_osirians_trending_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OsirianSuggestionOut"
+                  },
+                  "title": "Response Trending Osirians Api V2 Osirians Trending Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Trending Osirians"
+      }
+    },
+    "/api/v2/osirians/{target_user_id}/dismiss": {
+      "post": {
+        "description": "Permanently removes `target_user_id` from the caller's Suggested Osirians carousel.",
+        "operationId": "dismiss_osirian_suggestion_api_v2_osirians__target_user_id__dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_user_id",
+            "required": true,
+            "schema": {
+              "title": "Target User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DismissOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Dismiss Osirian Suggestion"
+      }
+    },
+    "/api/v2/osirians/{target_user_id}/follow": {
+      "delete": {
+        "operationId": "unfollow_osirian_api_v2_osirians__target_user_id__follow_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_user_id",
+            "required": true,
+            "schema": {
+              "title": "Target User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Unfollow Osirian"
+      },
+      "post": {
+        "operationId": "follow_osirian_api_v2_osirians__target_user_id__follow_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_user_id",
+            "required": true,
+            "schema": {
+              "title": "Target User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Follow Osirian"
       }
     },
     "/api/v2/payments/google-play/entitlements": {

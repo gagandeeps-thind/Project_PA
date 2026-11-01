@@ -6,12 +6,15 @@ import OsirisShared
 struct ExerciseCameraView: View {
     let graph: AppGraph
     let key: String
+    var sets: Int32 = 1
+    var reps: Int32 = 0
+    var holdS: Int32 = 0
     @State private var load: ExerciseLoad?
 
     var body: some View {
         Group {
             if let load, let spec = load.spec, let catalog = load.catalog {
-                ExerciseSession(graph: graph, spec: spec, catalog: catalog)
+                ExerciseSession(graph: graph, spec: spec, catalog: catalog, sets: sets, reps: reps, holdS: holdS)
             } else if let error = load?.error {
                 Text(error)
                     .foregroundStyle(OsirisColor.error)
@@ -46,8 +49,16 @@ private struct ExerciseSession: View {
     @State private var leaving = false
     private let minLikelihood: Double
 
-    init(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalog) {
-        _model = StateObject(wrappedValue: Observed(graph.exerciseSession(spec: spec, catalog: catalog)) { $0.state })
+    init(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalog, sets: Int32 = 1, reps: Int32 = 0, holdS: Int32 = 0) {
+        _model = StateObject(wrappedValue: Observed(
+            graph.exerciseSession(
+                spec: spec,
+                catalog: catalog,
+                totalSets: sets,
+                targetRepsPerSet: reps,
+                targetHoldSecondsPerSet: holdS
+            )
+        ) { $0.state })
         _camera = StateObject(wrappedValue: PoseCamera(front: spec.camera == "front"))
         minLikelihood = catalog.minLikelihood
     }
@@ -65,7 +76,7 @@ private struct ExerciseSession: View {
             }
             .aspectRatio(overlay.image.map { $0.width / max($0.height, 1) } ?? 3.0 / 4.0, contentMode: .fit)
             VStack(spacing: 8) {
-                hud(s.hud)
+                hud(s.hud, planBanner: s.planBanner)
                 if let warning = s.slowWarning {
                     Text(warning)
                         .font(.manrope(.footnote))
@@ -126,16 +137,24 @@ private struct ExerciseSession: View {
         )
         .sheet(
             isPresented: Binding(get: { model.state.result != nil && !leaving }, set: { if !$0 { leaving = true } }),
-            onDismiss: { nav.back() }
+            onDismiss: { if leaving { nav.back() } }
         ) {
-            if let r = model.state.result { ResultSheet(result: r) { leaving = true } }
+            if let r = model.state.result {
+                ResultSheet(
+                    result: r,
+                    onNextSet: { vm.nextSet() },
+                    onShareToFeed: { vm.shareWorkoutToFeed(caption: "") },
+                    onDone: { leaving = true }
+                )
+            }
         }
     }
 
-    private func hud(_ h: ExerciseHud) -> some View {
+    private func hud(_ h: ExerciseHud, planBanner: String?) -> some View {
         HStack(spacing: 16) {
             Text(h.count).font(.system(size: 44, weight: .bold)).monospacedDigit()
             VStack(alignment: .leading, spacing: 2) {
+                if let planBanner { Text(planBanner).font(.manrope(.caption).weight(.semibold)).foregroundStyle(OsirisColor.secondary) }
                 if let notCounted = h.notCounted { Text(notCounted).font(.manrope(.caption)).foregroundStyle(OsirisColor.warning) }
                 Text(h.hint)
             }
@@ -220,6 +239,8 @@ private struct SkeletonView: View {
 
 private struct ResultSheet: View {
     let result: SetResult
+    let onNextSet: () -> Void
+    let onShareToFeed: () -> Void
     let onDone: () -> Void
 
     private var color: Color {
@@ -234,11 +255,32 @@ private struct ResultSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Text(result.title).font(.manrope(.title2).bold()).foregroundStyle(color)
+                if result.totalSets > 1 {
+                    Text("Set \(result.currentSet) of \(result.totalSets)")
+                        .font(.manrope(.subheadline))
+                        .foregroundStyle(OsirisColor.secondary)
+                }
                 Text(result.amount).font(.manrope(.title3))
                 if let notCounted = result.notCounted { Text(notCounted) }
                 ForEach(result.reasons, id: \.self) { Text("• \($0)").foregroundStyle(OsirisColor.muted) }
                 Text(result.sync).foregroundStyle(OsirisColor.secondary).padding(.top, 4)
                 if let perf = result.perf { Text("Pose: \(perf)").font(.manrope(.caption)).foregroundStyle(OsirisColor.faint) }
+                if result.canStartNextSet {
+                    Button(action: onNextSet) {
+                        Text("Next Set (\(result.currentSet + 1)/\(result.totalSets))").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.key)
+                    .padding(.top, 8)
+                }
+                if result.canShareToFeed {
+                    Button(action: onShareToFeed) {
+                        Text(result.postedToFeed ? "Posted to People's Posts ✓" : "Post Workout to People's Posts")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.raised)
+                    .disabled(result.postedToFeed)
+                    .padding(.top, 4)
+                }
                 Button(action: onDone) { Text("Done").frame(maxWidth: .infinity) }
                     .buttonStyle(.raised)
                     .padding(.top, 8)

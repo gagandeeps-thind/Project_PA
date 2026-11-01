@@ -46,7 +46,7 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun login() = LoginViewModel(data.auth)
     fun onboarding(inviteToken: String? = null, referralCode: String? = null) =
         OnboardingViewModel(data.auth, data.player, inviteToken, referralCode)
-    fun today() = TodayViewModel(data.player)
+    fun today() = TodayViewModel(data.player, challenges = data.challenges)
     fun run(challengeId: Int? = null) = RunViewModel(data.runs, data.challenges, data.player, challengeId)
     fun challengeBoard() = ChallengeBoardViewModel(data.challenges)
     fun challengeDetail(id: Int) = ChallengeDetailViewModel(id, data.challenges, data.player)
@@ -64,6 +64,20 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun wallet() = WalletViewModel(checkNotNull(data.wallet) { "This build has no wallet" })
     fun settings() = SettingsViewModel(data.auth, data.player, data.privacy, data.exercises)
     fun exerciseHub() = ExerciseHubViewModel(data.exercises)
-    fun exerciseSession(spec: ExerciseSpec, catalog: ExerciseCatalog) =
-        ExerciseSessionViewModel(spec, catalog, data.exercises, recordingAllowed = config.features.poseRecording)
+    fun exerciseSession(
+        spec: ExerciseSpec,
+        catalog: ExerciseCatalog,
+        totalSets: Int = 1,
+        targetRepsPerSet: Int = 0,
+        targetHoldSecondsPerSet: Int = 0,
+    ) = ExerciseSessionViewModel(
+        spec = spec,
+        catalog = catalog,
+        exercises = data.exercises,
+        recordingAllowed = config.features.poseRecording,
+        totalSets = totalSets,
+        targetRepsPerSet = targetRepsPerSet,
+        targetHoldSecondsPerSet = targetHoldSecondsPerSet,
+        player = data.player,
+    )
 }

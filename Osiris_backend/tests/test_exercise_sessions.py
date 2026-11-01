@@ -109,7 +109,11 @@ def test_catalog_served_and_bundled_copy_in_sync() -> None:
     r = client.get("/api/v2/exercises", headers=headers)
     assert r.status_code == 200, r.text
     keys = [e["key"] for e in r.json()["exercises"]]
-    assert keys == ["pushup", "squat", "lunge", "situp", "jumping_jack", "high_knees", "plank"], keys
+    assert keys == [
+        "pushup", "squat", "lunge", "situp", "jumping_jack", "high_knees", "plank",
+        "glute_bridge", "calf_raise", "shoulder_press", "tricep_dip", "mountain_climber",
+        "leg_raise", "wall_sit", "side_jack", "burpee",
+    ], keys
     assert r.json()["rules_version"] == rules.RULES_VERSION
     import export_exercise_catalog
     assert export_exercise_catalog.main() == 0, "bundled app catalog drifted; run export_exercise_catalog.py --write"

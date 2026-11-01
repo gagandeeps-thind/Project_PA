@@ -148,6 +148,41 @@ class ViewModelTest {
     }
 
     @Test
+    fun `home screen manages notifications, suggested challenges, workout customizer, osirians and posts`() = runTest {
+        val player = FakePlayer()
+        val challenges = FakeChallenges()
+        val vm = TodayViewModel(player, main(), challenges)
+        vm.onNoPosition()
+        assertEquals(1, vm.home.value.unreadNotifications)
+        vm.markNotificationRead(1)
+        assertEquals(0, vm.home.value.unreadNotifications)
+
+        vm.joinSuggestedChallenge(3)
+        assertTrue(vm.home.value.suggestedChallenges.single().joined)
+        assertTrue("join" in challenges.calls)
+
+        assertEquals("Push-ups — 10 × 3", vm.home.value.workoutPlan.measureLabel)
+        vm.selectWorkoutOption("squat")
+        vm.setWorkoutReps(15)
+        vm.setWorkoutSets(4)
+        assertEquals("Squats — 15 × 4", vm.home.value.workoutPlan.measureLabel)
+
+        vm.followOsirian(42)
+        assertTrue(vm.home.value.suggestedOsirians.single().following)
+        vm.dismissOsirian(42)
+        assertTrue(vm.home.value.suggestedOsirians.isEmpty())
+
+        vm.reactToPost(101, "fire")
+        assertEquals(1, vm.home.value.feedPosts.single().totalReactions)
+        vm.addComment(101, "Great workout!")
+        assertEquals(1, vm.home.value.feedPosts.single().commentCount)
+        vm.sharePost(101)
+        assertNotNull(vm.home.value.share)
+        vm.shared(true)
+        assertNull(vm.home.value.share)
+    }
+
+    @Test
     fun `a refused location says so instead of locating forever, and a fix clears it`() = runTest {
         RunViewModel(FakeRuns(), FakeChallenges(), FakePlayer(), clock = FixedClock(noon), dispatcher = main()).use {
             val vm = this

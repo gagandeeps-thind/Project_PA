@@ -71,12 +71,12 @@ extension View {
 /// The SF Symbol for an exercise, by its catalog key.
 func exerciseIcon(_ key: String) -> String {
     switch key {
-    case "pushup": return "dumbbell"
-    case "squat": return "figure.strengthtraining.functional"
+    case "pushup", "shoulder_press", "tricep_dip": return "dumbbell"
+    case "squat", "wall_sit", "glute_bridge", "calf_raise": return "figure.strengthtraining.functional"
     case "lunge": return "figure.walk"
-    case "situp": return "figure.core.training"
-    case "jumping_jack": return "figure.mixed.cardio"
-    case "high_knees": return "figure.run"
+    case "situp", "leg_raise": return "figure.core.training"
+    case "jumping_jack", "side_jack", "burpee": return "figure.mixed.cardio"
+    case "high_knees", "mountain_climber": return "figure.run"
     case "plank": return "minus"
     default: return "figure.gymnastics"
     }

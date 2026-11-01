@@ -1,3 +1,4 @@
+# ruff: noqa: B008, B904
 """Growth release endpoints: the core habit loop (G1).
 
 "What is my next physical quest?" — registration without body measurements, a goal-driven
@@ -210,6 +211,25 @@ def delete_growth_data(db: Session, user_ids: list[int]) -> None:
                 models.CommunityChallenge.community_id == community.id).delete(synchronize_session=False)
             db.delete(community)
     db.query(models.CommunityChallenge).filter(models.CommunityChallenge.added_by_user_id.in_(user_ids)).delete(
+        synchronize_session=False)
+    post_ids = [
+        pid for (pid,) in db.query(models.SocialPost.id)
+        .filter(models.SocialPost.user_id.in_(user_ids)).all()
+    ] or [-1]
+    db.query(models.PostReaction).filter(
+        models.PostReaction.post_id.in_(post_ids) | models.PostReaction.user_id.in_(user_ids)
+    ).delete(synchronize_session=False)
+    db.query(models.PostComment).filter(
+        models.PostComment.post_id.in_(post_ids) | models.PostComment.user_id.in_(user_ids)
+    ).delete(synchronize_session=False)
+    db.query(models.SocialPost).filter(models.SocialPost.user_id.in_(user_ids)).delete(synchronize_session=False)
+    db.query(models.UserFollow).filter(
+        models.UserFollow.follower_id.in_(user_ids) | models.UserFollow.followed_id.in_(user_ids)
+    ).delete(synchronize_session=False)
+    db.query(models.DismissedSuggestion).filter(
+        models.DismissedSuggestion.user_id.in_(user_ids) | models.DismissedSuggestion.dismissed_user_id.in_(user_ids)
+    ).delete(synchronize_session=False)
+    db.query(models.PlayerNotification).filter(models.PlayerNotification.user_id.in_(user_ids)).delete(
         synchronize_session=False)
 
 

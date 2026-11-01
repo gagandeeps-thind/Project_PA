@@ -446,9 +446,10 @@ class RepEngine(val spec: ExerciseSpec, val catalog: ExerciseCatalog) {
     }
 
     private fun towardPeakHint(): String = when (spec.key) {
-        "pushup", "squat", "lunge" -> "Go lower"
-        "jumping_jack" -> "Arms all the way up"
-        "high_knees" -> "Knee higher"
+        "pushup", "squat", "lunge", "tricep_dip", "burpee" -> "Go lower"
+        "jumping_jack", "side_jack", "shoulder_press" -> "Arms all the way up"
+        "high_knees", "mountain_climber", "leg_raise" -> "Knee higher"
+        "glute_bridge", "calf_raise" -> "Drive all the way up"
         else -> "Full range"
     }
 

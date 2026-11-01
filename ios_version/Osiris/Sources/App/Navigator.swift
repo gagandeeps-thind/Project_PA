@@ -14,6 +14,7 @@ enum Route: Hashable {
     case support
     case exercises
     case exercise(String)
+    case exercisePlan(key: String, sets: Int32, reps: Int32, holdS: Int32)
 }
 
 /// The signed-in navigation stack, shared so a screen can open another or close itself.
@@ -42,5 +43,7 @@ func destination(_ route: Route, graph: AppGraph) -> some View {
     case .support: SupportChatView(graph: graph)
     case .exercises: ExerciseHubView(graph: graph)
     case .exercise(let key): ExerciseCameraView(graph: graph, key: key)
+    case .exercisePlan(let key, let sets, let reps, let holdS):
+        ExerciseCameraView(graph: graph, key: key, sets: sets, reps: reps, holdS: holdS)
     }
 }

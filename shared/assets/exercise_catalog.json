@@ -304,6 +304,356 @@
         "below": 140.0
       },
       "xp_per_10s": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 30,
+      "form": [
+        {
+          "axis": "horizontal",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 55.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Lie on your back side-on to the phone with knees bent, about 2 m away, and drive hips up.",
+      "key": "glute_bridge",
+      "kind": "reps",
+      "max_rep_s": 10.0,
+      "max_reps_per_min": 45,
+      "metric": {
+        "joints": [
+          "shoulder",
+          "hip",
+          "knee"
+        ],
+        "sides": "best",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.8,
+      "name": "Glute bridge",
+      "peak": {
+        "above": 160.0
+      },
+      "rest": {
+        "below": 135.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 25,
+      "form": [
+        {
+          "axis": "vertical",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 35.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Stand side-on to the phone, about 2.5 m away, and perform controlled quarter-knee calf pulses.",
+      "key": "calf_raise",
+      "kind": "reps",
+      "max_rep_s": 6.0,
+      "max_reps_per_min": 70,
+      "metric": {
+        "joints": [
+          "hip",
+          "knee",
+          "ankle"
+        ],
+        "sides": "best",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.5,
+      "name": "Calf raise",
+      "peak": {
+        "below": 142.0
+      },
+      "rest": {
+        "above": 165.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "front",
+      "daily_xp_cap": 35,
+      "form": [
+        {
+          "axis": "vertical",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 45.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Face the phone from about 2.5 m away and press both hands from shoulder height to full lockout.",
+      "key": "shoulder_press",
+      "kind": "reps",
+      "max_rep_s": 8.0,
+      "max_reps_per_min": 55,
+      "metric": {
+        "joints": [
+          "shoulder",
+          "elbow",
+          "wrist"
+        ],
+        "sides": "mean",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.6,
+      "name": "Overhead press",
+      "peak": {
+        "above": 155.0
+      },
+      "rest": {
+        "below": 95.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 35,
+      "form": [
+        {
+          "axis": "vertical",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 55.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Position a bench or chair side-on to the phone about 2 m away and lower until elbows reach 90 degrees.",
+      "key": "tricep_dip",
+      "kind": "reps",
+      "max_rep_s": 8.0,
+      "max_reps_per_min": 55,
+      "metric": {
+        "joints": [
+          "shoulder",
+          "elbow",
+          "wrist"
+        ],
+        "sides": "best",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.6,
+      "name": "Tricep dip",
+      "peak": {
+        "below": 105.0
+      },
+      "rest": {
+        "above": 150.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 30,
+      "form": [
+        {
+          "axis": "horizontal",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 50.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Start in a plank side-on to the phone about 2 m away and drive knees toward your chest.",
+      "key": "mountain_climber",
+      "kind": "reps",
+      "max_rep_s": 4.0,
+      "max_reps_per_min": 160,
+      "metric": {
+        "joints": [
+          "shoulder",
+          "hip",
+          "knee"
+        ],
+        "sides": "min",
+        "type": "angle"
+      },
+      "min_pose_fps": 7,
+      "min_rep_s": 0.25,
+      "name": "Mountain climber",
+      "peak": {
+        "below": 105.0
+      },
+      "rest": {
+        "above": 145.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 30,
+      "form": [
+        {
+          "axis": "horizontal",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 40.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Lie flat on your back side-on to the phone about 2 m away and lift straight legs toward vertical.",
+      "key": "leg_raise",
+      "kind": "reps",
+      "max_rep_s": 10.0,
+      "max_reps_per_min": 45,
+      "metric": {
+        "joints": [
+          "shoulder",
+          "hip",
+          "ankle"
+        ],
+        "sides": "best",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.8,
+      "name": "Lying leg raise",
+      "peak": {
+        "below": 110.0
+      },
+      "rest": {
+        "above": 150.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 30,
+      "form": [
+        {
+          "axis": "vertical",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 40.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Stand side-on to the phone about 2.5 m away, then slide down into a 90-degree seated hold.",
+      "key": "wall_sit",
+      "kind": "hold",
+      "max_hold_s": 600,
+      "max_rep_s": 0.0,
+      "max_reps_per_min": 0,
+      "metric": {
+        "joints": [
+          "hip",
+          "knee",
+          "ankle"
+        ],
+        "sides": "best",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.0,
+      "name": "Wall sit",
+      "peak": {
+        "below": 115.0
+      },
+      "rest": {
+        "above": 145.0
+      },
+      "xp_per_10s": 1
+    },
+    {
+      "camera": "front",
+      "daily_xp_cap": 30,
+      "form": [
+        {
+          "axis": "vertical",
+          "code": "body_position",
+          "joints": [
+            "shoulder",
+            "hip"
+          ],
+          "max_deg": 40.0,
+          "type": "orientation"
+        }
+      ],
+      "instructions": "Face the phone from about 2.5 m away and raise both arms laterally above shoulder height.",
+      "key": "side_jack",
+      "kind": "reps",
+      "max_rep_s": 8.0,
+      "max_reps_per_min": 60,
+      "metric": {
+        "joints": [
+          "hip",
+          "shoulder",
+          "elbow"
+        ],
+        "sides": "mean",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 0.5,
+      "name": "Lateral raise",
+      "peak": {
+        "above": 95.0
+      },
+      "rest": {
+        "below": 45.0
+      },
+      "xp_per_rep": 1
+    },
+    {
+      "camera": "side",
+      "daily_xp_cap": 40,
+      "form": [],
+      "instructions": "Stand side-on to the phone about 2.5 m away, drop into a squat-plank, and return to standing.",
+      "key": "burpee",
+      "kind": "reps",
+      "max_rep_s": 12.0,
+      "max_reps_per_min": 40,
+      "metric": {
+        "joints": [
+          "shoulder",
+          "hip",
+          "knee"
+        ],
+        "sides": "best",
+        "type": "angle"
+      },
+      "min_pose_fps": 5,
+      "min_rep_s": 1.0,
+      "name": "Burpee",
+      "peak": {
+        "below": 95.0
+      },
+      "rest": {
+        "above": 155.0
+      },
+      "xp_per_rep": 2
     }
   ],
   "min_landmark_likelihood": 0.5,

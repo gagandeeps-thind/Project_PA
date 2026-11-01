@@ -36,7 +36,14 @@ class RepEngineTest {
     @Test
     fun bundledCatalogParsesAndListsEveryExercise() {
         assertEquals("exercise-rules-v2", catalog.rulesVersion)
-        assertEquals(listOf("pushup", "squat", "lunge", "situp", "jumping_jack", "high_knees", "plank"), catalog.exercises.map { it.key })
+        assertEquals(
+            listOf(
+                "pushup", "squat", "lunge", "situp", "jumping_jack", "high_knees", "plank",
+                "glute_bridge", "calf_raise", "shoulder_press", "tricep_dip", "mountain_climber",
+                "leg_raise", "wall_sit", "side_jack", "burpee",
+            ),
+            catalog.exercises.map { it.key },
+        )
         assertTrue("no_valid_reps" in catalog.sessionRules.hardReasons)
     }
 

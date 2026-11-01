@@ -13,6 +13,8 @@ ignore = [
     "E402",  # module-import-not-at-top: the app does deliberate lazy/ordered imports
     "E701",  # multiple-statements-on-one-line: stylistic, pervasive in the existing code
     "E501",  # line-too-long: legacy long lines; not worth reflowing at baseline
+    "B008",  # function-call-in-default-argument: FastAPI Depends()/Query() idiom
+    "B904",  # raise-without-from-inside-except: FastAPI HTTPException pattern
 ]
 
 [lint.per-file-ignores]

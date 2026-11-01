@@ -15,19 +15,28 @@ import com.osiris.shared.domain.model.Community
 import com.osiris.shared.domain.model.CourseRoute
 import com.osiris.shared.domain.model.CourseSummary
 import com.osiris.shared.domain.model.ExerciseHistory
+import com.osiris.shared.domain.model.FeedPost
+import com.osiris.shared.domain.model.FollowStatus
 import com.osiris.shared.domain.model.GlobalBoard
 import com.osiris.shared.domain.model.HubChallenge
 import com.osiris.shared.domain.model.HubSection
 import com.osiris.shared.domain.model.Leaderboard
-import com.osiris.shared.domain.model.SeasonLeaderboard
+import com.osiris.shared.domain.model.NotificationItem
+import com.osiris.shared.domain.model.NotificationsData
 import com.osiris.shared.domain.model.PlayerProfile
+import com.osiris.shared.domain.model.PostCommentItem
+import com.osiris.shared.domain.model.PostCreateDraft
+import com.osiris.shared.domain.model.PostShareResult
 import com.osiris.shared.domain.model.Progression
 import com.osiris.shared.domain.model.ReferralSummary
 import com.osiris.shared.domain.model.Registration
 import com.osiris.shared.domain.model.ReportReason
 import com.osiris.shared.domain.model.Season
+import com.osiris.shared.domain.model.SeasonLeaderboard
 import com.osiris.shared.domain.model.SetOutcome
 import com.osiris.shared.domain.model.ShareCard
+import com.osiris.shared.domain.model.SuggestedChallenge
+import com.osiris.shared.domain.model.SuggestedOsirian
 import com.osiris.shared.domain.model.SupportMessage
 import com.osiris.shared.domain.model.TodayData
 import com.osiris.shared.domain.model.UserProfile
@@ -81,6 +90,7 @@ interface AuthRepository {
     suspend fun onSessionExpired()
 }
 
+@Suppress("TooManyFunctions")
 interface PlayerRepository {
     suspend fun today(position: LatLng?): Outcome<TodayData>
     suspend fun profile(): Outcome<PlayerProfile>
@@ -88,6 +98,23 @@ interface PlayerRepository {
     suspend fun progression(): Outcome<Progression>
     suspend fun referrals(): Outcome<ReferralSummary>
     suspend fun shareAchievement(kind: String, entityId: Int): Outcome<ShareCard>
+
+    /** Home screen notifications, suggested global challenges, Osirians, and People's Posts. */
+    suspend fun notifications(): Outcome<NotificationsData>
+    suspend fun markNotificationRead(id: Int): Outcome<NotificationItem>
+    suspend fun markAllNotificationsRead(): Outcome<Unit>
+    suspend fun suggestedChallenges(): Outcome<List<SuggestedChallenge>>
+    suspend fun suggestedOsirians(): Outcome<List<SuggestedOsirian>>
+    suspend fun trendingOsirians(): Outcome<List<SuggestedOsirian>>
+    suspend fun followOsirian(userId: Int): Outcome<FollowStatus>
+    suspend fun unfollowOsirian(userId: Int): Outcome<FollowStatus>
+    suspend fun dismissOsirian(userId: Int): Outcome<Unit>
+    suspend fun feedPosts(limit: Int = 25, offset: Int = 0): Outcome<List<FeedPost>>
+    suspend fun createPost(draft: PostCreateDraft): Outcome<FeedPost>
+    suspend fun reactToPost(postId: Int, reaction: String): Outcome<FeedPost>
+    suspend fun postComments(postId: Int): Outcome<List<PostCommentItem>>
+    suspend fun addPostComment(postId: Int, body: String): Outcome<PostCommentItem>
+    suspend fun sharePost(postId: Int): Outcome<PostShareResult>
 
     /** Anonymous funnel event; never fails the caller. */
     suspend fun track(event: String, properties: Map<String, String> = emptyMap())

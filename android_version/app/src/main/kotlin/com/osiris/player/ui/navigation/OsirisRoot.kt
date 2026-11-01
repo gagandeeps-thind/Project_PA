@@ -89,12 +89,13 @@ object Routes {
     const val SETTINGS = "settings"
     const val SUPPORT = "support"
     const val EXERCISE = "exercise"
-    const val EXERCISE_CAMERA = "exercise/{key}"
+    const val EXERCISE_CAMERA = "exercise/{key}?sets={sets}&reps={reps}&holdS={holdS}"
 
     fun run(challengeId: Int? = null) = if (challengeId == null) "run" else "run?challengeId=$challengeId"
     fun challenge(id: Int) = "challenge/$id"
     fun community(slug: String) = "community/${android.net.Uri.encode(slug)}"
-    fun exerciseCamera(key: String) = "exercise/$key"
+    fun exerciseCamera(key: String, sets: Int = 1, reps: Int = 0, holdS: Int = 0) =
+        "exercise/$key?sets=$sets&reps=$reps&holdS=$holdS"
 }
 
 /** The bar's sections and the route each one opens. Wallet shows only in builds that have one. */
@@ -241,8 +242,24 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
         composable(Routes.SUPPORT) { SupportChatScreen(graph, onBack = nav::popBackStack) }
         composable(Routes.SETTINGS) { SettingsScreen(graph, onBack = nav::popBackStack) }
         composable(Routes.EXERCISE) { ExerciseHubScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.exerciseCamera(it)) }) }
-        composable(Routes.EXERCISE_CAMERA, arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
-            ExerciseCameraScreen(graph, key = entry.arguments!!.getString("key")!!, onDone = nav::popBackStack)
+        composable(
+            Routes.EXERCISE_CAMERA,
+            arguments = listOf(
+                navArgument("key") { type = NavType.StringType },
+                navArgument("sets") { type = NavType.IntType; defaultValue = 1 },
+                navArgument("reps") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("holdS") { type = NavType.IntType; defaultValue = 0 },
+            ),
+        ) { entry ->
+            val args = entry.arguments!!
+            ExerciseCameraScreen(
+                graph,
+                key = args.getString("key")!!,
+                sets = args.getInt("sets", 1),
+                reps = args.getInt("reps", 0),
+                holdS = args.getInt("holdS", 0),
+                onDone = nav::popBackStack,
+            )
         }
     }
 }

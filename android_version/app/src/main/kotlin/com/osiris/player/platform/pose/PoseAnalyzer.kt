@@ -29,7 +29,10 @@ class PoseAnalyzer(
     private val onFrame: (PoseFrame, PoseImage) -> Unit,
 ) : ImageAnalysis.Analyzer {
     private val detector = PoseDetection.getClient(
-        PoseDetectorOptions.Builder().setDetectorMode(PoseDetectorOptions.STREAM_MODE).build(),
+        PoseDetectorOptions.Builder()
+            .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
+            .setPreferredHardwareConfigs(PoseDetectorOptions.CPU_GPU)
+            .build(),
     )
     val stats = PoseStats()
 

@@ -104,7 +104,7 @@ fi
 # ---------- 3. Component checks (fingerprinted) ----------
 BACKEND_TESTS="test_ml_referee test_v2_10_flows test_phase2_security test_phase3_stripe test_phase2_ledger
 test_replay_guard test_party_stats test_run_release test_challenge_release test_growth_core_loop
-test_growth_sharing test_growth_communities test_growth_safety test_exercise_sessions test_settings test_growth_hub test_support_chat test_public_base_url test_origin_guard test_rate_limits test_google_play_billing"
+test_growth_sharing test_growth_communities test_growth_safety test_exercise_sessions test_settings test_growth_hub test_support_chat test_public_base_url test_origin_guard test_rate_limits test_google_play_billing test_home_social_feed"
 BACKEND_DEPS="Osiris_backend/requirements*.txt Osiris_backend/pyproject.toml Osiris_backend/*.lock"
 ADMIN_DEPS="Osiris_admin_web/package.json Osiris_admin_web/package-lock.json"
 KMP_PATHS="shared android_version build.gradle.kts gradle config"
