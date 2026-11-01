@@ -57,8 +57,7 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 ## Conventions
 - Backend tests have no pytest dependency. Each `tests/test_*.py` sets `os.environ.setdefault("OSIRIS_ENV", "test")`
   and a JWT secret, inserts the backend dir on `sys.path`, uses `fastapi.testclient.TestClient` against `main.app`,
-  cleans up its own users by unique email, and prints `PASS <name>`. Copy this pattern for new suites
-  and add the suite to `ci.yml` (human edit, see danger zones) and to `BACKEND_TESTS` in `gate.sh`.
+  cleans up its own users by unique email, and prints `PASS <name>`. Copy tnd add the suite to `ci.yml` (human edit, see danger zones) and to `BACKEND_TESTS` in `gate.sh`.
 - Errors: raise `HTTPException(status_code=..., detail="...")` from endpoints.
 - Every crystal movement goes through `services.ledger.apply_crystal_delta`; it does not commit,
   the endpoint owns the transaction. Challenges must never touch crystals.
@@ -69,29 +68,15 @@ No formatter is adopted yet (ruff.toml defers `ruff format`), so do not reformat
 - TS/React: pages `XxxPage.tsx`, API types centralised in `src/api/types.ts`.
 - API changes require regenerating `Documentation/openapi.json` with `python scripts/check_openapi_drift.py --write`.
 - Commit history uses `<Phase/Release>: <summary>` (e.g. `R2 backend: ...`). New commits use conventional
-  commits (`feat(backend): ...`, `fix(customer): ...`, `test(backend): ...`).
-
-## Danger zones (never touch without a human)
-- Secrets: `**/.env*` (`Osiris_backend/.env`), anything `*secret*`, Stripe keys.
-- Migrations: `Osiris_backend/alembic/versions/**`, `alembic.ini`; no `alembic revision/downgrade/stamp`.
-- Data: `*.db` files (`fitness_mvp.db` is local dev state).
-- Lockfiles: `requirements.lock.txt`, `package-lock.json`, `pubspec.lock`.
-- CI/deploy: `.github/workflows/**`, `Osiris_backend/Dockerfile`, `Osiris_backend/DEPLOY_RUNBOOK.md`.
-- Money path (editable, but flag for human review in the commit body): `services/ledger.py`,
-  `services/stripe_gateway.py`, `scripts/reconcile_ledger.py`.
-These are enforced by `permissions.deny` in `.claude/settings.json` and `.claude/hooks/guard.sh`.
-If a task needs one, stop and write what is needed into PLAN.md as a `[human]` item.
+  commita task needs one, stop and write what is needed into PLAN.md as a `[human]` item.
 
 ## Definition of Done
 - The gate passes (`.claude/hooks/gate.sh` exits 0).
 - New behaviour has tests that follow the patterns above.
 - No `TODO`, `FIXME`, `print` debugging, or `console.log` left behind in changed code.
-- Conventional commit on a feature branch (`git checkout -b feat/<slug>`). Never push to main/master.
-
-## Autonomous workflow
+- Conventional commit on a feature branch (`git checkout -b feat/<slug>`). Never push to main/mlow
 1. Read `PLAN.md`. Take the first unchecked `- [ ]` item that is not marked `[human]`.
 2. Create or reuse a feature branch for it.
 3. Implement exactly that item, meeting its acceptance criteria.
-4. Run the gate; fix until it passes.
-5. Commit with a conventional message, tick the box in `PLAN.md` (same commit).
+4. Run the gate; fix uname commit).
 6. Repeat. Stop and report when only `[human]` items remain or an item is blocked.
