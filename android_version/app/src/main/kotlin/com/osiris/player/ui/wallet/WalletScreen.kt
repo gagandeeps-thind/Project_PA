@@ -1,5 +1,6 @@
 package com.osiris.player.ui.wallet
 
+import android.app.Activity
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,12 +25,15 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.osiris.player.OsirisApplication
 import com.osiris.player.ui.common.LoadableContent
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.SectionHeader
@@ -43,15 +47,26 @@ import com.osiris.shared.domain.wallet.TransactionKind
 import com.osiris.shared.domain.wallet.TransactionStatus
 import com.osiris.shared.presentation.AppGraph
 
-/** Balances, saved methods and history. Demo builds label every figure as demo data. */
+/** Balances, Google Play Billing store, saved methods and history. Demo builds label every figure as demo data. */
 @Composable
 fun WalletScreen(graph: AppGraph) {
     val vm = rememberShared { graph.wallet() }
     val s by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val billingService = remember(context) { (context.applicationContext as OsirisApplication).billing }
+    val billingState by billingService.state.collectAsStateWithLifecycle()
     var addingChain by rememberSaveable { mutableStateOf<Chain?>(null) }
 
     OsirisScaffold("WALLET", vm) { padding ->
-        PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
+        PullToRefreshBox(
+            isRefreshing = false,
+            onRefresh = {
+                vm.refresh()
+                billingService.refreshCatalogAndPurchases()
+            },
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
             LoadableContent(s.overview, onRetry = vm::refresh) { overview ->
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                     if (s.isDemo) {
@@ -69,6 +84,11 @@ fun WalletScreen(graph: AppGraph) {
                             for (b in overview.balances) Text(b.format(), style = MaterialTheme.typography.headlineMedium)
                         }
                     }
+                    playStoreBillingItems(
+                        state = billingState,
+                        billing = billingService,
+                        activity = activity,
+                    )
                     item { SectionHeader("Payment methods") }
                     items(overview.methods, key = { it.id }) { m ->
                         ListItem(

@@ -62,6 +62,19 @@ config/environments/local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# --- Android Release Signing & Keystores ---
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+key.properties
+keystore.properties
+android_version/key.properties
+android_version/keystore.properties
+
 # --- Xcode ---
 ios_version/**/xcuserdata/
 ios_version/**/DerivedData/
