@@ -13,70 +13,37 @@ For how a request travels through these services, see `docs/architecture/how-it-
 | Backups | Cloudflare R2, written nightly by the Render cron job `osiris-db-backup` | |
 | Config | `render.yaml` (Blueprint); secrets live in the Render dashboard | |
 
-## Status on 2026-10-27
+## Status on 2026-10-31
 
 | Check | Result |
 |---|---|
-| `GET https://api.osiris.fit/healthz` | 200, database ok, migrations current (`a7c3e9f2b4d1`) |
-| API memory | 90 MB of 512 MB |
-| Database | 39 tables, RLS on for all, no grants to `anon` or `authenticated`, PostGIS 3.3.7 installed, 21 MB |
-| Accounts | 0 players, **0 admins** (the admin console has no one who can sign in yet) |
-| Supabase security advisor | Only "RLS enabled, no policy" (expected: only the API, as `postgres`, reads the tables) |
-| Supabase performance advisor | One duplicate index (`run_sessions.finish_idempotency_key`), 15 unindexed foreign keys on legacy tables |
-| Cloudflare | `api` and `admin` are **DNS-only** CNAMEs to Render: traffic reaches Render without passing the osiris.fit WAF |
-| Origin lock | Off: `https://osiris-api-ownh.onrender.com` serves the API directly |
-| Admin headers | No CSP, HSTS or frame protection yet (added in `render.yaml`, applied on the next Blueprint sync) |
-| Supabase edge function `redis-cache` | Still deployed, unused (removed from the repo) |
-| Render disk `osiris-data` (1 GB at `/data`) | Holds only the retired SQLite file |
+| `GET https://api.osiris.fit/healthz` | 200 through Cloudflare |
+| Cloudflare | `api` and `admin` are **Proxied**; WAF managed ruleset and auth rate-limit rules on |
+| Origin lock | On: `https://osiris-api-ownh.onrender.com/api/v2/rules` answers 403, `/healthz` 200 |
+| Admin console | First admin seeded; behind Cloudflare Access (email + one-time PIN) |
+| Backups | `osiris-db-backup` uploads nightly to R2 (first run 2026-10-31 23:31 UTC) |
+| Upstash | Configured for shared rate limits |
+| Supabase edge function `redis-cache` | Deleted |
+| Render disk `osiris-data` (1 GB at `/data`) | Still attached; holds only the retired SQLite file |
+| Supabase performance advisor | Duplicate `run_sessions.finish_idempotency_key` constraint dropped by migration `b5d2e8f1a9c3`; missing `crystal_purchases` indexes (incl. the UNIQUE `stripe_payment_intent_id` guard) added by `d6f3a1c8e2b7`; 15 unindexed foreign keys on legacy tables remain |
 
-## Open steps, in this order
+## Setup steps
 
-Order matters for steps 1 to 3: turning on the origin lock before Cloudflare sends the header refuses
-every request.
-
-1. **Proxy the two hosts through Cloudflare.** Cloudflare, `osiris.fit`, DNS: switch `api` and `admin`
-   from DNS only (grey cloud) to **Proxied** (orange). SSL/TLS: **Full (strict)**; Edge Certificates:
-   Always Use HTTPS on, minimum TLS 1.2, HSTS on (max-age 12 months, include subdomains). Then check
-   `https://api.osiris.fit/healthz` still answers 200.
-2. **Add the origin header.** Generate a value once:
-   `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
-   Rules, Transform Rules, Modify Request Header: when hostname equals `api.osiris.fit`, set static
-   header `X-Origin-Verify` to that value.
-3. **Turn the lock on in Render.** `osiris-api`, Environment: `OSIRIS_ORIGIN_SECRET` = the same value.
-   After the deploy:
-   - `https://api.osiris.fit/api/v2/rules` is 200 (through Cloudflare)
-   - `https://osiris-api-ownh.onrender.com/api/v2/rules` is 403 (direct, refused)
-   - `/healthz` is 200 on both (Render's health check calls it directly)
-
-   This also makes rate limits per player. Before it, every player shares one bucket, because the
-   API only sees Render's proxy address.
-4. **WAF and rate rules** (Cloudflare, Security): managed ruleset on; a rate-limiting rule on
-   `/api/v1/auth/login`, `/api/v2/auth/register` and `/api/v2/me/password` (for example 20 requests per
-   minute per IP, block 10 minutes). Leave **Bot Fight Mode off**: it challenges the mobile app's HTTP
-   client, which cannot solve a challenge.
-5. **Upstash** (when you add a second API instance, or now): Upstash console, the database, REST API
-   section. Copy the URL and the token into Render as `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN`. Pick the Upstash region nearest Oregon (us-west).
-6. **Nightly backups to R2.**
-   - Cloudflare, R2: create a private bucket `osiris-backups` and add a lifecycle rule that deletes
-     objects after 35 days. Create an R2 API token with Object Read & Write on that bucket only.
-   - Render, Blueprints, Sync: it creates the cron job `osiris-db-backup` and asks for `R2_ACCOUNT_ID`,
-     `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `BACKUP_PASSPHRASE`. Store the passphrase in
-     your password manager: without it no backup can be restored.
-   - Trigger one run from the dashboard and check the log ends with `backup uploaded:`.
-   - The same sync applies the admin console's security headers.
-7. **Create the first admin.** Render, `osiris-api`, Shell:
-   `python scripts/seed_admin.py` (prompts for email, password and name). Then sign in at
-   https://admin.osiris.fit. Add Cloudflare Access on `admin.osiris.fit` (Zero Trust, Access,
-   Applications) with your email and a one-time PIN, so the console asks for a second factor.
-8. **Delete the unused edge function** (needs your confirmation):
-   `npx supabase functions delete redis-cache --project-ref vhymfishiojgttlzcdgf`, then
-   `npx supabase secrets unset UPSTASH_REDIS_REST_URL UPSTASH_REDIS_REST_TOKEN --project-ref vhymfishiojgttlzcdgf`.
-9. **Stripe**: the webhook URL is `https://api.osiris.fit/api/v1/payments/stripe/webhook`.
-   `OSIRIS_PUBLIC_BASE_URL` must be `https://api.osiris.fit` (share links and the app's `links.webHost`).
-10. **Retire the disk** once you are sure the old SQLite file is not needed: download it first
-    (Render Shell: `ls -l /data`), then remove the `disk:` block from `render.yaml` and the disk in the
-    dashboard. Deleting it destroys the file.
+- [x] 1. **Proxy the two hosts through Cloudflare** (DNS Proxied, SSL Full (strict), Always Use HTTPS, TLS 1.2+, HSTS).
+- [x] 2. **Origin header**: Transform Rule sets `X-Origin-Verify` on `api.osiris.fit`.
+- [x] 3. **Origin lock** in Render: `OSIRIS_ORIGIN_SECRET` matches the header.
+- [x] 4. **WAF and rate rules**: managed ruleset; rate limit on `/api/v1/auth/login`, `/api/v2/auth/register`,
+  `/api/v2/me/password`. Bot Fight Mode stays **off** (the mobile app cannot solve a challenge).
+- [x] 5. **Upstash**: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in Render.
+- [x] 6. **Nightly backups to R2**: bucket `osiris-backups` (35-day lifecycle), cron job `osiris-db-backup`.
+  `BACKUP_PASSPHRASE` lives in the password manager: without it no backup can be restored.
+- [x] 7. **First admin** via `python scripts/seed_admin.py`; Cloudflare Access on `admin.osiris.fit`.
+- [x] 8. **Unused edge function** `redis-cache` and its secrets deleted.
+- [x] 9. **Stripe**: the webhook URL is `https://api.osiris.fit/api/v1/payments/stripe/webhook`.
+  `OSIRIS_PUBLIC_BASE_URL` must be `https://api.osiris.fit` (share links and the app's `links.webHost`).
+  The mobile app only picks up `https://api.osiris.fit` in a new release build.
+- [ ] 10. **Retire the disk**: download the SQLite file first (Render Shell: `ls -l /data`), then remove the
+  `disk:` block from `render.yaml` and the disk in the dashboard. Deleting it destroys the file.
 
 ## Backups and restore
 

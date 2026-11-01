@@ -12,7 +12,7 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import String, Text, engine_from_config, pool
 
 from alembic import context
 
@@ -35,6 +35,13 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = database.Base.metadata
+
+
+def compare_type(context, inspected_column, metadata_column, inspected_type, metadata_type):
+    # Old dev SQLite files report TEXT where models say String(); both hold the same unbounded text.
+    if isinstance(inspected_type, Text) and type(metadata_type) is String and metadata_type.length is None:
+        return False
+    return None  # fall back to Alembic's default comparison
 
 
 def run_migrations_offline() -> None:
@@ -63,6 +70,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             render_as_batch=is_sqlite,
+            compare_type=compare_type,
         )
         with context.begin_transaction():
             context.run_migrations()
