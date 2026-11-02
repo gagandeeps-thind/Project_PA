@@ -33,6 +33,7 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -52,7 +54,10 @@ import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.discover.DiscoverActions
 import com.osiris.player.ui.discover.discoverSections
 import com.osiris.player.ui.theme.OsirisColors
+import com.osiris.shared.domain.run.LatLng
+import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.AppGraph
+import com.osiris.shared.presentation.arise.RouteMode
 
 /** How much of the pull-up panel shows above the tab bar, about a centimetre. */
 private val PEEK = 64.dp
@@ -66,8 +71,7 @@ private val PEEK = 64.dp
 @Composable
 fun AriseScreen(
     graph: AppGraph,
-    onStartRoute: () -> Unit,
-    onRecordRoute: () -> Unit,
+    onRun: (sport: Sport, record: Boolean, routeId: Int?) -> Unit,
     onOpenChallenge: (Int) -> Unit,
     onCreateChallenge: () -> Unit,
     onNearbyChallenges: () -> Unit,
@@ -78,6 +82,13 @@ fun AriseScreen(
     val sections by discover.state.collectAsStateWithLifecycle()
     var recenter by remember { mutableIntStateOf(0) }
     var layersOpen by remember { mutableStateOf(false) }
+    var position by remember { mutableStateOf<LatLng?>(null) }
+    val token = stringResource(R.string.mapbox_access_token)
+    val picker = state.picker
+    LaunchedEffect(picker?.mode) {
+        val at = position
+        if (picker != null && at != null) vm.onTrailCheck(trailAllowed(token, at.lat, at.lng))
+    }
 
     BottomSheetScaffold(
         scaffoldState = rememberBottomSheetScaffoldState(),
@@ -101,6 +112,16 @@ fun AriseScreen(
                         Text("No domains near you yet.", color = OsirisColors.Faint, modifier = Modifier.padding(16.dp))
                     }
                 } else {
+                    state.selectedRoute?.let { route ->
+                        item(key = "route-${route.id}") {
+                            RouteCard(
+                                route,
+                                onStart = { onRun(Sport.fromWire(route.activityType), false, route.id) },
+                                onClose = { vm.selectRoute(null) },
+                            )
+                        }
+                    }
+                    item(key = "legend") { RouteLegend(state.routes.size) }
                     item(key = "actions") { DiscoverActions(onCreateChallenge, onNearbyChallenges) }
                     discoverSections(sections, onOpenChallenge, onRetry = discover::load)
                 }
@@ -108,7 +129,16 @@ fun AriseScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize()) {
-            AriseMap(state, recenter, Modifier.fillMaxSize())
+            AriseMap(
+                state,
+                recenter,
+                onPosition = { p ->
+                    position = p
+                    vm.onLocation(p)
+                },
+                onRouteTap = vm::selectRoute,
+                modifier = Modifier.fillMaxSize(),
+            )
             Column(
                 Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = padding.calculateBottomPadding() + 16.dp),
                 horizontalAlignment = Alignment.End,
@@ -121,8 +151,8 @@ fun AriseScreen(
                 RailButton("Locate me", onClick = { recenter++ }) { Icon(Icons.Outlined.MyLocation, null) }
                 AnimatedVisibility(state.fabOpen, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MenuChoice("Start route", Icons.Outlined.PlayArrow) { vm.toggleFab(); onStartRoute() }
-                        MenuChoice("Record route", Icons.Outlined.FiberManualRecord) { vm.toggleFab(); onRecordRoute() }
+                        MenuChoice("Start route", Icons.Outlined.PlayArrow) { vm.openPicker(RouteMode.START) }
+                        MenuChoice("Record route", Icons.Outlined.FiberManualRecord) { vm.openPicker(RouteMode.RECORD) }
                     }
                 }
                 RailButton(if (state.fabOpen) "Close menu" else "Start or record a route", onClick = vm::toggleFab, accent = true) {
@@ -142,6 +172,12 @@ fun AriseScreen(
         }
     }
     if (layersOpen) LayersSheet(state, vm, onDismiss = { layersOpen = false })
+    picker?.let { p ->
+        ActivityPicker(p, onPick = { sport ->
+            vm.closePicker()
+            onRun(sport, p.mode == RouteMode.RECORD, null)
+        }, onDismiss = vm::closePicker)
+    }
 }
 
 @Composable

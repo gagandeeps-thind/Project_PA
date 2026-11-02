@@ -66,6 +66,7 @@ import com.osiris.player.ui.social.SocialScreen
 import com.osiris.player.ui.support.SupportChatScreen
 import com.osiris.player.ui.today.TodayScreen
 import com.osiris.player.ui.wallet.WalletScreen
+import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.navigation.Destination
 import com.osiris.shared.presentation.navigation.RootState
@@ -80,7 +81,7 @@ object Routes {
     const val SOCIAL = "social"
     const val WALLET = "wallet"
     const val PROFILE = "profile"
-    const val RUN = "run?challengeId={challengeId}"
+    const val RUN = "run?challengeId={challengeId}&sport={sport}&record={record}&route={route}"
     const val CHALLENGES = "challenges"
     const val CHALLENGE = "challenge/{id}"
     const val COURSES = "courses"
@@ -93,6 +94,8 @@ object Routes {
     const val EXERCISE_CAMERA = "exercise/{key}?sets={sets}&reps={reps}&holdS={holdS}"
 
     fun run(challengeId: Int? = null) = if (challengeId == null) "run" else "run?challengeId=$challengeId"
+    fun ariseRun(sport: Sport, record: Boolean, routeId: Int? = null) =
+        "run?sport=${sport.name}&record=$record" + (routeId?.let { "&route=$it" } ?: "")
     fun challenge(id: Int) = "challenge/$id"
     fun community(slug: String) = "community/${android.net.Uri.encode(slug)}"
     fun exerciseCamera(key: String, sets: Int = 1, reps: Int = 0, holdS: Int = 0) =
@@ -187,16 +190,28 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
         composable(Routes.TODAY) { TodayScreen(graph, nav) }
         composable(
             Routes.RUN,
-            arguments = listOf(navArgument("challengeId") { type = NavType.IntType; defaultValue = -1 }),
+            arguments = listOf(
+                navArgument("challengeId") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("sport") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("record") { type = NavType.BoolType; defaultValue = false },
+                navArgument("route") { type = NavType.IntType; defaultValue = -1 },
+            ),
         ) { entry ->
-            val id = entry.arguments?.getInt("challengeId")?.takeIf { it >= 0 }
-            RunScreen(graph, challengeId = id, onBack = nav::popBackStack, onOpenChallenge = { nav.navigate(Routes.challenge(it)) })
+            val args = entry.arguments
+            RunScreen(
+                graph,
+                challengeId = args?.getInt("challengeId")?.takeIf { it >= 0 },
+                onBack = nav::popBackStack,
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+                sport = args?.getString("sport")?.let { name -> Sport.entries.firstOrNull { it.name == name } },
+                record = args?.getBoolean("record") ?: false,
+                guideRouteId = args?.getInt("route")?.takeIf { it >= 0 },
+            )
         }
         composable(Routes.ARISE) {
             AriseScreen(
                 graph,
-                onStartRoute = { nav.navigate(Routes.run()) },
-                onRecordRoute = { nav.navigate(Routes.run()) },
+                onRun = { sport, record, routeId -> nav.navigate(Routes.ariseRun(sport, record, routeId)) },
                 onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
                 onCreateChallenge = { nav.open(Routes.COURSES) },
                 onNearbyChallenges = { nav.open(Routes.CHALLENGES) },

@@ -4,11 +4,13 @@ import com.osiris.shared.core.config.AppConfig
 import com.osiris.shared.data.exercise.ExerciseRepositoryImpl
 import com.osiris.shared.data.network.ApiClient
 import com.osiris.shared.data.network.api.AuthApi
+import com.osiris.shared.data.network.api.AriseApi
 import com.osiris.shared.data.network.api.ChallengeApi
 import com.osiris.shared.data.network.api.CommunityApi
 import com.osiris.shared.data.network.api.ExerciseApi
 import com.osiris.shared.data.network.api.MeApi
 import com.osiris.shared.data.network.api.RunApi
+import com.osiris.shared.data.repository.AriseRepositoryImpl
 import com.osiris.shared.data.repository.AuthRepositoryImpl
 import com.osiris.shared.data.repository.ChallengeRepositoryImpl
 import com.osiris.shared.data.repository.DeviceSetupRepositoryImpl
@@ -21,6 +23,7 @@ import com.osiris.shared.data.repository.SessionStore
 import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.data.support.SupportChatRepositoryImpl
 import com.osiris.shared.data.wallet.MockWalletRepository
+import com.osiris.shared.domain.repository.AriseRepository
 import com.osiris.shared.domain.repository.AuthRepository
 import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.repository.CommunityRepository
@@ -97,6 +100,7 @@ class DataGraph(
     val privacy: PrivacyRepository = PrivacyRepositoryImpl(me, authImpl)
     val deviceSetup: DeviceSetupRepository = DeviceSetupRepositoryImpl(platform.settings)
     val support: SupportChatRepository = SupportChatRepositoryImpl(api)
+    val arise: AriseRepository = AriseRepositoryImpl(AriseApi(api))
 
     /** Null when the build has no wallet (production): the app then hides the Wallet tab. */
     val wallet: WalletRepository? = if (config.features.walletDemo) MockWalletRepository(clock) else null

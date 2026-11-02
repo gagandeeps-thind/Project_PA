@@ -6,6 +6,7 @@ import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.domain.exercise.ExerciseCatalog
 import com.osiris.shared.domain.exercise.ExerciseSpec
 import com.osiris.shared.domain.repository.DevicePermission
+import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.arise.AriseViewModel
 import com.osiris.shared.presentation.challenge.ChallengeBoardViewModel
 import com.osiris.shared.presentation.challenge.ChallengeDetailViewModel
@@ -48,7 +49,8 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun onboarding(inviteToken: String? = null, referralCode: String? = null) =
         OnboardingViewModel(data.auth, data.player, inviteToken, referralCode)
     fun today() = TodayViewModel(data.player, challenges = data.challenges)
-    fun run(challengeId: Int? = null) = RunViewModel(data.runs, data.challenges, data.player, challengeId)
+    fun run(challengeId: Int? = null, sport: Sport? = null, record: Boolean = false, guideRouteId: Int? = null) =
+        RunViewModel(data.runs, data.challenges, data.player, challengeId, sport, record, guideRouteId, data.arise)
     fun challengeBoard() = ChallengeBoardViewModel(data.challenges)
     fun challengeDetail(id: Int) = ChallengeDetailViewModel(id, data.challenges, data.player)
     fun courses() = CoursesViewModel(data.challenges)
@@ -57,7 +59,7 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun rankings() = RankingsViewModel(data.communities)
     fun profile() = ProfileViewModel(data.player)
     fun discover() = DiscoverViewModel(data.challenges)
-    fun arise() = AriseViewModel()
+    fun arise() = AriseViewModel(data.arise)
     fun globalBoards() = GlobalBoardsViewModel(data.communities)
     fun supportChat() = SupportChatViewModel(data.support)
 

@@ -28,6 +28,13 @@ enum class Sport(val wire: String, val label: String) {
     RUN("run", "Run"),
     WALK("walk", "Walk"),
     HIKE("hike", "Hike"),
+    TRAIL("trail", "Trail"),
+    ;
+
+    companion object {
+        /** The sport for a server activity type; anything unknown is a run. */
+        fun fromWire(wire: String): Sport = entries.firstOrNull { it.wire == wire } ?: RUN
+    }
 }
 
 /** The run being recorded, persisted so a restart or an outage never loses route points. */

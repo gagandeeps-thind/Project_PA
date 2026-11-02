@@ -9,6 +9,7 @@ import com.osiris.shared.domain.model.CourseRoute
 import com.osiris.shared.domain.model.ReasonCopy
 import com.osiris.shared.domain.model.RunResult
 import com.osiris.shared.domain.model.TodayData
+import com.osiris.shared.domain.repository.AriseRepository
 import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.RunRepository
@@ -95,6 +96,8 @@ sealed interface RunDialog {
     ) : RunDialog
     /** Offer to register the route as a course: [RunViewModel.registerCourse] or dismiss. */
     data class OfferCourse(val runId: Int) : RunDialog
+    /** A recorded Arise route: name it and publish it with [RunViewModel.publishRoute], or dismiss. */
+    data class PublishRoute(val runId: Int) : RunDialog
     data class Info(val title: String, val body: String) : RunDialog
 }
 
@@ -110,10 +113,23 @@ class RunViewModel(
     private val challenges: ChallengeRepository,
     private val player: PlayerRepository,
     challengeId: Int? = null,
+    /** Activity chosen on the Arise map; null lets the player pick here. */
+    sport: Sport? = null,
+    /** Arise "Record route": an accepted run is offered as a public route. */
+    private val record: Boolean = false,
+    /** Arise "Start this route": its line is drawn as the course to follow. */
+    guideRouteId: Int? = null,
+    private val arise: AriseRepository? = null,
     private val clock: Clock = Clock.System,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
 ) : SharedViewModel(dispatcher) {
-    private val _state = MutableStateFlow(RunState(challengeId = runs.active.value?.challengeId ?: challengeId))
+    private val _state = MutableStateFlow(
+        RunState(
+            challengeId = runs.active.value?.challengeId ?: challengeId,
+            sport = sport ?: Sport.RUN,
+            course = guideRouteId?.let { arise?.cached(it) }?.let { CourseRoute(route = it.line) },
+        ),
+    )
     val state: StateFlow<RunState> = _state.asStateFlow()
     private var ticker: Job? = null
     private var nearbyLoaded = false
@@ -250,7 +266,10 @@ class RunViewModel(
         val dialog = _state.value.dialog
         _state.update { it.copy(dialog = null) }
         // After a celebration comes the course offer, as in the Flutter flow.
-        if (dialog is RunDialog.Celebrate) _state.update { it.copy(dialog = RunDialog.OfferCourse(dialog.runId)) }
+        if (dialog is RunDialog.Celebrate) {
+            val next = if (record && arise != null) RunDialog.PublishRoute(dialog.runId) else RunDialog.OfferCourse(dialog.runId)
+            _state.update { it.copy(dialog = next) }
+        }
     }
 
     fun registerCourse(runId: Int, name: String) {
@@ -258,6 +277,15 @@ class RunViewModel(
         scope.launch {
             challenges.registerCourse(runId, name).orShow() ?: return@launch
             show("Course registered. Publish a challenge from My Courses.", UiMessage.Kind.SUCCESS)
+        }
+    }
+
+    fun publishRoute(runId: Int, name: String, hideEnds: Boolean) {
+        val repo = arise ?: return
+        _state.update { it.copy(dialog = null) }
+        scope.launch {
+            repo.publishRoute(runId, name, hideEnds).orShow() ?: return@launch
+            show("Route published. Every player can see it on the Arise map.", UiMessage.Kind.SUCCESS)
         }
     }
 

@@ -49,6 +49,7 @@ import com.osiris.player.platform.permission.openAppSettings
 import com.osiris.player.platform.permission.rememberPermission
 import com.osiris.player.platform.share.share
 import com.osiris.player.platform.speech.rememberSpeech
+import com.osiris.player.ui.arise.PublishRouteDialog
 import com.osiris.player.ui.common.ConfirmDialog
 import com.osiris.player.ui.common.InfoDialog
 import com.osiris.player.ui.common.OsirisScaffold
@@ -76,8 +77,16 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 @Composable
-fun RunScreen(graph: AppGraph, challengeId: Int?, onBack: () -> Unit, onOpenChallenge: (Int) -> Unit) {
-    val vm = rememberShared { graph.run(challengeId) }
+fun RunScreen(
+    graph: AppGraph,
+    challengeId: Int?,
+    onBack: () -> Unit,
+    onOpenChallenge: (Int) -> Unit,
+    sport: Sport? = null,
+    record: Boolean = false,
+    guideRouteId: Int? = null,
+) {
+    val vm = rememberShared { graph.run(challengeId, sport, record, guideRouteId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val location = remember { LocationClient(context) }
@@ -293,6 +302,10 @@ private fun Dialogs(dialog: RunDialog?, vm: RunViewModel) {
             confirm = "Register",
             onConfirm = { name -> vm.registerCourse(dialog.runId, name) },
             dismiss = "Not now",
+            onDismiss = vm::dismissDialog,
+        )
+        is RunDialog.PublishRoute -> PublishRouteDialog(
+            onPublish = { name, hideEnds -> vm.publishRoute(dialog.runId, name, hideEnds) },
             onDismiss = vm::dismissDialog,
         )
         is RunDialog.Info -> InfoDialog(dialog.title, dialog.body, vm::dismissDialog)
