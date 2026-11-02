@@ -180,6 +180,16 @@ Every exercise below uses the 13 tracked BlazePose/Vision landmarks (`nose`, `le
 ### Phase 5: Verification & Quality Gate
 - [x] **verification-gate**: Run `ruff check .`, `alembic upgrade head`, `reconcile_ledger.py --check`, `check_openapi_drift.py`, all backend test suites, and `./gradlew detekt :shared:core:jvmTest :shared:domain:jvmTest :shared:data:jvmTest :shared:presentation:jvmTest` until every check passes cleanly.
 
-### Real-Device / External Service QA (Requires Physical Hardware / Live Cloud Credentials)
+### Real-Device / External Service QA & Danger-Zone Edits (Requires Human)
+- [x] **[human] ci-sync-backend-suites**: Add the 9 missing backend test suites from `.claude/hooks/gate.sh` (`BACKEND_TESTS`) to `.github/workflows/ci.yml` before `test_arise.py`:
+  - `python tests/test_exercise_sessions.py`
+  - `python tests/test_settings.py`
+  - `python tests/test_growth_hub.py`
+  - `python tests/test_support_chat.py`
+  - `python tests/test_public_base_url.py`
+  - `python tests/test_origin_guard.py`
+  - `python tests/test_rate_limits.py`
+  - `python tests/test_google_play_billing.py`
+  - `python tests/test_home_social_feed.py`
 - [ ] **[human] device-qa-camera-pose**: Validate live camera lighting & floor-stand angles for the 16 exercises on a physical Android phone and physical iPhone.
 - [ ] **[human] device-qa-background-gps**: Validate a 60-minute outdoor GPS run & domain loop trace with the screen locked on a physical Android/iOS device.

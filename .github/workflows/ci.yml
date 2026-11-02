@@ -95,6 +95,33 @@ jobs:
       - name: Tests — Growth G4 consent, reports, blocks, sessions, export and erasure
         run: python tests/test_growth_safety.py
 
+      - name: Tests — camera-verified exercise sessions suite
+        run: python tests/test_exercise_sessions.py
+
+      - name: Tests — user settings suite
+        run: python tests/test_settings.py
+
+      - name: Tests — growth hub suite
+        run: python tests/test_growth_hub.py
+
+      - name: Tests — support chat suite
+        run: python tests/test_support_chat.py
+
+      - name: Tests — public base URL suite
+        run: python tests/test_public_base_url.py
+
+      - name: Tests — origin guard suite
+        run: python tests/test_origin_guard.py
+
+      - name: Tests — rate limits suite
+        run: python tests/test_rate_limits.py
+
+      - name: Tests — Google Play billing suite
+        run: python tests/test_google_play_billing.py
+
+      - name: Tests — home social feed suite
+        run: python tests/test_home_social_feed.py
+
       - name: Tests — Arise routes, domains, attacks, heatmaps
         run: python tests/test_arise.py
 
