@@ -42,6 +42,7 @@ import models  # noqa: E402
 from routers import (  # noqa: E402
     accounts, admin_trust, bounties, challenges, legacy_game, merchants, payments, runs, system,
 )
+from routers import arise as arise_routes  # noqa: E402
 import settings  # noqa: E402
 from services import jobs  # noqa: E402
 
@@ -113,5 +114,6 @@ for _router in (
     exercise_api.router,
     growth_hub.router,
     growth_support.router,
+    arise_routes.router,
 ):
     app.include_router(_router)

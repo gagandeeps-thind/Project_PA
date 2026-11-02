@@ -1,4 +1,5 @@
 from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import false as sa_false, true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 import datetime
@@ -521,6 +522,12 @@ class Course(Base):
     route_hash: Mapped[str] = mapped_column(String, nullable=False, index=True)
     public_lat: Mapped[float] = mapped_column(Float, nullable=False, index=True)
     public_lng: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    # Arise: a published course is visible to every player with `public_route_json` as its line
+    # (trimmed at both ends when `hide_ends`). Private courses keep is_public False.
+    activity_type: Mapped[str] = mapped_column(String, nullable=False, default="run", server_default="run")
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa_false(), index=True)
+    hide_ends: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa_true())
+    public_route_json: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
 

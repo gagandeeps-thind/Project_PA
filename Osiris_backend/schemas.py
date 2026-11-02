@@ -160,7 +160,7 @@ class UserProfile(BaseModel):
 class RunSessionCreate(BaseModel):
     # Foot sports only: game rules (quests, boards, challenges) count every verified session as
     # running or walking distance, so rides wait for per-sport rules and boards.
-    activity_type: str = Field(default="run", pattern="^(run|jog|walk|hike)$")
+    activity_type: str = Field(default="run", pattern="^(run|jog|walk|hike|trail)$")
     device_started_at: datetime
 
 
@@ -707,3 +707,23 @@ class CouponRedeemResponse(BaseModel):
     customer_user_id: int
     redeemed_at: datetime
     message: str
+
+
+# --- Arise: public routes ---------------------------------------------------------
+
+class AriseRoutePublish(BaseModel):
+    run_session_id: int
+    name: str = Field(..., min_length=3, max_length=60)
+    hide_ends: bool = True
+
+
+class AriseRoute(BaseModel):
+    """A public route. `line` is what every player sees: trimmed at both ends when `hide_ends`."""
+    id: int
+    name: str
+    activity_type: str
+    distance_m: float
+    benchmark_seconds: float
+    hide_ends: bool
+    owner_name: str
+    line: List[List[float]]

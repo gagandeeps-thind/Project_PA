@@ -741,6 +741,86 @@
         "title": "AdminUserStatus",
         "type": "object"
       },
+      "AriseRoute": {
+        "description": "A public route. `line` is what every player sees: trimmed at both ends when `hide_ends`.",
+        "properties": {
+          "activity_type": {
+            "title": "Activity Type",
+            "type": "string"
+          },
+          "benchmark_seconds": {
+            "title": "Benchmark Seconds",
+            "type": "number"
+          },
+          "distance_m": {
+            "title": "Distance M",
+            "type": "number"
+          },
+          "hide_ends": {
+            "title": "Hide Ends",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "line": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Line",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_name": {
+            "title": "Owner Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "activity_type",
+          "distance_m",
+          "benchmark_seconds",
+          "hide_ends",
+          "owner_name",
+          "line"
+        ],
+        "title": "AriseRoute",
+        "type": "object"
+      },
+      "AriseRoutePublish": {
+        "properties": {
+          "hide_ends": {
+            "default": true,
+            "title": "Hide Ends",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 3,
+            "title": "Name",
+            "type": "string"
+          },
+          "run_session_id": {
+            "title": "Run Session Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_session_id",
+          "name"
+        ],
+        "title": "AriseRoutePublish",
+        "type": "object"
+      },
       "AttemptSubmit": {
         "properties": {
           "run_id": {
@@ -5478,7 +5558,7 @@
         "properties": {
           "activity_type": {
             "default": "run",
-            "pattern": "^(run|jog|walk|hike)$",
+            "pattern": "^(run|jog|walk|hike|trail)$",
             "title": "Activity Type",
             "type": "string"
           },
@@ -8890,6 +8970,122 @@
           }
         ],
         "summary": "Admin Unsuspend User"
+      }
+    },
+    "/api/v2/arise/routes": {
+      "get": {
+        "description": "Public routes whose marker is within `radius_km`, nearest first (at most 100).",
+        "operationId": "nearby_routes_api_v2_arise_routes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "radius_km",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "exclusiveMinimum": 0,
+              "maximum": 50,
+              "title": "Radius Km",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AriseRoute"
+                  },
+                  "title": "Response Nearby Routes Api V2 Arise Routes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Nearby Routes"
+      },
+      "post": {
+        "description": "Publish an accepted run as a route every player can see and run. Registers the course (same rules\nand privacy trim as /api/v2/courses), then makes it public. Publishing the same run again returns it.",
+        "operationId": "publish_route_api_v2_arise_routes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AriseRoutePublish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseRoute"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Publish Route"
       }
     },
     "/api/v2/auth/register": {
