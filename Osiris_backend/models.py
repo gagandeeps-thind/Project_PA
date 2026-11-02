@@ -1002,3 +1002,78 @@ class PostComment(Base):
     body: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
 
+
+# --- Start tab: training sessions and group challenges --------------------------------
+
+class TrainingSession(Base):
+    """One workout started from the Start tab (or imported from Health Connect).
+
+    Stats are computed by the server from `series_json`; the client's own summary is never
+    trusted. A camera activity links its verified `ExerciseSession`, whose reps it copies.
+    mode: train (personal) | challenge (counts towards joined group challenges).
+    """
+    __tablename__ = "training_sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    client_session_id: Mapped[str] = mapped_column(String, nullable=False)
+    activity_key: Mapped[str] = mapped_column(String, nullable=False)
+    mode: Mapped[str] = mapped_column(String, nullable=False, default="train")
+    source: Mapped[str] = mapped_column(String, nullable=False, default="sensor")   # sensor | camera | health_connect
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    duration_s: Mapped[float] = mapped_column(Float, nullable=False)
+    distance_m: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    elevation_gain_m: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    reps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    exercise_session_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("exercise_sessions.id"), nullable=True, unique=True)
+    hr_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hr_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hr_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    power_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    power_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    power_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    speed_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    speed_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elev_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elev_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    series_json: Mapped[str] = mapped_column(String, nullable=False, default="{}")
+    devices_json: Mapped[str] = mapped_column(String, nullable=False, default="[]")
+    social_post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=True)
+    local_date: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_session_id", name="uq_training_sessions_user_client"),
+        Index("ix_training_sessions_user_activity_started", "user_id", "activity_key", "started_at"),
+    )
+
+
+class GroupChallenge(Base):
+    """A goal friends race towards: a target of distance, time, reps or sessions of one
+    activity inside a window. Official ones are created by an admin and open to everyone;
+    the others to the creator's connections. Challenges never touch crystals."""
+    __tablename__ = "group_challenges"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    creator_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    is_official: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    activity_key: Mapped[str] = mapped_column(String, nullable=False)
+    metric: Mapped[str] = mapped_column(String, nullable=False)        # distance_m | duration_s | reps | sessions
+    target: Mapped[float] = mapped_column(Float, nullable=False)
+    starts_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    ends_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")   # active | cancelled
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class GroupChallengeMember(Base):
+    __tablename__ = "group_challenge_members"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    challenge_id: Mapped[int] = mapped_column(Integer, ForeignKey("group_challenges.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="invited")   # invited | joined
+    invited_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    joined_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (UniqueConstraint("challenge_id", "user_id", name="uq_group_challenge_members_pair"),)
+

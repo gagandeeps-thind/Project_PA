@@ -181,6 +181,15 @@ def delete_growth_data(db: Session, user_ids: list[int]) -> None:
     row goes. Other players' referral links to them are cleared, not deleted."""
     if not user_ids:
         return
+    # Start tab rows first: training sessions point at exercise sets and posts deleted below.
+    db.query(models.TrainingSession).filter(models.TrainingSession.user_id.in_(user_ids)).delete(synchronize_session=False)
+    created = [c.id for c in db.query(models.GroupChallenge.id).filter(models.GroupChallenge.creator_id.in_(user_ids))]
+    db.query(models.GroupChallengeMember).filter(
+        models.GroupChallengeMember.user_id.in_(user_ids) | models.GroupChallengeMember.challenge_id.in_(created or [-1])
+    ).delete(synchronize_session=False)
+    db.query(models.GroupChallengeMember).filter(models.GroupChallengeMember.invited_by.in_(user_ids)).update(
+        {models.GroupChallengeMember.invited_by: None}, synchronize_session=False)
+    db.query(models.GroupChallenge).filter(models.GroupChallenge.id.in_(created or [-1])).delete(synchronize_session=False)
     db.query(models.QuestAward).filter(models.QuestAward.user_id.in_(user_ids)).delete(synchronize_session=False)
     db.query(models.ExerciseSession).filter(models.ExerciseSession.user_id.in_(user_ids)).delete(synchronize_session=False)
     db.query(models.AnalyticsEvent).filter(models.AnalyticsEvent.user_id.in_(user_ids)).delete(synchronize_session=False)

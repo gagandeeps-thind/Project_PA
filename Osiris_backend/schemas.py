@@ -1,7 +1,7 @@
 """Request and response models (Pydantic) of the routers in `routers/`.
 Database tables live in models.py; growth routers keep their own models next to their endpoints."""
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -788,3 +788,159 @@ class AriseHeatCell(BaseModel):
     lat: float
     lng: float
     w: int
+
+
+# --- Start tab: training sessions and group challenges ---------------------------------
+
+SeriesPoints = List[List[float]]
+
+
+class TrainingActivity(BaseModel):
+    key: str
+    name: str
+    kind: str                        # camera | gps | sensor
+    metric: str                      # distance_m | duration_s | reps
+    max_speed_mps: float
+    gps: bool
+
+
+class TrainingSeries(BaseModel):
+    hr: SeriesPoints = Field(default_factory=list, max_length=720)
+    power: SeriesPoints = Field(default_factory=list, max_length=720)
+    speed: SeriesPoints = Field(default_factory=list, max_length=720)
+    elevation: SeriesPoints = Field(default_factory=list, max_length=720)
+
+
+class TrainingSessionIn(BaseModel):
+    client_session_id: str = Field(..., min_length=1, max_length=64)
+    activity_key: str = Field(..., max_length=32)
+    mode: Literal["train", "challenge"] = "train"
+    source: Literal["sensor", "camera", "health_connect"] = "sensor"
+    started_at: datetime
+    duration_s: float = Field(..., gt=0, le=86_400)
+    distance_m: float = Field(default=0.0, ge=0, le=1_000_000)
+    exercise_session_id: Optional[int] = None
+    series: TrainingSeries = Field(default_factory=TrainingSeries)
+    devices: List[str] = Field(default_factory=list, max_length=8)
+
+
+class TrainingSessionOut(BaseModel):
+    id: int
+    activity_key: str
+    mode: str
+    source: str
+    started_at: datetime
+    duration_s: float
+    distance_m: float
+    elevation_gain_m: float
+    reps: int
+    hr_avg: Optional[float] = None
+    hr_min: Optional[float] = None
+    hr_max: Optional[float] = None
+    power_avg: Optional[float] = None
+    power_min: Optional[float] = None
+    power_max: Optional[float] = None
+    speed_avg: Optional[float] = None
+    speed_max: Optional[float] = None
+    elev_min: Optional[float] = None
+    elev_max: Optional[float] = None
+    posted: bool
+    is_pr: bool
+    series: Optional[TrainingSeries] = None
+
+
+class TrainingSessions(BaseModel):
+    items: List[TrainingSessionOut]
+
+
+class TrainingPost(BaseModel):
+    caption: str = Field(default="", max_length=600)
+
+
+class TrainingRecord(BaseModel):
+    value: float
+    unit: str
+    session_id: int
+
+
+class TrainingSegments(BaseModel):
+    workouts: int
+    challenges: int
+
+
+class TrainingSummary(BaseModel):
+    activity_key: str
+    pr: Optional[TrainingRecord] = None
+    segments: TrainingSegments
+    total_duration_s: float
+    total_distance_m: float
+    total_reps: int
+    week_sessions: int
+    latest: Optional[TrainingSessionOut] = None
+
+
+class TrainingWeek(BaseModel):
+    week_start: str
+    duration_s: float
+    sessions: int
+    by_activity: Dict[str, float]
+
+
+class TrainingProgress(BaseModel):
+    weeks: List[TrainingWeek]
+
+
+class MotivationQuote(BaseModel):
+    id: int
+    text: str
+    author: str
+
+
+class Connection(BaseModel):
+    user_id: int
+    display_name: str
+    avatar_url: Optional[str] = None
+
+
+class GroupMemberOut(BaseModel):
+    user_id: int
+    display_name: str
+    avatar_url: Optional[str] = None
+    progress: float
+
+
+class GroupChallengeOut(BaseModel):
+    id: int
+    title: str
+    activity_key: str
+    metric: str
+    target: float
+    starts_at: datetime
+    ends_at: datetime
+    is_official: bool
+    creator_id: Optional[int] = None
+    status: str                      # active | ended | cancelled
+    my_status: Optional[str] = None  # joined | invited
+    my_progress: float
+    members: int
+    top: List[GroupMemberOut]
+
+
+class GroupChallengeDetail(GroupChallengeOut):
+    leaderboard: List[GroupMemberOut]
+
+
+class GroupChallengeLists(BaseModel):
+    official: List[GroupChallengeOut]
+    mine: List[GroupChallengeOut]
+    invited: List[GroupChallengeOut]
+    connections: List[GroupChallengeOut]
+
+
+class GroupChallengeCreate(BaseModel):
+    title: str = Field(..., min_length=3, max_length=80)
+    activity_key: str = Field(..., max_length=32)
+    metric: Literal["distance_m", "duration_s", "reps", "sessions"]
+    target: float = Field(..., gt=0, le=10_000_000)
+    days: int = Field(..., ge=1, le=90)
+    invitee_ids: List[int] = Field(default_factory=list, max_length=50)

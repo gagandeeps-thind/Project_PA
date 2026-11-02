@@ -2275,6 +2275,35 @@
         "title": "CommunityUpdate",
         "type": "object"
       },
+      "Connection": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name"
+        ],
+        "title": "Connection",
+        "type": "object"
+      },
       "Coordinate": {
         "properties": {
           "lat": {
@@ -4275,6 +4304,29 @@
           "business_type"
         ],
         "title": "MerchantResponse",
+        "type": "object"
+      },
+      "MotivationQuote": {
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "author"
+        ],
+        "title": "MotivationQuote",
         "type": "object"
       },
       "NotificationOut": {
@@ -6501,6 +6553,533 @@
           "message"
         ],
         "title": "TokenOut",
+        "type": "object"
+      },
+      "TrainingActivity": {
+        "properties": {
+          "gps": {
+            "title": "Gps",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_speed_mps": {
+            "title": "Max Speed Mps",
+            "type": "number"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "kind",
+          "metric",
+          "max_speed_mps",
+          "gps"
+        ],
+        "title": "TrainingActivity",
+        "type": "object"
+      },
+      "TrainingPost": {
+        "properties": {
+          "caption": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Caption",
+            "type": "string"
+          }
+        },
+        "title": "TrainingPost",
+        "type": "object"
+      },
+      "TrainingProgress": {
+        "properties": {
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingWeek"
+            },
+            "title": "Weeks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "weeks"
+        ],
+        "title": "TrainingProgress",
+        "type": "object"
+      },
+      "TrainingRecord": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "session_id"
+        ],
+        "title": "TrainingRecord",
+        "type": "object"
+      },
+      "TrainingSegments": {
+        "properties": {
+          "challenges": {
+            "title": "Challenges",
+            "type": "integer"
+          },
+          "workouts": {
+            "title": "Workouts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workouts",
+          "challenges"
+        ],
+        "title": "TrainingSegments",
+        "type": "object"
+      },
+      "TrainingSeries": {
+        "properties": {
+          "elevation": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 720,
+            "title": "Elevation",
+            "type": "array"
+          },
+          "hr": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 720,
+            "title": "Hr",
+            "type": "array"
+          },
+          "power": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 720,
+            "title": "Power",
+            "type": "array"
+          },
+          "speed": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 720,
+            "title": "Speed",
+            "type": "array"
+          }
+        },
+        "title": "TrainingSeries",
+        "type": "object"
+      },
+      "TrainingSessionIn": {
+        "properties": {
+          "activity_key": {
+            "maxLength": 32,
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "client_session_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Client Session Id",
+            "type": "string"
+          },
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Devices",
+            "type": "array"
+          },
+          "distance_m": {
+            "default": 0.0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Distance M",
+            "type": "number"
+          },
+          "duration_s": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 86400.0,
+            "title": "Duration S",
+            "type": "number"
+          },
+          "exercise_session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Session Id"
+          },
+          "mode": {
+            "default": "train",
+            "enum": [
+              "train",
+              "challenge"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "series": {
+            "$ref": "#/components/schemas/TrainingSeries"
+          },
+          "source": {
+            "default": "sensor",
+            "enum": [
+              "sensor",
+              "camera",
+              "health_connect"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_session_id",
+          "activity_key",
+          "started_at",
+          "duration_s"
+        ],
+        "title": "TrainingSessionIn",
+        "type": "object"
+      },
+      "TrainingSessionOut": {
+        "properties": {
+          "activity_key": {
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "distance_m": {
+            "title": "Distance M",
+            "type": "number"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "elev_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elev Max"
+          },
+          "elev_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elev Min"
+          },
+          "elevation_gain_m": {
+            "title": "Elevation Gain M",
+            "type": "number"
+          },
+          "hr_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Avg"
+          },
+          "hr_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Max"
+          },
+          "hr_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Min"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_pr": {
+            "title": "Is Pr",
+            "type": "boolean"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "posted": {
+            "title": "Posted",
+            "type": "boolean"
+          },
+          "power_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Avg"
+          },
+          "power_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Max"
+          },
+          "power_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Min"
+          },
+          "reps": {
+            "title": "Reps",
+            "type": "integer"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainingSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "speed_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Avg"
+          },
+          "speed_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Max"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "activity_key",
+          "mode",
+          "source",
+          "started_at",
+          "duration_s",
+          "distance_m",
+          "elevation_gain_m",
+          "reps",
+          "posted",
+          "is_pr"
+        ],
+        "title": "TrainingSessionOut",
+        "type": "object"
+      },
+      "TrainingSessions": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingSessionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TrainingSessions",
+        "type": "object"
+      },
+      "TrainingSummary": {
+        "properties": {
+          "activity_key": {
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainingSessionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pr": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainingRecord"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "segments": {
+            "$ref": "#/components/schemas/TrainingSegments"
+          },
+          "total_distance_m": {
+            "title": "Total Distance M",
+            "type": "number"
+          },
+          "total_duration_s": {
+            "title": "Total Duration S",
+            "type": "number"
+          },
+          "total_reps": {
+            "title": "Total Reps",
+            "type": "integer"
+          },
+          "week_sessions": {
+            "title": "Week Sessions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activity_key",
+          "segments",
+          "total_duration_s",
+          "total_distance_m",
+          "total_reps",
+          "week_sessions"
+        ],
+        "title": "TrainingSummary",
+        "type": "object"
+      },
+      "TrainingWeek": {
+        "properties": {
+          "by_activity": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "By Activity",
+            "type": "object"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start",
+          "duration_s",
+          "sessions",
+          "by_activity"
+        ],
+        "title": "TrainingWeek",
         "type": "object"
       },
       "UserCreate": {
@@ -11629,6 +12208,33 @@
         "summary": "My Communities"
       }
     },
+    "/api/v2/me/connections": {
+      "get": {
+        "operationId": "my_connections_api_v2_me_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Connection"
+                  },
+                  "title": "Response My Connections Api V2 Me Connections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "My Connections"
+      }
+    },
     "/api/v2/me/erase": {
       "post": {
         "description": "Permanently erase the account. Needs the password and the word DELETE.",
@@ -12230,6 +12836,268 @@
           }
         ],
         "summary": "My Today"
+      }
+    },
+    "/api/v2/me/training/progress": {
+      "get": {
+        "operationId": "training_progress_api_v2_me_training_progress_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "weeks",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "maximum": 52,
+              "minimum": 1,
+              "title": "Weeks",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingProgress"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Training Progress"
+      }
+    },
+    "/api/v2/me/training/sessions": {
+      "get": {
+        "operationId": "list_sessions_api_v2_me_training_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "activity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Activity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingSessions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Sessions"
+      }
+    },
+    "/api/v2/me/training/sessions/{session_id}": {
+      "get": {
+        "operationId": "session_detail_api_v2_me_training_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingSessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Session Detail"
+      }
+    },
+    "/api/v2/me/training/summary": {
+      "get": {
+        "operationId": "training_summary_api_v2_me_training_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "activity",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "title": "Activity",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Training Summary"
+      }
+    },
+    "/api/v2/motivation/quote": {
+      "get": {
+        "operationId": "motivation_quote_api_v2_motivation_quote_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "exclude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MotivationQuote"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Motivation Quote"
       }
     },
     "/api/v2/osirians/suggested": {
@@ -13145,6 +14013,130 @@
           }
         },
         "summary": "Get Share Card"
+      }
+    },
+    "/api/v2/training/activities": {
+      "get": {
+        "operationId": "list_activities_api_v2_training_activities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrainingActivity"
+                  },
+                  "title": "Response List Activities Api V2 Training Activities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Activities"
+      }
+    },
+    "/api/v2/training/sessions": {
+      "post": {
+        "operationId": "upload_session_api_v2_training_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingSessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingSessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Upload Session"
+      }
+    },
+    "/api/v2/training/sessions/{session_id}/post": {
+      "post": {
+        "operationId": "post_session_api_v2_training_sessions__session_id__post_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Post Session"
       }
     }
   }
