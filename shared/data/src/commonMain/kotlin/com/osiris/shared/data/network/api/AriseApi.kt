@@ -7,6 +7,7 @@ import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
 import com.osiris.shared.domain.model.AriseWorkout
 import com.osiris.shared.domain.model.AriseWorkoutResult
+import com.osiris.shared.domain.model.HeatCell
 
 /** Arise: public routes. */
 class AriseApi(private val api: ApiClient) {
@@ -29,6 +30,12 @@ class AriseApi(private val api: ApiClient) {
         api.post("/api/v2/arise/domains/$domainId/attack", ApiClient.body("run_session_id" to runId))
 
     suspend fun completeAttack(attackId: Int): AriseAttackResult = api.post("/api/v2/arise/attacks/$attackId/workout/complete")
+
+    suspend fun heatmap(kind: String, south: Double, west: Double, north: Double, east: Double): List<HeatCell> =
+        api.get(
+            "/api/v2/arise/heatmap",
+            mapOf("kind" to kind, "min_lat" to south, "min_lng" to west, "max_lat" to north, "max_lng" to east),
+        )
 
     suspend fun photo(domainId: Int, jpegBase64: String): AriseDomain =
         api.put("/api/v2/arise/domains/$domainId/photo", ApiClient.body("jpeg_base64" to jpegBase64))

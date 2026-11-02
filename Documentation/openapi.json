@@ -934,6 +934,29 @@
         "title": "AriseDomains",
         "type": "object"
       },
+      "AriseHeatCell": {
+        "properties": {
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "title": "Lng",
+            "type": "number"
+          },
+          "w": {
+            "title": "W",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "w"
+        ],
+        "title": "AriseHeatCell",
+        "type": "object"
+      },
       "AriseRoute": {
         "description": "A public route. `line` is what every player sees: trimmed at both ends when `hide_ends`.",
         "properties": {
@@ -9617,6 +9640,100 @@
           }
         ],
         "summary": "Complete Exceed"
+      }
+    },
+    "/api/v2/arise/heatmap": {
+      "get": {
+        "description": "Where accepted runs go, in ~100 m cells, for the visible map area (at most 0.5\u00b0 a side). The first\nand last 200 m of every run are left out; shared kinds hide cells fewer than 3 players crossed.\nglobal: all runs; weekly: the last 7 days; night: started 20:00-05:00 solar time; personal: the\ncaller's runs only.",
+        "operationId": "heatmap_api_v2_arise_heatmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "pattern": "^(global|weekly|night|personal)$",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Min Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Min Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Max Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Max Lng",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AriseHeatCell"
+                  },
+                  "title": "Response Heatmap Api V2 Arise Heatmap Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Heatmap"
       }
     },
     "/api/v2/arise/routes": {

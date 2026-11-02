@@ -77,3 +77,7 @@ data class AriseAttackResult(
     val workout: AriseWorkout? = null,
     val domain: AriseDomain,
 )
+
+/** One heatmap cell: how many runs crossed it. */
+@Serializable
+data class HeatCell(val lat: Double, val lng: Double, val w: Int)

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,7 @@ import com.mapbox.maps.Style
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.fillLayer
+import com.mapbox.maps.extension.style.layers.generated.heatmapLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
 import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
@@ -53,10 +55,13 @@ import com.osiris.player.R
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.model.AriseDomain
 import com.osiris.shared.domain.model.AriseRoute
+import com.osiris.shared.domain.model.HeatCell
 import com.osiris.shared.domain.model.MapStyle
 import com.osiris.shared.domain.model.Overlay
+import com.osiris.shared.domain.model.TerrainLayer
 import com.osiris.shared.domain.run.LatLng
 import com.osiris.shared.presentation.arise.AriseState
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * The Arise map (Mapbox): the player's position, the chosen style, POIs, bike lanes and 3D terrain.
@@ -86,7 +91,9 @@ fun AriseMap(
             }
         }
     }
-    val controller = remember { MapController(map) }
+    val scope = rememberCoroutineScope()
+    val token = context.getString(R.string.mapbox_access_token)
+    val controller = remember { MapController(map, token, scope) }
     controller.onPosition = onPosition
     controller.onRouteTap = onRouteTap
     AndroidView({ map }, modifier)
@@ -95,13 +102,15 @@ fun AriseMap(
 }
 
 /** Applies [AriseState] to the map. A style change reloads the style, which drops our layers, so they are re-added. */
-private class MapController(private val map: MapView) {
+private class MapController(private val map: MapView, private val token: String, private val scope: CoroutineScope) {
     private var state = AriseState()
     private var loadedStyle: MapStyle? = null
     private var last: Point? = null
     private var centred = false
     private var drawn: Pair<List<AriseRoute>, Int?>? = null
     private var drawnDomains: List<AriseDomain>? = null
+    private var drawnHeat: List<HeatCell>? = null
+    private var drawnTerrain: TerrainLayer? = null
     var onPosition: (LatLng) -> Unit = {}
     var onRouteTap: (Int?) -> Unit = {}
 
@@ -127,6 +136,8 @@ private class MapController(private val map: MapView) {
             loadedStyle = next.style
             drawn = null
             drawnDomains = null
+            drawnHeat = null
+            drawnTerrain = null
             map.mapboxMap.loadStyle(styleUri(next.style)) { style -> decorate(style) }
         } else {
             map.mapboxMap.style?.takeIf { it.isStyleLoaded() }?.let(::decorate)
@@ -157,6 +168,36 @@ private class MapController(private val map: MapView) {
         if (s.style == MapStyle.WINTER) style.setSnow(snow { intensity(SNOW_INTENSITY) }) else style.removeSnow()
         routes(style, s.routes, s.selectedRoute?.id)
         domains(style, if (s.attackMode) s.domains?.let { it.suggested + it.hard }.orEmpty() else emptyList())
+        heat(style, s.heat)
+        terrainOverlay(style, s.terrain)
+    }
+
+    /** The chosen heatmap: each cell a point weighted by how many runs crossed it. */
+    private fun heat(style: Style, cells: List<HeatCell>) {
+        if (drawnHeat == cells) return
+        drawnHeat = cells
+        val features = FeatureCollection.fromFeatures(
+            cells.map { c -> Feature.fromGeometry(Point.fromLngLat(c.lng, c.lat)).apply { addNumberProperty("w", c.w) } },
+        )
+        val source = style.getSourceAs<GeoJsonSource>(HEAT)
+        if (source == null) style.addSource(geoJsonSource(HEAT) { featureCollection(features) }) else source.featureCollection(features)
+        if (!style.styleLayerExists(HEAT)) {
+            style.addLayer(
+                heatmapLayer(HEAT, HEAT) {
+                    heatmapWeight(Expression.fromRaw("[\"interpolate\",[\"linear\"],[\"get\",\"w\"],1,0.2,20,1]"))
+                    heatmapRadius(HEAT_RADIUS)
+                    heatmapOpacity(HEAT_OPACITY)
+                    if (state.style.isStandard) slot("middle")
+                },
+            )
+        }
+    }
+
+    private fun terrainOverlay(style: Style, layer: TerrainLayer?) {
+        if (drawnTerrain == layer) return
+        drawnTerrain = layer
+        TerrainTiles.detach(style)
+        if (layer != null) TerrainTiles(style, token, layer, scope).attach()
     }
 
     /** Attack mode's domains as translucent red areas with an outline. */
@@ -261,6 +302,9 @@ private class MapController(private val map: MapView) {
         const val BIKE_LANES = "osiris-bike-lanes"
         const val ROUTES = "osiris-routes"
         const val DOMAINS = "osiris-domains"
+        const val HEAT = "osiris-heat"
+        const val HEAT_RADIUS = 18.0
+        const val HEAT_OPACITY = 0.8
         const val DOMAIN_EDGES = "osiris-domain-edges"
         const val DOMAIN_COLOR = "#E53935"
         const val DOMAIN_OPACITY = 0.25

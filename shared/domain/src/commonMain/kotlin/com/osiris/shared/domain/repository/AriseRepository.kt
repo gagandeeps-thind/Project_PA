@@ -7,6 +7,8 @@ import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
 import com.osiris.shared.domain.model.AriseWorkout
 import com.osiris.shared.domain.model.AriseWorkoutResult
+import com.osiris.shared.domain.model.HeatCell
+import com.osiris.shared.domain.model.Heatmap
 import com.osiris.shared.domain.run.LatLng
 
 /** Public routes on the Arise map. */
@@ -40,6 +42,9 @@ interface AriseRepository {
 
     /** A domain from the last [nearbyDomains] result, or null. */
     fun cachedDomain(id: Int): AriseDomain?
+
+    /** Heatmap cells of [kind] inside the box. */
+    suspend fun heatmap(kind: Heatmap, south: Double, west: Double, north: Double, east: Double): Outcome<List<HeatCell>>
 
     /** The owner's JPEG photo for a domain, base64-encoded. */
     suspend fun setPhoto(domainId: Int, jpegBase64: String): Outcome<AriseDomain>

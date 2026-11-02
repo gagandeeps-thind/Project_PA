@@ -8,6 +8,7 @@ import binascii
 import json
 import secrets
 from datetime import timedelta
+from collections import defaultdict
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -29,6 +30,7 @@ from schemas import (
     AriseDomain,
     AriseDomainPhoto,
     AriseDomains,
+    AriseHeatCell,
     AriseRoute,
     AriseRoutePublish,
     AriseWorkout,
@@ -347,3 +349,60 @@ def get_domain_photo(domain_id: int, db: Session = Depends(get_db)):
     if photo is None:
         raise HTTPException(status_code=404, detail="No photo")
     return Response(photo.jpeg, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=300"})
+
+
+# --- heatmaps -----------------------------------------------------------------------
+
+HEAT_KINDS = "^(global|weekly|night|personal)$"
+MAX_HEAT_SPAN_DEG = 0.5
+MIN_SHARED_PLAYERS = 3
+WEEK = timedelta(days=7)
+
+
+@router.get("/api/v2/arise/heatmap", response_model=List[AriseHeatCell])
+def heatmap(
+    kind: str = Query(..., pattern=HEAT_KINDS),
+    min_lat: float = Query(..., ge=-90, le=90),
+    min_lng: float = Query(..., ge=-180, le=180),
+    max_lat: float = Query(..., ge=-90, le=90),
+    max_lng: float = Query(..., ge=-180, le=180),
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player),
+):
+    """Where accepted runs go, in ~100 m cells, for the visible map area (at most 0.5° a side). The first
+    and last 200 m of every run are left out; shared kinds hide cells fewer than 3 players crossed.
+    global: all runs; weekly: the last 7 days; night: started 20:00-05:00 solar time; personal: the
+    caller's runs only."""
+    if not (0 < max_lat - min_lat <= MAX_HEAT_SPAN_DEG and 0 < max_lng - min_lng <= MAX_HEAT_SPAN_DEG):
+        raise _api_error(422, "AREA_TOO_LARGE", "Zoom in: the heatmap covers at most 0.5 degrees a side")
+    # Runs that touch the area; their whole line is used so the end trim is measured on the real run.
+    q = db.query(models.RunSession.id, models.RunSession.user_id, models.RunSession.started_at).filter(
+        models.RunSession.verification_status == "accepted",
+        models.RunSession.id.in_(
+            db.query(models.RoutePoint.run_session_id).filter(
+                models.RoutePoint.lat.between(min_lat, max_lat), models.RoutePoint.lng.between(min_lng, max_lng),
+            )
+        ),
+    )
+    if kind == "personal":
+        q = q.filter(models.RunSession.user_id == token_data["id"])
+    if kind == "weekly":
+        q = q.filter(models.RunSession.started_at >= _now_naive_utc() - WEEK)
+    runs = q.all()
+    # shortcut: aggregates per request over raw route points; precompute cells in a job if this gets slow.
+    points: dict[int, list[tuple[float, float]]] = defaultdict(list)
+    for run_id, lat, lng in (
+        db.query(models.RoutePoint.run_session_id, models.RoutePoint.lat, models.RoutePoint.lng)
+        .filter(models.RoutePoint.run_session_id.in_([r.id for r in runs] or [-1]))
+        .order_by(models.RoutePoint.run_session_id, models.RoutePoint.sequence)
+    ):
+        points[run_id].append((lat, lng))
+    if kind == "night":
+        runs = [r for r in runs if r.started_at and points[r.id] and arise.is_night(r.started_at, points[r.id][0][1])]
+    cells = arise.heat_cells(
+        [(r.user_id, points[r.id]) for r in runs], min_players=1 if kind == "personal" else MIN_SHARED_PLAYERS,
+    )
+    return [
+        AriseHeatCell(lat=lat, lng=lng, w=w) for lat, lng, w in cells
+        if min_lat <= lat <= max_lat and min_lng <= lng <= max_lng
+    ]

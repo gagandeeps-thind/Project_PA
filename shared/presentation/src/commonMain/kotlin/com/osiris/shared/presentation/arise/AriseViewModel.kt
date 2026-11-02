@@ -2,6 +2,7 @@ package com.osiris.shared.presentation.arise
 
 import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
+import com.osiris.shared.domain.model.HeatCell
 import com.osiris.shared.domain.model.Heatmap
 import com.osiris.shared.domain.model.MapStyle
 import com.osiris.shared.domain.model.Overlay
@@ -42,6 +43,8 @@ data class AriseState(
     val picker: PickerState? = null,
     /** Attack mode's domains; null until loaded. */
     val domains: AriseDomains? = null,
+    /** The chosen heatmap's cells around the player. */
+    val heat: List<HeatCell> = emptyList(),
 )
 
 /** The Arise map: its look and layers, public routes around the player, the + menu and attack mode. */
@@ -60,7 +63,20 @@ class AriseViewModel(
         it.copy(overlays = if (overlay in it.overlays) it.overlays - overlay else it.overlays + overlay)
     }
 
-    fun setHeatmap(heatmap: Heatmap) = _state.update { it.copy(heatmap = heatmap.takeIf { h -> h != it.heatmap }) }
+    fun setHeatmap(heatmap: Heatmap) {
+        _state.update { it.copy(heatmap = heatmap.takeIf { h -> h != it.heatmap }, heat = emptyList()) }
+        loadHeat()
+    }
+
+    /** The heatmap around the player: a box [HEAT_SPAN] degrees each way (about 5 km). */
+    private fun loadHeat() {
+        val kind = _state.value.heatmap ?: return
+        val at = position ?: return
+        scope.launch {
+            val cells = arise.heatmap(kind, at.lat - HEAT_SPAN, at.lng - HEAT_SPAN, at.lat + HEAT_SPAN, at.lng + HEAT_SPAN).orShow()
+            if (cells != null && _state.value.heatmap == kind) _state.update { it.copy(heat = cells) }
+        }
+    }
 
     fun setTerrain(layer: TerrainLayer) = _state.update { it.copy(terrain = layer.takeIf { l -> l != it.terrain }) }
 
@@ -92,6 +108,7 @@ class AriseViewModel(
         val first = this.position == null
         this.position = position
         if (first && _state.value.attackMode) loadDomains()
+        if (first) loadHeat()
         val last = loadedAt
         if (last != null && Geo.distanceM(last, position) < RELOAD_M) return
         loadedAt = position
@@ -110,5 +127,6 @@ class AriseViewModel(
     private companion object {
         const val RELOAD_M = 1000.0
         val RETRY_AFTER = 30.seconds
+        const val HEAT_SPAN = 0.05
     }
 }

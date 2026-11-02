@@ -8,6 +8,7 @@ import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
 import com.osiris.shared.domain.model.AriseWorkout
 import com.osiris.shared.domain.model.AriseWorkoutResult
+import com.osiris.shared.domain.model.HeatCell
 import com.osiris.shared.domain.model.Heatmap
 import com.osiris.shared.domain.model.MapStyle
 import com.osiris.shared.domain.model.Overlay
@@ -88,6 +89,13 @@ class FakeArise : AriseRepository {
 
     override fun cachedAttack(attackId: Int): AriseAttackResult? =
         AriseAttackResult(attackId, "needs_workout", emptyList(), workout, domain(8))
+
+    val heatAsked = mutableListOf<Heatmap>()
+
+    override suspend fun heatmap(kind: Heatmap, south: Double, west: Double, north: Double, east: Double): Outcome<List<HeatCell>> {
+        heatAsked += kind
+        return ok(listOf(HeatCell((south + north) / 2, (west + east) / 2, 4)))
+    }
 
     override fun cachedDomain(id: Int): AriseDomain? = domain(id)
 
@@ -222,6 +230,19 @@ class AriseViewModelTest {
         assertEquals(5, vm.state.value.selectedRoute?.id)
         vm.selectRoute(null)
         assertNull(vm.state.value.selectedRoute)
+    }
+
+    @Test
+    fun `a heatmap loads around the player and clearing it empties the layer`() = runTest {
+        val arise = FakeArise()
+        val vm = vm(arise)
+        vm.setHeatmap(Heatmap.NIGHT)
+        assertTrue(vm.state.value.heat.isEmpty())
+        vm.onLocation(LatLng(52.37, 4.89))
+        assertEquals(listOf(Heatmap.NIGHT), arise.heatAsked)
+        assertEquals(4, vm.state.value.heat.single().w)
+        vm.setHeatmap(Heatmap.NIGHT)
+        assertTrue(vm.state.value.heat.isEmpty())
     }
 
     @Test

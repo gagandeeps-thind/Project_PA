@@ -782,3 +782,9 @@ class AriseAttackResult(BaseModel):
 
 class AriseDomainPhoto(BaseModel):
     jpeg_base64: str = Field(..., max_length=500_000)   # 300 KB of JPEG is ~400k base64 characters
+
+
+class AriseHeatCell(BaseModel):
+    lat: float
+    lng: float
+    w: int

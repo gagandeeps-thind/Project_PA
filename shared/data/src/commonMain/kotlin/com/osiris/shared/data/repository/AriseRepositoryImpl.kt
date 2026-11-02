@@ -9,6 +9,8 @@ import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
 import com.osiris.shared.domain.model.AriseWorkout
 import com.osiris.shared.domain.model.AriseWorkoutResult
+import com.osiris.shared.domain.model.HeatCell
+import com.osiris.shared.domain.model.Heatmap
 import com.osiris.shared.domain.repository.AriseRepository
 import com.osiris.shared.domain.run.LatLng
 
@@ -43,6 +45,9 @@ class AriseRepositoryImpl(private val api: AriseApi) : AriseRepository {
     override fun cachedAttack(attackId: Int): AriseAttackResult? = attacks[attackId]
 
     override fun cachedDomain(id: Int): AriseDomain? = domains.firstOrNull { it.id == id }
+
+    override suspend fun heatmap(kind: Heatmap, south: Double, west: Double, north: Double, east: Double): Outcome<List<HeatCell>> =
+        outcomeOf { api.heatmap(kind.wire, south, west, north, east) }
 
     override suspend fun setPhoto(domainId: Int, jpegBase64: String): Outcome<AriseDomain> =
         outcomeOf { api.photo(domainId, jpegBase64) }

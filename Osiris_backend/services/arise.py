@@ -117,3 +117,43 @@ def difficulty(best_pace_s_per_km: Optional[float], level: int, distance_m: floa
     time_gap = (predicted - duration_s) / duration_s if predicted is not None and duration_s > 0 else 1.0
     rep_gap = max(0, workout_reps - cap) / cap
     return "hard", max(0.0, time_gap) + rep_gap
+
+
+# --- heatmaps -----------------------------------------------------------------------
+
+HEAT_CELL_DEG = 0.001          # ~110 m north-south
+HEAT_TRIM_M = 200.0            # the first and last stretch of every run stays private
+NIGHT_START_H, NIGHT_END_H = 20, 5
+
+
+def _trimmed(points: Sequence[LatLng], trim_m: float) -> list[LatLng]:
+    """The points more than `trim_m` along the run from both its start and its finish."""
+    if len(points) < 2:
+        return []
+    along = [0.0]
+    for a, b in zip(points, points[1:], strict=False):
+        along.append(along[-1] + rules.distance_m(a, b))
+    total = along[-1]
+    return [p for p, d in zip(points, along, strict=True) if trim_m < d < total - trim_m]
+
+
+def heat_cells(runs: Iterable[tuple[int, Sequence[LatLng]]], min_players: int,
+               cell_deg: float = HEAT_CELL_DEG, trim_m: float = HEAT_TRIM_M) -> list[tuple[float, float, int]]:
+    """(lat, lng, runs) per grid cell the runs pass through, without their ends. Cells fewer than
+    `min_players` distinct players crossed are dropped, so a shared heatmap never traces one person."""
+    cells: dict[tuple[int, int], tuple[set[int], int]] = {}
+    for user_id, points in runs:
+        for key in {(round(p[0] / cell_deg), round(p[1] / cell_deg)) for p in _trimmed(points, trim_m)}:
+            players, count = cells.get(key, (set(), 0))
+            players.add(user_id)
+            cells[key] = (players, count + 1)
+    return sorted(
+        (round(k[0] * cell_deg, 6), round(k[1] * cell_deg, 6), count)
+        for k, (players, count) in cells.items() if len(players) >= min_players
+    )
+
+
+def is_night(started_utc, lng: float) -> bool:
+    """Whether a run started between 20:00 and 05:00 local solar time (UTC + longitude / 15 h)."""
+    hour = (started_utc.hour + started_utc.minute / 60 + lng / 15) % 24
+    return hour >= NIGHT_START_H or hour < NIGHT_END_H

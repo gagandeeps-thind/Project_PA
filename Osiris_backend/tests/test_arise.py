@@ -367,6 +367,63 @@ def test_domain_photo_owner_only_and_limited() -> None:
     print("PASS test_domain_photo_owner_only_and_limited")
 
 
+# --- heatmaps -----------------------------------------------------------------------
+
+HEAT = _north(BASE, 30000)
+
+
+def _set_times(run_id: int, started: datetime) -> None:
+    db = database.SessionLocal()
+    try:
+        run = db.query(models.RunSession).filter(models.RunSession.id == run_id).one()
+        run.started_at = started
+        run.finished_at = started + timedelta(seconds=run.duration_seconds or 600)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _heat(headers, kind, centre=HEAT, span=0.05):
+    return client.get("/api/v2/arise/heatmap", headers=headers, params={
+        "kind": kind, "min_lat": centre[0] - span, "min_lng": centre[1] - span,
+        "max_lat": centre[0] + span, "max_lng": centre[1] + span,
+    })
+
+
+def test_heat_cells_trim_the_ends_and_hide_rare_cells() -> None:
+    line = [_north(HEAT, m) for m in range(0, 1001, 10)]
+    runs = [(uid, line) for uid in (1, 2)]
+    assert arise.heat_cells(runs, min_players=3) == []
+    cells = arise.heat_cells(runs + [(3, line)], min_players=3)
+    assert cells, cells
+    assert all(rules.distance_m((c[0], c[1]), HEAT) >= 150 for c in cells), "start trimmed"
+    assert all(rules.distance_m((c[0], c[1]), line[-1]) >= 150 for c in cells), "finish trimmed"
+    assert all(c[2] == 3 for c in cells)
+    assert arise.is_night(datetime(2026, 6, 21, 3, 0), -66.6)
+    assert not arise.is_night(datetime(2026, 6, 21, 16, 0), -66.6)
+    print("PASS test_heat_cells_trim_the_ends_and_hide_rare_cells")
+
+
+def test_heatmap_kinds() -> None:
+    players = [_player(f"heat{i}") for i in range(3)]
+    path = _path([HEAT, _north(HEAT, 1500)], 3.0)
+    ids = [_run(h, path, f"heat{i}") for i, (h, _) in enumerate(players)]
+    me = players[0][0]
+    assert _heat(me, "global").json(), "three players make the cells public"
+    _set_times(ids[1], datetime.now() - timedelta(days=10))
+    assert _heat(me, "weekly").json() == [], "only two players ran this week"
+    assert _heat(me, "personal").json(), "a player always sees their own runs"
+    night = datetime.now().replace(hour=3, minute=0, second=0, microsecond=0)
+    for run_id in ids:
+        _set_times(run_id, night)
+    assert _heat(me, "night").json(), "03:00 UTC is 22:30 solar time at this longitude"
+    too_big = client.get("/api/v2/arise/heatmap", headers=me, params={
+        "kind": "global", "min_lat": 0, "min_lng": 0, "max_lat": 2, "max_lng": 2,
+    })
+    assert too_big.status_code == 422
+    print("PASS test_heatmap_kinds")
+
+
 TESTS = [
     test_public_line_helper,
     test_trail_runs_can_be_recorded,
@@ -380,6 +437,8 @@ TESTS = [
     test_attack_rules,
     test_a_defended_domain_needs_the_same_workout,
     test_domain_photo_owner_only_and_limited,
+    test_heat_cells_trim_the_ends_and_hide_rare_cells,
+    test_heatmap_kinds,
 ]
 
 
