@@ -3686,6 +3686,332 @@
         "title": "GpsSample",
         "type": "object"
       },
+      "GroupChallengeCreate": {
+        "properties": {
+          "activity_key": {
+            "maxLength": 32,
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "days": {
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "invitee_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "title": "Invitee Ids",
+            "type": "array"
+          },
+          "metric": {
+            "enum": [
+              "distance_m",
+              "duration_s",
+              "reps",
+              "sessions"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
+          "target": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 10000000.0,
+            "title": "Target",
+            "type": "number"
+          },
+          "title": {
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "activity_key",
+          "metric",
+          "target",
+          "days"
+        ],
+        "title": "GroupChallengeCreate",
+        "type": "object"
+      },
+      "GroupChallengeDetail": {
+        "properties": {
+          "activity_key": {
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "creator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Id"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_official": {
+            "title": "Is Official",
+            "type": "boolean"
+          },
+          "leaderboard": {
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberOut"
+            },
+            "title": "Leaderboard",
+            "type": "array"
+          },
+          "members": {
+            "title": "Members",
+            "type": "integer"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "my_progress": {
+            "title": "My Progress",
+            "type": "number"
+          },
+          "my_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Status"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberOut"
+            },
+            "title": "Top",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "activity_key",
+          "metric",
+          "target",
+          "starts_at",
+          "ends_at",
+          "is_official",
+          "status",
+          "my_progress",
+          "members",
+          "top",
+          "leaderboard"
+        ],
+        "title": "GroupChallengeDetail",
+        "type": "object"
+      },
+      "GroupChallengeLists": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/GroupChallengeOut"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "invited": {
+            "items": {
+              "$ref": "#/components/schemas/GroupChallengeOut"
+            },
+            "title": "Invited",
+            "type": "array"
+          },
+          "mine": {
+            "items": {
+              "$ref": "#/components/schemas/GroupChallengeOut"
+            },
+            "title": "Mine",
+            "type": "array"
+          },
+          "official": {
+            "items": {
+              "$ref": "#/components/schemas/GroupChallengeOut"
+            },
+            "title": "Official",
+            "type": "array"
+          }
+        },
+        "required": [
+          "official",
+          "mine",
+          "invited",
+          "connections"
+        ],
+        "title": "GroupChallengeLists",
+        "type": "object"
+      },
+      "GroupChallengeOut": {
+        "properties": {
+          "activity_key": {
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "creator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Id"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_official": {
+            "title": "Is Official",
+            "type": "boolean"
+          },
+          "members": {
+            "title": "Members",
+            "type": "integer"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "my_progress": {
+            "title": "My Progress",
+            "type": "number"
+          },
+          "my_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Status"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberOut"
+            },
+            "title": "Top",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "activity_key",
+          "metric",
+          "target",
+          "starts_at",
+          "ends_at",
+          "is_official",
+          "status",
+          "my_progress",
+          "members",
+          "top"
+        ],
+        "title": "GroupChallengeOut",
+        "type": "object"
+      },
+      "GroupMemberOut": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "number"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "progress"
+        ],
+        "title": "GroupMemberOut",
+        "type": "object"
+      },
       "GyroscopeSample": {
         "properties": {
           "gx": {
@@ -9395,6 +9721,74 @@
         "summary": "Admin Funnel"
       }
     },
+    "/api/v2/admin/group-challenges": {
+      "get": {
+        "operationId": "list_official_challenges_api_v2_admin_group_challenges_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GroupChallengeOut"
+                  },
+                  "title": "Response List Official Challenges Api V2 Admin Group Challenges Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Official Challenges"
+      },
+      "post": {
+        "operationId": "create_official_challenge_api_v2_admin_group_challenges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupChallengeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Official Challenge"
+      }
+    },
     "/api/v2/admin/reports": {
       "get": {
         "operationId": "admin_reports_api_v2_admin_reports_get",
@@ -11978,6 +12372,246 @@
           }
         ],
         "summary": "Share Post"
+      }
+    },
+    "/api/v2/group-challenges": {
+      "get": {
+        "operationId": "list_group_challenges_api_v2_group_challenges_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeLists"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Group Challenges"
+      },
+      "post": {
+        "operationId": "create_group_challenge_api_v2_group_challenges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupChallengeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Group Challenge"
+      }
+    },
+    "/api/v2/group-challenges/{challenge_id}": {
+      "get": {
+        "operationId": "group_challenge_detail_api_v2_group_challenges__challenge_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Group Challenge Detail"
+      }
+    },
+    "/api/v2/group-challenges/{challenge_id}/cancel": {
+      "post": {
+        "operationId": "cancel_group_challenge_api_v2_group_challenges__challenge_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Cancel Group Challenge"
+      }
+    },
+    "/api/v2/group-challenges/{challenge_id}/join": {
+      "post": {
+        "operationId": "join_group_challenge_api_v2_group_challenges__challenge_id__join_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Join Group Challenge"
+      }
+    },
+    "/api/v2/group-challenges/{challenge_id}/leave": {
+      "post": {
+        "operationId": "leave_group_challenge_api_v2_group_challenges__challenge_id__leave_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Leave Group Challenge"
       }
     },
     "/api/v2/invites/{token}": {

@@ -27,6 +27,7 @@ PASSWORD = "TrainingTest1!"
 ADMIN_EMAIL = PREFIX + "admin@example.com"
 
 client = TestClient(main.app)
+IDS: dict[str, int] = {}
 
 
 def _now() -> str:
@@ -72,7 +73,9 @@ def _player(name: str) -> tuple[dict, int]:
     assert r.status_code == 200, r.text
     r = client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD, "device_timestamp": _now()})
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}, r.json()["id"]
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    IDS[headers["Authorization"]] = r.json()["id"]
+    return headers, r.json()["id"]
 
 
 def _admin() -> dict:
@@ -276,6 +279,132 @@ def test_connections() -> None:
     print("PASS test_connections")
 
 
+# --- group challenges ------------------------------------------------------------------
+
+def _group(headers, invitees=(), title=PREFIX + "Weekend 20k", activity="run", metric="distance_m", target=20000.0,
+           days=7):
+    return client.post("/api/v2/group-challenges", headers=headers, json={
+        "title": title, "activity_key": activity, "metric": metric, "target": target, "days": days,
+        "invitee_ids": list(invitees),
+    })
+
+
+def _set_window(challenge_id: int, starts: datetime, ends: datetime) -> None:
+    db = database.SessionLocal()
+    try:
+        ch = db.query(models.GroupChallenge).filter(models.GroupChallenge.id == challenge_id).first()
+        ch.starts_at, ch.ends_at = starts.replace(tzinfo=None), ends.replace(tzinfo=None)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_group_create_and_invites() -> None:
+    owner, _ = _player("g_owner")
+    friend, friend_id = _player("g_friend")
+    _, stranger_id = _player("g_stranger")
+    _follow(friend, _me_id(owner))
+    assert _group(owner, invitees=[stranger_id]).status_code == 422
+    assert _group(owner, activity="teleport").status_code == 422
+    r = _group(owner, invitees=[friend_id])
+    assert r.status_code == 201, r.text
+    g = r.json()
+    assert g["my_status"] == "joined" and g["members"] == 1 and g["status"] == "active", g
+    lists = client.get("/api/v2/group-challenges", headers=friend).json()
+    assert [c["id"] for c in lists["invited"]] == [g["id"]], lists
+    notes = client.get("/api/v2/me/notifications", headers=friend).json()
+    assert any(n["kind"] == "group_challenge_invite" for n in notes["items"]), notes
+    print("PASS test_group_create_and_invites")
+
+
+def _me_id(headers) -> int:
+    return IDS[headers["Authorization"]]
+
+
+def test_group_visibility() -> None:
+    owner, owner_id = _player("v_owner")
+    fan, _ = _player("v_fan")
+    stranger, _ = _player("v_stranger")
+    _follow(fan, owner_id)
+    gid = _group(owner).json()["id"]
+    assert client.get(f"/api/v2/group-challenges/{gid}", headers=stranger).status_code == 404
+    assert client.post(f"/api/v2/group-challenges/{gid}/join", headers=stranger).status_code == 404
+    assert gid not in [c["id"] for c in client.get("/api/v2/group-challenges", headers=stranger).json()["connections"]]
+    assert gid in [c["id"] for c in client.get("/api/v2/group-challenges", headers=fan).json()["connections"]]
+    assert client.get(f"/api/v2/group-challenges/{gid}", headers=fan).status_code == 200
+    r = client.post(f"/api/v2/group-challenges/{gid}/join", headers=fan)
+    assert r.status_code == 200 and r.json()["my_status"] == "joined" and r.json()["members"] == 2, r.text
+    mine = client.get("/api/v2/group-challenges", headers=fan).json()
+    assert gid in [c["id"] for c in mine["mine"]] and gid not in [c["id"] for c in mine["connections"]]
+    print("PASS test_group_visibility")
+
+
+def test_group_join_rules() -> None:
+    owner, owner_id = _player("j_owner")
+    fan, _ = _player("j_fan")
+    _follow(fan, owner_id)
+    assert client.post(f"/api/v2/group-challenges/{_group(owner).json()['id']}/leave", headers=owner).status_code == 409
+    ended = _group(owner).json()["id"]
+    past = datetime.now(timezone.utc) - timedelta(days=10)
+    _set_window(ended, past, past + timedelta(days=2))
+    assert client.post(f"/api/v2/group-challenges/{ended}/join", headers=fan).status_code == 409
+    assert client.get(f"/api/v2/group-challenges/{ended}", headers=fan).json()["status"] == "ended"
+    cancelled = _group(owner).json()["id"]
+    assert client.post(f"/api/v2/group-challenges/{cancelled}/cancel", headers=fan).status_code in (403, 404)
+    assert client.post(f"/api/v2/group-challenges/{cancelled}/cancel", headers=owner).status_code == 200
+    assert client.post(f"/api/v2/group-challenges/{cancelled}/join", headers=fan).status_code == 409
+    open_id = _group(owner).json()["id"]
+    assert client.post(f"/api/v2/group-challenges/{open_id}/join", headers=fan).status_code == 200
+    r = client.post(f"/api/v2/group-challenges/{open_id}/leave", headers=fan)
+    assert r.status_code == 200 and r.json()["my_status"] is None and r.json()["members"] == 1, r.text
+    print("PASS test_group_join_rules")
+
+
+def test_group_progress_challenge_mode_only() -> None:
+    owner, _ = _player("p_owner")
+    gid = _group(owner).json()["id"]
+    _upload(owner, mode="train", distance=4000.0)
+    _upload(owner, mode="challenge", activity="walk", distance=1000.0)
+    _upload(owner, mode="challenge", distance=3000.0)
+    old = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    _upload(owner, mode="challenge", distance=2000.0, started_at=old)
+    g = client.get(f"/api/v2/group-challenges/{gid}", headers=owner).json()
+    assert g["my_progress"] == 3000.0, g
+    print("PASS test_group_progress_challenge_mode_only")
+
+
+def test_group_leaderboard_order() -> None:
+    owner, owner_id = _player("l_owner")
+    a, _ = _player("l_a")
+    b, _ = _player("l_b")
+    _follow(a, owner_id)
+    _follow(b, owner_id)
+    gid = _group(owner, metric="sessions", target=5).json()["id"]
+    for h in (a, b):
+        client.post(f"/api/v2/group-challenges/{gid}/join", headers=h)
+    _upload(a, mode="challenge")
+    for _ in range(2):
+        _upload(b, mode="challenge")
+    board = client.get(f"/api/v2/group-challenges/{gid}", headers=owner).json()["leaderboard"]
+    assert [m["progress"] for m in board] == [2.0, 1.0, 0.0], board
+    assert board[0]["user_id"] == _me_id(b)
+    print("PASS test_group_leaderboard_order")
+
+
+def test_official_admin() -> None:
+    player, _ = _player("o_player")
+    body = {"title": PREFIX + "Osiris 100 push-ups", "activity_key": "pushup", "metric": "reps", "target": 100, "days": 14}
+    assert client.post("/api/v2/admin/group-challenges", json=body).status_code == 401
+    assert client.post("/api/v2/admin/group-challenges", json=body, headers=player).status_code == 403
+    r = client.post("/api/v2/admin/group-challenges", json=body, headers=_admin())
+    assert r.status_code == 201 and r.json()["is_official"] is True, r.text
+    gid = r.json()["id"]
+    assert gid in [c["id"] for c in client.get("/api/v2/group-challenges", headers=player).json()["official"]]
+    assert client.post(f"/api/v2/group-challenges/{gid}/join", headers=player).status_code == 200
+    assert gid in [c["id"] for c in client.get("/api/v2/admin/group-challenges", headers=_admin()).json()]
+    print("PASS test_official_admin")
+
+
 TESTS = [
     test_catalog,
     test_upload_stats_server_side,
@@ -289,6 +418,12 @@ TESTS = [
     test_post_idempotent,
     test_quote_exclude,
     test_connections,
+    test_group_create_and_invites,
+    test_group_visibility,
+    test_group_join_rules,
+    test_group_progress_challenge_mode_only,
+    test_group_leaderboard_order,
+    test_official_admin,
 ]
 
 

@@ -44,6 +44,7 @@ from routers import (  # noqa: E402
 )
 from routers import arise as arise_routes  # noqa: E402
 from routers import training as training_routes  # noqa: E402
+from routers import group_challenges as group_challenge_routes  # noqa: E402
 import settings  # noqa: E402
 from services import jobs  # noqa: E402
 
@@ -117,5 +118,6 @@ for _router in (
     growth_support.router,
     arise_routes.router,
     training_routes.router,
+    group_challenge_routes.router,
 ):
     app.include_router(_router)
