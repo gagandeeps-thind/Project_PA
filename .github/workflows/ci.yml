@@ -95,6 +95,9 @@ jobs:
       - name: Tests — Growth G4 consent, reports, blocks, sessions, export and erasure
         run: python tests/test_growth_safety.py
 
+      - name: Tests — Arise routes, domains, attacks, heatmaps
+        run: python tests/test_arise.py
+
       - name: Crystal ledger reconciliation after suites (challenges must not touch crystals)
         run: python scripts/reconcile_ledger.py --check
 
