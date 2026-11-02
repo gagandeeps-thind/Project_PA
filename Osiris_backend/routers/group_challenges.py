@@ -18,7 +18,6 @@ from database import get_db
 from routers.training import connection_cards
 from schemas import (
     GroupChallengeCreate,
-    GroupChallengeDetail,
     GroupChallengeLists,
     GroupChallengeOut,
     GroupMemberOut,
@@ -77,7 +76,7 @@ def _cards(db: Session, uid: int, challenges: list[models.GroupChallenge], mine:
             status=_status(ch), my_status=mine.get(ch.id), my_progress=progress.get(ch.id, {}).get(uid, 0.0),
             members=len(members), top=members[:TOP],
         )
-        out.append(GroupChallengeDetail(**fields, leaderboard=members) if full else GroupChallengeOut(**fields))
+        out.append(GroupChallengeOut(**fields, leaderboard=members if full else []))
     return out
 
 
@@ -89,7 +88,7 @@ def _load(db: Session, uid: int, challenge_id: int) -> tuple[models.GroupChallen
     return ch, mine
 
 
-def _detail(db: Session, uid: int, ch: models.GroupChallenge) -> GroupChallengeDetail:
+def _detail(db: Session, uid: int, ch: models.GroupChallenge) -> GroupChallengeOut:
     return _cards(db, uid, [ch], _memberships(db, uid), full=True)[0]
 
 
@@ -119,7 +118,7 @@ def list_group_challenges(db: Session = Depends(get_db), token_data: dict = Depe
     )
 
 
-@router.post("/api/v2/group-challenges", response_model=GroupChallengeDetail, status_code=201)
+@router.post("/api/v2/group-challenges", response_model=GroupChallengeOut, status_code=201)
 def create_group_challenge(
     req: GroupChallengeCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player),
 ):
@@ -143,13 +142,13 @@ def create_group_challenge(
     return _detail(db, uid, ch)
 
 
-@router.get("/api/v2/group-challenges/{challenge_id}", response_model=GroupChallengeDetail)
+@router.get("/api/v2/group-challenges/{challenge_id}", response_model=GroupChallengeOut)
 def group_challenge_detail(challenge_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     ch, _ = _load(db, token_data["id"], challenge_id)
     return _detail(db, token_data["id"], ch)
 
 
-@router.post("/api/v2/group-challenges/{challenge_id}/join", response_model=GroupChallengeDetail)
+@router.post("/api/v2/group-challenges/{challenge_id}/join", response_model=GroupChallengeOut)
 def join_group_challenge(challenge_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     ch, _ = _load(db, uid, challenge_id)
@@ -166,7 +165,7 @@ def join_group_challenge(challenge_id: int, db: Session = Depends(get_db), token
     return _detail(db, uid, ch)
 
 
-@router.post("/api/v2/group-challenges/{challenge_id}/leave", response_model=GroupChallengeDetail)
+@router.post("/api/v2/group-challenges/{challenge_id}/leave", response_model=GroupChallengeOut)
 def leave_group_challenge(challenge_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     ch, _ = _load(db, uid, challenge_id)
@@ -179,7 +178,7 @@ def leave_group_challenge(challenge_id: int, db: Session = Depends(get_db), toke
     return _detail(db, uid, ch)
 
 
-@router.post("/api/v2/group-challenges/{challenge_id}/cancel", response_model=GroupChallengeDetail)
+@router.post("/api/v2/group-challenges/{challenge_id}/cancel", response_model=GroupChallengeOut)
 def cancel_group_challenge(challenge_id: int, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     ch, _ = _load(db, uid, challenge_id)
@@ -190,7 +189,7 @@ def cancel_group_challenge(challenge_id: int, db: Session = Depends(get_db), tok
     return _detail(db, uid, ch)
 
 
-@router.post("/api/v2/admin/group-challenges", response_model=GroupChallengeDetail, status_code=201)
+@router.post("/api/v2/admin/group-challenges", response_model=GroupChallengeOut, status_code=201)
 def create_official_challenge(
     req: GroupChallengeCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin),
 ):

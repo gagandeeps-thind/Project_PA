@@ -30,6 +30,17 @@ import com.osiris.shared.domain.model.ShareCard
 import com.osiris.shared.domain.model.TodayData
 import com.osiris.shared.domain.model.TokenResponse
 import com.osiris.shared.domain.model.UserProfile
+import com.osiris.shared.domain.model.Connection
+import com.osiris.shared.domain.model.GroupChallenge
+import com.osiris.shared.domain.model.GroupChallenges
+import com.osiris.shared.domain.model.NewGroupChallenge
+import com.osiris.shared.domain.model.NewTrainingSession
+import com.osiris.shared.domain.model.Quote
+import com.osiris.shared.domain.model.TrainingActivity
+import com.osiris.shared.domain.model.TrainingProgress
+import com.osiris.shared.domain.model.TrainingSession
+import com.osiris.shared.domain.model.TrainingSessions
+import com.osiris.shared.domain.model.TrainingSummary
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -98,11 +109,25 @@ class ContractTest {
         Triple("GET", "/api/v2/me/exercise-consent", ConsentState.serializer()),
         Triple("PUT", "/api/v2/me/exercise-consent", ConsentState.serializer()),
         Triple("GET", "/api/v2/me/exercise-sessions", ExerciseHistoryResponse.serializer()),
+        Triple("GET", "/api/v2/training/activities", ListSerializer(TrainingActivity.serializer())),
+        Triple("POST", "/api/v2/training/sessions", TrainingSession.serializer()),
+        Triple("GET", "/api/v2/me/training/summary", TrainingSummary.serializer()),
+        Triple("GET", "/api/v2/me/training/sessions", TrainingSessions.serializer()),
+        Triple("GET", "/api/v2/me/training/sessions/{}", TrainingSession.serializer()),
+        Triple("GET", "/api/v2/me/training/progress", TrainingProgress.serializer()),
+        Triple("GET", "/api/v2/motivation/quote", Quote.serializer()),
+        Triple("GET", "/api/v2/me/connections", ListSerializer(Connection.serializer())),
+        Triple("GET", "/api/v2/group-challenges", GroupChallenges.serializer()),
+        Triple("GET", "/api/v2/group-challenges/{}", GroupChallenge.serializer()),
+        Triple("POST", "/api/v2/group-challenges", GroupChallenge.serializer()),
+        Triple("POST", "/api/v2/group-challenges/{}/join", GroupChallenge.serializer()),
     )
 
     private val requests: List<Triple<String, String, KSerializer<*>>> = listOf(
         Triple("POST", "/api/v2/exercise-sessions", ExerciseUpload.serializer()),
         Triple("POST", "/api/v2/runs/{}/points", RoutePointsBody.serializer()),
+        Triple("POST", "/api/v2/training/sessions", NewTrainingSession.serializer()),
+        Triple("POST", "/api/v2/group-challenges", NewGroupChallenge.serializer()),
     )
 
     @kotlinx.serialization.Serializable

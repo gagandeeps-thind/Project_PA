@@ -3740,109 +3740,6 @@
         "title": "GroupChallengeCreate",
         "type": "object"
       },
-      "GroupChallengeDetail": {
-        "properties": {
-          "activity_key": {
-            "title": "Activity Key",
-            "type": "string"
-          },
-          "creator_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creator Id"
-          },
-          "ends_at": {
-            "format": "date-time",
-            "title": "Ends At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "is_official": {
-            "title": "Is Official",
-            "type": "boolean"
-          },
-          "leaderboard": {
-            "items": {
-              "$ref": "#/components/schemas/GroupMemberOut"
-            },
-            "title": "Leaderboard",
-            "type": "array"
-          },
-          "members": {
-            "title": "Members",
-            "type": "integer"
-          },
-          "metric": {
-            "title": "Metric",
-            "type": "string"
-          },
-          "my_progress": {
-            "title": "My Progress",
-            "type": "number"
-          },
-          "my_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "My Status"
-          },
-          "starts_at": {
-            "format": "date-time",
-            "title": "Starts At",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "target": {
-            "title": "Target",
-            "type": "number"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "top": {
-            "items": {
-              "$ref": "#/components/schemas/GroupMemberOut"
-            },
-            "title": "Top",
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "activity_key",
-          "metric",
-          "target",
-          "starts_at",
-          "ends_at",
-          "is_official",
-          "status",
-          "my_progress",
-          "members",
-          "top",
-          "leaderboard"
-        ],
-        "title": "GroupChallengeDetail",
-        "type": "object"
-      },
       "GroupChallengeLists": {
         "properties": {
           "connections": {
@@ -3912,6 +3809,13 @@
           "is_official": {
             "title": "Is Official",
             "type": "boolean"
+          },
+          "leaderboard": {
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberOut"
+            },
+            "title": "Leaderboard",
+            "type": "array"
           },
           "members": {
             "title": "Members",
@@ -9764,7 +9668,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                  "$ref": "#/components/schemas/GroupChallengeOut"
                 }
               }
             },
@@ -12413,7 +12317,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                  "$ref": "#/components/schemas/GroupChallengeOut"
                 }
               }
             },
@@ -12457,7 +12361,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                  "$ref": "#/components/schemas/GroupChallengeOut"
                 }
               }
             },
@@ -12501,7 +12405,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                  "$ref": "#/components/schemas/GroupChallengeOut"
                 }
               }
             },
@@ -12545,7 +12449,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                  "$ref": "#/components/schemas/GroupChallengeOut"
                 }
               }
             },
@@ -12589,7 +12493,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GroupChallengeDetail"
+                  "$ref": "#/components/schemas/GroupChallengeOut"
                 }
               }
             },

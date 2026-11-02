@@ -5,6 +5,8 @@ import com.osiris.shared.data.exercise.ExerciseRepositoryImpl
 import com.osiris.shared.data.network.ApiClient
 import com.osiris.shared.data.network.api.AuthApi
 import com.osiris.shared.data.network.api.AriseApi
+import com.osiris.shared.data.network.api.GroupChallengeApi
+import com.osiris.shared.data.network.api.TrainingApi
 import com.osiris.shared.data.network.api.ChallengeApi
 import com.osiris.shared.data.network.api.CommunityApi
 import com.osiris.shared.data.network.api.ExerciseApi
@@ -14,12 +16,14 @@ import com.osiris.shared.data.repository.AriseRepositoryImpl
 import com.osiris.shared.data.repository.AuthRepositoryImpl
 import com.osiris.shared.data.repository.ChallengeRepositoryImpl
 import com.osiris.shared.data.repository.DeviceSetupRepositoryImpl
+import com.osiris.shared.data.repository.GroupChallengeRepositoryImpl
 import com.osiris.shared.data.repository.CommunityRepositoryImpl
 import com.osiris.shared.data.repository.InstallId
 import com.osiris.shared.data.repository.PlayerRepositoryImpl
 import com.osiris.shared.data.repository.PrivacyRepositoryImpl
 import com.osiris.shared.data.repository.RunRepositoryImpl
 import com.osiris.shared.data.repository.SessionStore
+import com.osiris.shared.data.repository.TrainingRepositoryImpl
 import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.data.support.SupportChatRepositoryImpl
 import com.osiris.shared.data.wallet.MockWalletRepository
@@ -29,10 +33,12 @@ import com.osiris.shared.domain.repository.ChallengeRepository
 import com.osiris.shared.domain.repository.CommunityRepository
 import com.osiris.shared.domain.repository.DeviceSetupRepository
 import com.osiris.shared.domain.repository.ExerciseRepository
+import com.osiris.shared.domain.repository.GroupChallengeRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.PrivacyRepository
 import com.osiris.shared.domain.repository.RunRepository
 import com.osiris.shared.domain.repository.SupportChatRepository
+import com.osiris.shared.domain.repository.TrainingRepository
 import com.osiris.shared.domain.repository.WalletRepository
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
@@ -101,6 +107,8 @@ class DataGraph(
     val deviceSetup: DeviceSetupRepository = DeviceSetupRepositoryImpl(platform.settings)
     val support: SupportChatRepository = SupportChatRepositoryImpl(api)
     val arise: AriseRepository = AriseRepositoryImpl(AriseApi(api))
+    val training: TrainingRepository = TrainingRepositoryImpl(TrainingApi(api), platform.settings)
+    val groupChallenges: GroupChallengeRepository = GroupChallengeRepositoryImpl(GroupChallengeApi(api))
 
     /** Null when the build has no wallet (production): the app then hides the Wallet tab. */
     val wallet: WalletRepository? = if (config.features.walletDemo) MockWalletRepository(clock) else null

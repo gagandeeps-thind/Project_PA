@@ -924,10 +924,7 @@ class GroupChallengeOut(BaseModel):
     my_progress: float
     members: int
     top: List[GroupMemberOut]
-
-
-class GroupChallengeDetail(GroupChallengeOut):
-    leaderboard: List[GroupMemberOut]
+    leaderboard: List[GroupMemberOut] = Field(default_factory=list)   # filled on the detail only
 
 
 class GroupChallengeLists(BaseModel):
