@@ -1,3 +1,4 @@
+# ruff: noqa: B008  (FastAPI dependencies are declared as argument defaults)
 """Growth release G4: safety, privacy, and trust.
 
 - Reporting (users, challenges, communities, share cards) with an admin abuse queue.
@@ -376,6 +377,16 @@ def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get
         "blocks": _rows(db.query(models.UserBlock).filter(models.UserBlock.blocker_id == uid), ("created_at",)),
         "analytics_events": _rows(db.query(models.AnalyticsEvent).filter(models.AnalyticsEvent.user_id == uid),
                                   ("event_name", "occurred_at")),
+        "training_sessions": [
+            {**{f: getattr(t, f) for f in (
+                "id", "activity_key", "mode", "source", "started_at", "duration_s", "distance_m",
+                "elevation_gain_m", "reps", "hr_avg", "hr_max", "power_avg", "power_max", "speed_avg", "speed_max")},
+             "series": json.loads(t.series_json or "{}"), "devices": json.loads(t.devices_json or "[]")}
+            for t in db.query(models.TrainingSession).filter(models.TrainingSession.user_id == uid)
+        ],
+        "group_challenges": _rows(
+            db.query(models.GroupChallengeMember).filter(models.GroupChallengeMember.user_id == uid),
+            ("challenge_id", "status", "joined_at")),
     }
     return json.loads(json.dumps(data, default=str))
 

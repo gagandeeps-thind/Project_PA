@@ -818,7 +818,8 @@ class TrainingSessionIn(BaseModel):
     source: Literal["sensor", "camera", "health_connect"] = "sensor"
     started_at: datetime
     duration_s: float = Field(..., gt=0, le=86_400)
-    distance_m: float = Field(default=0.0, ge=0, le=1_000_000)
+    # The feed caps a post at 500 km, and every saved session must stay postable.
+    distance_m: float = Field(default=0.0, ge=0, le=500_000)
     # A camera workout's verified set, by the id the phone gave it.
     exercise_client_session_id: Optional[str] = Field(default=None, max_length=64)
     series: TrainingSeries = Field(default_factory=TrainingSeries)

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 import growth_feed
 import models
+from core.clock import _now_naive_utc
 from core.security import get_active_player, get_active_player_or_admin
 from database import get_db
 from growth_social import _display_name
@@ -32,6 +33,9 @@ from schemas import (
 from services import training
 
 router = APIRouter()
+
+# Phone clocks drift; anything later than this is not a session that happened.
+FUTURE_SLACK = timedelta(minutes=10)
 
 STAT_FIELDS = ("hr_avg", "hr_min", "hr_max", "power_avg", "power_min", "power_max",
                "speed_avg", "speed_max", "elev_min", "elev_max")
@@ -91,6 +95,8 @@ def list_activities(token_data: dict = Depends(get_active_player_or_admin)):
 def upload_session(req: TrainingSessionIn, db: Session = Depends(get_db), token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
     activity = _activity(req.activity_key)
+    if _naive_utc(req.started_at) > _now_naive_utc() + FUTURE_SLACK:
+        raise HTTPException(status_code=422, detail="A session cannot start in the future")
     existing = db.query(models.TrainingSession).filter(
         models.TrainingSession.user_id == uid, models.TrainingSession.client_session_id == req.client_session_id).first()
     if existing is not None:

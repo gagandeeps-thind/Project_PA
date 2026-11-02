@@ -446,6 +446,20 @@ def _open_challenge(owner_id: int, title: str) -> int:
         db.close()
 
 
+def test_upload_bounds_and_export() -> None:
+    headers, _ = _player("bounds")
+    # Over the feed's 500 km cap a session could never be posted, so it is refused up front.
+    assert _upload(headers, activity="cycle", distance=600_000.0, duration=86_000.0).status_code == 422
+    future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    assert _upload(headers, started_at=future).status_code == 422
+    sid = _upload(headers).json()["id"]
+    gid = _group(headers).json()["id"]
+    export = client.get("/api/v2/me/export", headers=headers).json()
+    assert [s["id"] for s in export["training_sessions"]] == [sid], export.get("training_sessions")
+    assert [m["challenge_id"] for m in export["group_challenges"]] == [gid], export.get("group_challenges")
+    print("PASS test_upload_bounds_and_export")
+
+
 def test_suggested_challenges_with_open_challenges() -> None:
     """The Challenge page's suggested grid; it failed whenever any challenge was open."""
     host, host_id = _player("s_host")
@@ -478,6 +492,7 @@ TESTS = [
     test_group_leaderboard_order,
     test_official_admin,
     test_suggested_challenges_with_open_challenges,
+    test_upload_bounds_and_export,
 ]
 
 
