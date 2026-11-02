@@ -69,14 +69,20 @@ class TrainingRecorder(private val startedAt: Instant) {
         if ((fix.accuracyM ?: 0.0) > MAX_ACCURACY_M) return
         val t = elapsedS(at)
         hasGps = true
+        var derivedSpeedMps: Double? = null
         lastFix?.let { (prev, prevT) ->
+            val dt = t - prevT
             val step = Geo.distanceM(prev.position, fix.position)
             // A stale cached fix or a GPS warm-up jump: re-anchor here instead of counting it.
-            if (step <= MAX_STEP_SPEED_MPS * (t - prevT).coerceAtLeast(MIN_GAP_S)) gpsDistanceM += step
+            if (step <= MAX_STEP_SPEED_MPS * dt.coerceAtLeast(MIN_GAP_S)) {
+                gpsDistanceM += step
+                if (dt >= MIN_GAP_S) derivedSpeedMps = step / dt
+            }
         }
         lastFix = fix to t
         val sensorFresh = lastSensorSpeed?.let { t - it.first <= SENSOR_SPEED_FRESH_S } == true
-        fix.speedMps?.takeIf { it >= 0 && !sensorFresh }?.let { record(Channel.SPEED, it, t) }
+        val speedMps = fix.speedMps?.takeIf { it >= 0 } ?: derivedSpeedMps
+        if (!sensorFresh && speedMps != null) record(Channel.SPEED, speedMps, t)
         fix.altitudeM?.let { record(Channel.ELEVATION, it, t) }
     }
 

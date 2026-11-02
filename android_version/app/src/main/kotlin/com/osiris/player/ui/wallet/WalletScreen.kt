@@ -19,7 +19,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -41,6 +40,7 @@ import com.osiris.player.ui.common.TextInputDialog
 import com.osiris.player.ui.common.localMinute
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.FrostCard
+import com.osiris.player.ui.design.RaisedButton
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.wallet.Chain
 import com.osiris.shared.domain.wallet.TransactionKind
@@ -50,6 +50,42 @@ import com.osiris.shared.presentation.AppGraph
 /** Balances, Google Play Billing store, saved methods and history. Demo builds label every figure as demo data. */
 @Composable
 fun WalletScreen(graph: AppGraph, onBack: (() -> Unit)? = null) {
+    if (graph.hasWallet) {
+        DemoWalletScreen(graph, onBack)
+    } else {
+        PlayStoreWalletScreen(graph, onBack)
+    }
+}
+
+@Composable
+private fun PlayStoreWalletScreen(graph: AppGraph, onBack: (() -> Unit)?) {
+    val vm = rememberShared { graph.profile() }
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val billingService = remember(context) { (context.applicationContext as OsirisApplication).billing }
+    val billingState by billingService.state.collectAsStateWithLifecycle()
+    OsirisScaffold("Wallet", vm, onBack = onBack) { padding ->
+        PullToRefreshBox(
+            isRefreshing = billingState.isLoading,
+            onRefresh = {
+                vm.refresh()
+                billingService.refreshCatalogAndPurchases()
+            },
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                playStoreBillingItems(
+                    state = billingState,
+                    billing = billingService,
+                    activity = activity,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DemoWalletScreen(graph: AppGraph, onBack: (() -> Unit)?) {
     val vm = rememberShared { graph.wallet() }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current

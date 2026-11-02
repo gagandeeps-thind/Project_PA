@@ -98,4 +98,13 @@ class TrainingRecorderTest {
         r.add(Channel.SPEED, 5.0, at(10.0))
         assertEquals(50.0, r.distanceM, 1e-9)
     }
+
+    @Test
+    fun `gps speed is derived from position steps when fix has no speed`() {
+        val r = TrainingRecorder(t0)
+        r.addFix(LocationFix(45.0, -66.0, accuracyM = 5.0), at(0.0))
+        r.addFix(LocationFix(45.001, -66.0, accuracyM = 5.0), at(50.0))
+        val speed = r.latest(Channel.SPEED)
+        assertTrue(speed != null && speed in 2.1..2.3, "Expected ~2.22 m/s derived speed, got $speed")
+    }
 }

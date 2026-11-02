@@ -40,7 +40,7 @@ fun NavGraphBuilder.startGraph(graph: AppGraph, nav: NavHostController) {
                     StartCard.COURSES -> nav.open(Routes.COURSES)
                 }
             },
-            onWallet = if (graph.hasWallet) ({ nav.open(Routes.WALLET) }) else null,
+            onWallet = { nav.open(Routes.WALLET) },
         )
     }
     composable(Routes.TRAINING, arguments = listOf(navArgument("mode") { type = NavType.StringType })) { entry ->
