@@ -253,7 +253,7 @@ class FakeCommunities : CommunityRepository {
 
 class FakeExercises : ExerciseRepository {
     var consented = false
-    var saveResult: Outcome<SetOutcome> = ok(SetOutcome(uploaded = true, xpAwarded = 15))
+    var saveResult: Outcome<SetOutcome> = ok(SetOutcome(uploaded = true, xpAwarded = 15, clientSessionId = "set-1"))
     val saved = mutableListOf<SessionSummary>()
     val recordings = mutableListOf<PoseRecording>()
     override suspend fun bindAccount(userId: Int?) = Unit

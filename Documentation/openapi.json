@@ -6976,16 +6976,17 @@
             "title": "Duration S",
             "type": "number"
           },
-          "exercise_session_id": {
+          "exercise_client_session_id": {
             "anyOf": [
               {
-                "type": "integer"
+                "maxLength": 64,
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Exercise Session Id"
+            "title": "Exercise Client Session Id"
           },
           "mode": {
             "default": "train",

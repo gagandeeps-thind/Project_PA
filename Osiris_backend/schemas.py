@@ -819,7 +819,8 @@ class TrainingSessionIn(BaseModel):
     started_at: datetime
     duration_s: float = Field(..., gt=0, le=86_400)
     distance_m: float = Field(default=0.0, ge=0, le=1_000_000)
-    exercise_session_id: Optional[int] = None
+    # A camera workout's verified set, by the id the phone gave it.
+    exercise_client_session_id: Optional[str] = Field(default=None, max_length=64)
     series: TrainingSeries = Field(default_factory=TrainingSeries)
     devices: List[str] = Field(default_factory=list, max_length=8)
 

@@ -75,7 +75,8 @@ data class NewTrainingSession(
     @SerialName("started_at") val startedAt: String,
     @SerialName("duration_s") val durationS: Double,
     @SerialName("distance_m") val distanceM: Double = 0.0,
-    @SerialName("exercise_session_id") val exerciseSessionId: Int? = null,
+    /** A camera workout's uploaded set ([SetOutcome.clientSessionId]); the server copies its verified reps. */
+    @SerialName("exercise_client_session_id") val exerciseSetId: String? = null,
     val series: TrainingSeries = TrainingSeries(),
     val devices: List<String> = emptyList(),
 )

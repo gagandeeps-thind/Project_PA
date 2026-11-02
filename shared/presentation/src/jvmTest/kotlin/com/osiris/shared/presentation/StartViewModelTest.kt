@@ -135,9 +135,9 @@ class StartViewModelTest {
     fun `camera set saves a linked session and offers post or save`() = runTest {
         val training = FakeTraining()
         val vm = start(StartMode.CHALLENGE, training)
-        vm.saveCameraSet("pushup", exerciseSessionId = 44, startedAt = t0, durationS = 30.0)
+        vm.saveCameraSet("pushup", setId = "set-44", startedAt = t0, durationS = 30.0)
         val upload = training.uploads.single()
-        assertEquals(44, upload.exerciseSessionId)
+        assertEquals("set-44", upload.exerciseSetId)
         assertEquals("camera", upload.source)
         assertEquals("challenge", upload.mode)
         assertNotNull(vm.state.value.pendingPost)

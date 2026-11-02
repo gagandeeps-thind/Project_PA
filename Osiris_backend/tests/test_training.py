@@ -103,17 +103,18 @@ def _upload(headers, activity="run", mode="train", distance=3000.0, duration=120
     return client.post("/api/v2/training/sessions", json=body, headers=headers)
 
 
-def _exercise_session(user_id: int, reps: int) -> int:
+def _exercise_session(user_id: int, reps: int) -> str:
+    """A camera set as the exercise upload stores it; returns its client session id."""
     db = database.SessionLocal()
     try:
-        row = models.ExerciseSession(
-            user_id=user_id, client_session_id=f"{PREFIX}{uuid.uuid4()}", exercise_key="pushup", rules_version="test",
+        cid = f"{PREFIX}{uuid.uuid4()}"
+        db.add(models.ExerciseSession(
+            user_id=user_id, client_session_id=cid, exercise_key="pushup", rules_version="test",
             duration_s=45.0, reps_attempted=reps, reps_valid=reps, client_verdict="pass", status="verified",
             local_date=datetime.now().date().isoformat(),
-        )
-        db.add(row)
+        ))
         db.commit()
-        return row.id
+        return cid
     finally:
         db.close()
 
@@ -184,14 +185,20 @@ def test_upload_idempotent() -> None:
 def test_camera_link() -> None:
     headers, uid = _player("camera")
     _, other = _player("camera_other")
+    # Another player's set, even with a known client id, is not found for this player.
     foreign = _exercise_session(other, 20)
-    r = _upload(headers, activity="pushup", distance=0.0, duration=30.0, source="camera", exercise_session_id=foreign)
-    assert r.status_code == 403, r.text
+    r = _upload(headers, activity="pushup", distance=0.0, duration=30.0, source="camera",
+                exercise_client_session_id=foreign)
+    assert r.status_code == 404, r.text
     mine = _exercise_session(uid, 18)
     r = _upload(headers, activity="pushup", distance=0.0, duration=999.0, source="camera",
-                exercise_session_id=mine, reps=500)
+                exercise_client_session_id=mine, reps=500)
     assert r.status_code == 201, r.text
     assert r.json()["reps"] == 18 and r.json()["duration_s"] == 45.0, r.json()
+    # The same set cannot back a second session.
+    again = _upload(headers, activity="pushup", distance=0.0, duration=30.0, source="camera",
+                    exercise_client_session_id=mine)
+    assert again.status_code == 409, again.text
     # A camera activity without its verified set is refused.
     assert _upload(headers, activity="pushup", distance=0.0, duration=30.0, source="camera").status_code == 422
     print("PASS test_camera_link")

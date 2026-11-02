@@ -78,11 +78,11 @@ class StartViewModel(
 
     /** The camera coach saved a verified set; record it as this page's session, linked to that set. */
     @OptIn(ExperimentalUuidApi::class)
-    fun saveCameraSet(activityKey: String, exerciseSessionId: Int, startedAt: Instant, durationS: Double) {
+    fun saveCameraSet(activityKey: String, setId: String, startedAt: Instant, durationS: Double) {
         val body = NewTrainingSession(
             clientSessionId = Uuid.random().toString(), activityKey = activityKey, mode = _state.value.mode.wire,
             source = SOURCE_CAMERA, startedAt = startedAt.toString(), durationS = durationS.coerceAtLeast(1.0),
-            exerciseSessionId = exerciseSessionId,
+            exerciseSetId = setId,
         )
         scope.launch {
             training.upload(body).orShow()?.let { saved -> _state.update { it.copy(pendingPost = saved) } }

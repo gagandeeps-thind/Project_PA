@@ -96,20 +96,21 @@ def upload_session(req: TrainingSessionIn, db: Session = Depends(get_db), token_
     if existing is not None:
         return _out(db, existing)
 
-    duration, reps = req.duration_s, 0
+    duration, reps, exercise_id = req.duration_s, 0, None
     if activity["kind"] == "camera":
         # Reps come only from the server-checked camera set, never from the client.
-        if req.exercise_session_id is None:
+        if req.exercise_client_session_id is None:
             raise HTTPException(status_code=422, detail="A camera workout needs its verified set")
-        ex = db.query(models.ExerciseSession).filter(models.ExerciseSession.id == req.exercise_session_id).first()
+        ex = db.query(models.ExerciseSession).filter(
+            models.ExerciseSession.user_id == uid,
+            models.ExerciseSession.client_session_id == req.exercise_client_session_id,
+        ).first()
         if ex is None:
             raise HTTPException(status_code=404, detail="Exercise set not found")
-        if ex.user_id != uid:
-            raise HTTPException(status_code=403, detail="Not your exercise set")
         if ex.exercise_key != req.activity_key:
             raise HTTPException(status_code=422, detail="The set is a different exercise")
-        duration, reps = ex.duration_s, ex.reps_valid
-    elif req.exercise_session_id is not None:
+        duration, reps, exercise_id = ex.duration_s, ex.reps_valid, ex.id
+    elif req.exercise_client_session_id is not None:
         raise HTTPException(status_code=422, detail="Only camera workouts link an exercise set")
 
     if req.distance_m > activity["max_speed_mps"] * duration:
@@ -120,7 +121,7 @@ def upload_session(req: TrainingSessionIn, db: Session = Depends(get_db), token_
     row = models.TrainingSession(
         user_id=uid, client_session_id=req.client_session_id, activity_key=req.activity_key, mode=req.mode,
         source=req.source, started_at=started, duration_s=round(duration, 1), distance_m=round(req.distance_m, 1),
-        reps=reps, exercise_session_id=req.exercise_session_id, series_json=json.dumps(series),
+        reps=reps, exercise_session_id=exercise_id, series_json=json.dumps(series),
         devices_json=json.dumps([d[:64] for d in req.devices]),
         # The player's own calendar day, so weekly totals follow their week, not UTC's.
         local_date=req.started_at.date().isoformat(),

@@ -88,7 +88,12 @@ data class ExerciseHistoryResponse(val sessions: List<ServerExerciseSession> = e
 data class ConsentState(val granted: Boolean)
 
 /** What happened to a finished set: saved locally, and uploaded if the network allowed. */
-data class SetOutcome(val uploaded: Boolean, val xpAwarded: Int)
+data class SetOutcome(
+    val uploaded: Boolean,
+    val xpAwarded: Int,
+    /** The set's id on this phone and on the server. */
+    val clientSessionId: String = "",
+)
 
 /** Recent sets and personal bests (most valid reps, or longest hold, per exercise). */
 data class ExerciseHistory(val recent: List<StoredSession>, val bests: Map<String, Double>) {
