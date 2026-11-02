@@ -47,7 +47,7 @@ class AuthLoginResponse(BaseModel):
     name: str          # display name
     message: str
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - the OAuth token type, not a secret
 
 # The JSON shape for a single GPS point in our Domain trace
 class Coordinate(BaseModel):
