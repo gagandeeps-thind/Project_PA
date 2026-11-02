@@ -59,7 +59,7 @@ private struct SignedInRoot: View {
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(AppSection.home)
             stack(discover) { DiscoverView(graph: graph) }
-                .tabItem { Label("Discover", systemImage: "safari") }
+                .tabItem { Label("Arise", systemImage: "map") }
                 .tag(AppSection.discover)
             stack(social) { SocialView(graph: graph) }
                 .tabItem { Label("Social", systemImage: "person.3") }
@@ -90,7 +90,7 @@ private struct SignedInRoot: View {
         switch destination {
         case let tab as DestinationSection:
             switch tab.tab {
-            case .discover: section = .discover
+            case .arise: section = .discover
             case .social: section = .social
             case .wallet: section = graph.hasWallet ? .wallet : .home
             case .profile: section = .profile

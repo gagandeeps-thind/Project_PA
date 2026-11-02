@@ -19,6 +19,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Mapbox Maps SDK (Arise tab). Served without credentials.
+        maven("https://api.mapbox.com/downloads/v2/releases/maven") {
+            content { includeGroupByRegex("com\\.mapbox.*") }
+        }
     }
 }
 

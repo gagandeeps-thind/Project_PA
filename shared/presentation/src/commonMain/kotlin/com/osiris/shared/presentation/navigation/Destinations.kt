@@ -3,7 +3,7 @@ package com.osiris.shared.presentation.navigation
 /** The five bottom-bar sections, in bar order. */
 enum class Tab(val path: String) {
     HOME("home"),
-    DISCOVER("discover"),
+    ARISE("arise"),
     SOCIAL("social"),
     WALLET("wallet"),
     PROFILE("profile"),
@@ -57,6 +57,8 @@ class DeepLinkParser(private val webLinkHost: String) {
             "community" -> arg?.takeIf(::isSafeToken)?.let(Destination::Community)
             "invite" -> arg?.takeIf(::isSafeToken)?.let(Destination::Invite)
             "join" -> arg?.takeIf(::isSafeToken)?.let(Destination::Referral)
+            // Discover became Arise; old links still land there.
+            "discover" -> Destination.Section(Tab.ARISE).takeIf { segments.size == 1 }
             else -> Tab.entries.firstOrNull { it.path == head && segments.size == 1 }?.let(Destination::Section)
         }
     }

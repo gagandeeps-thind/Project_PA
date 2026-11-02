@@ -35,6 +35,12 @@ class NavigationTest {
     }
 
     @Test
+    fun `the old discover link opens Arise`() {
+        assertEquals(Destination.Section(Tab.ARISE), links.parse("osiris://discover"))
+        assertEquals(Destination.Section(Tab.ARISE), links.parse("osiris://arise"))
+    }
+
+    @Test
     fun `links to other hosts, unknown paths and unsafe arguments are rejected`() {
         assertNull(links.parse("https://evil.example/i/abc"))
         assertNull(links.parse("https://osiris.example.evil.com/i/abc"))

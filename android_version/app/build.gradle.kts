@@ -74,6 +74,8 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
         versionCode = resolvedVersionCode
         versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Mapbox public token from config/environments/local.properties (git-ignored); empty disables the map.
+        resValue("string", "mapbox_access_token", osirisEnv.getProperty("MAPBOX_ACCESS_TOKEN").orEmpty())
         manifestPlaceholders["webLinkHost"] = osirisEnv.getProperty("links.webHost")
         buildConfigField("String", "PLAY_BILLING_PUBLIC_KEY", "\"$playBillingPublicKey\"")
     }
@@ -173,6 +175,7 @@ dependencies {
     "implementation"(libs.play.billing.ktx)
     "implementation"(libs.osmdroid)
     "implementation"(libs.haze)
+    "implementation"(libs.mapbox.maps)
 
     "testImplementation"(libs.junit)
     "testImplementation"(libs.kotlinx.coroutines.test)

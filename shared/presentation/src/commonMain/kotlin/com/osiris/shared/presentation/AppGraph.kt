@@ -6,6 +6,7 @@ import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.domain.exercise.ExerciseCatalog
 import com.osiris.shared.domain.exercise.ExerciseSpec
 import com.osiris.shared.domain.repository.DevicePermission
+import com.osiris.shared.presentation.arise.AriseViewModel
 import com.osiris.shared.presentation.challenge.ChallengeBoardViewModel
 import com.osiris.shared.presentation.challenge.ChallengeDetailViewModel
 import com.osiris.shared.presentation.challenge.CoursesViewModel
@@ -56,6 +57,7 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun rankings() = RankingsViewModel(data.communities)
     fun profile() = ProfileViewModel(data.player)
     fun discover() = DiscoverViewModel(data.challenges)
+    fun arise() = AriseViewModel()
     fun globalBoards() = GlobalBoardsViewModel(data.communities)
     fun supportChat() = SupportChatViewModel(data.support)
 

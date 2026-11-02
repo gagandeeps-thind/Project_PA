@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +43,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.osiris.player.ui.arise.AriseScreen
 import com.osiris.player.ui.challenge.ChallengeBoardScreen
 import com.osiris.player.ui.challenge.ChallengeDetailScreen
 import com.osiris.player.ui.challenge.CoursesScreen
@@ -52,7 +54,6 @@ import com.osiris.player.ui.community.RankingsScreen
 import com.osiris.player.ui.design.FrostBackground
 import com.osiris.player.ui.design.FrostBar
 import com.osiris.player.ui.design.FrostBarItem
-import com.osiris.player.ui.discover.DiscoverScreen
 import com.osiris.player.ui.exercise.ExerciseCameraScreen
 import com.osiris.player.ui.exercise.ExerciseHubScreen
 import com.osiris.player.ui.permission.PermissionPrimerScreen
@@ -75,7 +76,7 @@ object Routes {
     const val LOGIN = "login"
     const val ONBOARD = "onboard"
     const val TODAY = "today"
-    const val DISCOVER = "discover"
+    const val ARISE = "arise"
     const val SOCIAL = "social"
     const val WALLET = "wallet"
     const val PROFILE = "profile"
@@ -103,7 +104,7 @@ private class Section(val tab: Tab, val route: String, val label: String, val ic
 
 private fun sections(hasWallet: Boolean) = listOfNotNull(
     Section(Tab.HOME, Routes.TODAY, "Home", Icons.Outlined.Home),
-    Section(Tab.DISCOVER, Routes.DISCOVER, "Discover", Icons.Outlined.Explore),
+    Section(Tab.ARISE, Routes.ARISE, "Arise", Icons.Outlined.Explore),
     Section(Tab.SOCIAL, Routes.SOCIAL, "Social", Icons.Outlined.Groups),
     Section(Tab.WALLET, Routes.WALLET, "Wallet", Icons.Outlined.AccountBalanceWallet).takeIf { hasWallet },
     Section(Tab.PROFILE, Routes.PROFILE, "Profile", Icons.Outlined.Person),
@@ -163,13 +164,14 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
             is Destination.Section -> sections.firstOrNull { it.tab == pending.tab }?.let { nav.selectTab(it.route) }
             is Destination.Challenge -> nav.open(Routes.challenge(pending.id))
             is Destination.Community -> nav.open(Routes.community(pending.slug))
-            // A signed-in player already has an account; the invite's challenge is on Discover.
-            is Destination.Invite, is Destination.Referral -> nav.selectTab(Routes.DISCOVER)
+            // A signed-in player already has an account; the invite's challenge is on Arise.
+            is Destination.Invite, is Destination.Referral -> nav.selectTab(Routes.ARISE)
         }
         onPendingOpened()
     }
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f)) { SignedInGraph(graph, nav) }
+        // Clipped so a screen's pull-up panel never draws under the tab bar.
+        Box(Modifier.weight(1f).clipToBounds()) { SignedInGraph(graph, nav) }
         if (sections.any { it.route == route }) {
             FrostBar(
                 sections.map { s -> FrostBarItem(s.label, s.icon, selected = s.route == route, onClick = { nav.selectTab(s.route) }) },
@@ -190,12 +192,14 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
             val id = entry.arguments?.getInt("challengeId")?.takeIf { it >= 0 }
             RunScreen(graph, challengeId = id, onBack = nav::popBackStack, onOpenChallenge = { nav.navigate(Routes.challenge(it)) })
         }
-        composable(Routes.DISCOVER) {
-            DiscoverScreen(
+        composable(Routes.ARISE) {
+            AriseScreen(
                 graph,
-                onOpen = { nav.navigate(Routes.challenge(it)) },
-                onCreate = { nav.open(Routes.COURSES) },
-                onNearby = { nav.open(Routes.CHALLENGES) },
+                onStartRoute = { nav.navigate(Routes.run()) },
+                onRecordRoute = { nav.navigate(Routes.run()) },
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+                onCreateChallenge = { nav.open(Routes.COURSES) },
+                onNearbyChallenges = { nav.open(Routes.CHALLENGES) },
             )
         }
         composable(Routes.CHALLENGES) {
