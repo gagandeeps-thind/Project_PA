@@ -27,6 +27,9 @@ osmdroid = "6.1.20"
 # 1.6.x is the last line built on Compose 1.8 / Kotlin 2.1; 1.7+ and 2.x need Compose 1.12 and Kotlin 2.3+.
 haze = "1.6.10"
 mapbox = "11.28.0"
+health-connect = "1.1.0"
+# Health Connect brings Guava at runtime only, which empties CameraX's ListenableFuture at compile time.
+guava = "31.1-android"
 junit = "4.13.2"
 
 [libraries]
@@ -89,4 +92,6 @@ play-billing-ktx = { module = "com.android.billingclient:billing-ktx", version.r
 osmdroid = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroid" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 mapbox-maps = { module = "com.mapbox.maps:android-ndk27", version.ref = "mapbox" }
+health-connect = { module = "androidx.health.connect:connect-client", version.ref = "health-connect" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit = { module = "junit:junit", version.ref = "junit" }
