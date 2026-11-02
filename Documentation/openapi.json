@@ -741,6 +741,199 @@
         "title": "AdminUserStatus",
         "type": "object"
       },
+      "AriseAttackResult": {
+        "properties": {
+          "attack_id": {
+            "title": "Attack Id",
+            "type": "integer"
+          },
+          "domain": {
+            "$ref": "#/components/schemas/AriseDomain"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "workout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AriseWorkout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "attack_id",
+          "status",
+          "reasons",
+          "domain"
+        ],
+        "title": "AriseAttackResult",
+        "type": "object"
+      },
+      "AriseClaim": {
+        "properties": {
+          "run_session_id": {
+            "title": "Run Session Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_session_id"
+        ],
+        "title": "AriseClaim",
+        "type": "object"
+      },
+      "AriseDomain": {
+        "properties": {
+          "area_sqkm": {
+            "title": "Area Sqkm",
+            "type": "number"
+          },
+          "centroid_lat": {
+            "title": "Centroid Lat",
+            "type": "number"
+          },
+          "centroid_lng": {
+            "title": "Centroid Lng",
+            "type": "number"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "distance_m": {
+            "title": "Distance M",
+            "type": "number"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "geometry": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Geometry",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "owner_id": {
+            "title": "Owner Id",
+            "type": "integer"
+          },
+          "owner_name": {
+            "title": "Owner Name",
+            "type": "string"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "source_run_session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Run Session Id"
+          },
+          "workout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AriseWorkout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "owner_id",
+          "owner_name",
+          "area_sqkm",
+          "distance_m",
+          "duration_s",
+          "centroid_lat",
+          "centroid_lng",
+          "geometry"
+        ],
+        "title": "AriseDomain",
+        "type": "object"
+      },
+      "AriseDomainPhoto": {
+        "properties": {
+          "jpeg_base64": {
+            "maxLength": 500000,
+            "title": "Jpeg Base64",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jpeg_base64"
+        ],
+        "title": "AriseDomainPhoto",
+        "type": "object"
+      },
+      "AriseDomains": {
+        "properties": {
+          "hard": {
+            "items": {
+              "$ref": "#/components/schemas/AriseDomain"
+            },
+            "title": "Hard",
+            "type": "array"
+          },
+          "suggested": {
+            "items": {
+              "$ref": "#/components/schemas/AriseDomain"
+            },
+            "title": "Suggested",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suggested",
+          "hard"
+        ],
+        "title": "AriseDomains",
+        "type": "object"
+      },
       "AriseRoute": {
         "description": "A public route. `line` is what every player sees: trimmed at both ends when `hide_ends`.",
         "properties": {
@@ -819,6 +1012,67 @@
           "name"
         ],
         "title": "AriseRoutePublish",
+        "type": "object"
+      },
+      "AriseWorkout": {
+        "properties": {
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/AriseWorkoutSet"
+            },
+            "title": "Sets",
+            "type": "array"
+          },
+          "total_reps": {
+            "title": "Total Reps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sets",
+          "total_reps"
+        ],
+        "title": "AriseWorkout",
+        "type": "object"
+      },
+      "AriseWorkoutResult": {
+        "properties": {
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "domain": {
+            "$ref": "#/components/schemas/AriseDomain"
+          }
+        },
+        "required": [
+          "completed",
+          "domain"
+        ],
+        "title": "AriseWorkoutResult",
+        "type": "object"
+      },
+      "AriseWorkoutSet": {
+        "properties": {
+          "exercise_key": {
+            "title": "Exercise Key",
+            "type": "string"
+          },
+          "reps": {
+            "title": "Reps",
+            "type": "integer"
+          },
+          "rest_s": {
+            "title": "Rest S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exercise_key",
+          "reps",
+          "rest_s"
+        ],
+        "title": "AriseWorkoutSet",
         "type": "object"
       },
       "AttemptSubmit": {
@@ -8970,6 +9224,399 @@
           }
         ],
         "summary": "Admin Unsuspend User"
+      }
+    },
+    "/api/v2/arise/attacks/{attack_id}/workout/complete": {
+      "post": {
+        "description": "Wins the domain once the attacker has done every set of the defender's workout since the attack.\nUntil then the attack stays `needs_workout`.",
+        "operationId": "complete_attack_workout_api_v2_arise_attacks__attack_id__workout_complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attack_id",
+            "required": true,
+            "schema": {
+              "title": "Attack Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseAttackResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Complete Attack Workout"
+      }
+    },
+    "/api/v2/arise/domains": {
+      "get": {
+        "description": "Other players' Arise domains near a point, split into the ones the caller is likely to win and\nthe hard ones (hardest first).",
+        "operationId": "nearby_domains_api_v2_arise_domains_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "radius_km",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "exclusiveMinimum": 0,
+              "maximum": 50,
+              "title": "Radius Km",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseDomains"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Nearby Domains"
+      },
+      "post": {
+        "description": "Claim the area inside an accepted loop run (finish within 50 m of the start). Its distance and time\nbecome the bar attackers must beat. Each run claims or attacks once.",
+        "operationId": "claim_domain_api_v2_arise_domains_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AriseClaim"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseDomain"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Claim Domain"
+      }
+    },
+    "/api/v2/arise/domains/{domain_id}/attack": {
+      "post": {
+        "description": "Attack with an accepted loop run that encloses the domain, is at least as long as the defender's run\nand faster. A domain with a defense workout also needs the same workout done (`needs_workout`).",
+        "operationId": "attack_domain_api_v2_arise_domains__domain_id__attack_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "title": "Domain Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AriseClaim"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseAttackResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Attack Domain"
+      }
+    },
+    "/api/v2/arise/domains/{domain_id}/photo": {
+      "get": {
+        "description": "Public on purpose: the defender adds the picture for every attacker to see, and the app loads it\nas a plain image URL.",
+        "operationId": "get_domain_photo_api_v2_arise_domains__domain_id__photo_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "title": "Domain Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Domain Photo"
+      },
+      "put": {
+        "description": "The owner's picture for the domain: a JPEG of at most 300 KB, sent as base64.",
+        "operationId": "set_domain_photo_api_v2_arise_domains__domain_id__photo_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "title": "Domain Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AriseDomainPhoto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseDomain"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Set Domain Photo"
+      }
+    },
+    "/api/v2/arise/domains/{domain_id}/workout": {
+      "post": {
+        "description": "Exceed: a random workout for the owner's level. Doing every set with the camera makes it the domain's\ndefense (see .../workout/complete). Asking again replaces the pending workout.",
+        "operationId": "exceed_api_v2_arise_domains__domain_id__workout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "title": "Domain Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseWorkout"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Exceed"
+      }
+    },
+    "/api/v2/arise/domains/{domain_id}/workout/complete": {
+      "post": {
+        "description": "Attaches the pending workout once every set is matched by a verified camera set done since it was\nissued. Until then `completed` is false and the domain keeps only its run.",
+        "operationId": "complete_exceed_api_v2_arise_domains__domain_id__workout_complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "title": "Domain Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AriseWorkoutResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Complete Exceed"
       }
     },
     "/api/v2/arise/routes": {

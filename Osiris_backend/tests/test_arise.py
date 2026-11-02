@@ -3,6 +3,7 @@
 Run directly from the backend directory:
     python tests/test_arise.py
 """
+import base64
 import math
 import os
 import sys
@@ -223,6 +224,149 @@ def test_public_line_helper() -> None:
     print("PASS test_public_line_helper")
 
 
+# --- domains and attacks ----------------------------------------------------------
+
+def _session(user_id: int, key: str, reps: int) -> None:
+    """A verified camera set, as the exercise upload would store it."""
+    db = database.SessionLocal()
+    try:
+        db.add(models.ExerciseSession(
+            user_id=user_id, client_session_id=f"{PREFIX}{user_id}-{key}-{reps}-{datetime.now().timestamp()}",
+            exercise_key=key, rules_version="test", duration_s=30.0, reps_attempted=reps, reps_valid=reps,
+            client_verdict="pass", status="verified", local_date=datetime.now().date().isoformat(),
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _claim(headers, origin, side=400, speed=3.0, key="claim"):
+    run_id = _run(headers, _square(origin, side, speed), key)
+    return client.post("/api/v2/arise/domains", headers=headers, json={"run_session_id": run_id})
+
+
+def test_workout_generator_bounds_and_determinism() -> None:
+    keys = ["pushup", "squat", "lunge", "situp", "burpee"]
+    for level in (1, 5, 15, 40):
+        w = arise.generate_workout(1234, level, keys)
+        total = sum(s["reps"] for s in w)
+        assert total == arise.total_reps(level), (level, total)
+        assert 30 <= total <= 100
+        assert 3 <= len(w) <= 6
+        assert all(10 <= s["rest_s"] <= 30 and s["exercise_key"] in keys and s["reps"] >= 5 for s in w)
+    assert arise.generate_workout(7, 3, keys) == arise.generate_workout(7, 3, keys)
+    assert arise.player_level(0) == 1 and arise.player_level(10**6) == 15
+    print("PASS test_workout_generator_bounds_and_determinism")
+
+
+def test_only_an_accepted_loop_claims_a_domain() -> None:
+    headers, _ = _player("claimer")
+    origin = _north(BASE, 4000)
+    straight = _run(headers, _path([origin, _north(origin, 1500)], 3.0), "straight")
+    r = client.post("/api/v2/arise/domains", headers=headers, json={"run_session_id": straight})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "NOT_A_LOOP", r.text
+    r = _claim(headers, _east(origin, 2000), key="loop")
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert d["distance_m"] > 1400 and d["duration_s"] > 400 and d["area_sqkm"] > 0.1
+    assert d["workout"] is None
+    again = client.post("/api/v2/arise/domains", headers=headers, json={"run_session_id": d["source_run_session_id"]})
+    assert again.status_code == 409
+    print("PASS test_only_an_accepted_loop_claims_a_domain")
+
+
+def test_exceed_attaches_the_workout_only_when_every_set_is_done() -> None:
+    headers, uid = _player("exceeder")
+    d = _claim(headers, _north(BASE, 8000), key="exceed").json()
+    w = client.post(f"/api/v2/arise/domains/{d['id']}/workout", headers=headers)
+    assert w.status_code == 200, w.text
+    sets = w.json()["sets"]
+    for s in sets[:-1]:
+        _session(uid, s["exercise_key"], s["reps"])
+    r = client.post(f"/api/v2/arise/domains/{d['id']}/workout/complete", headers=headers)
+    assert r.status_code == 200 and r.json()["completed"] is False, r.text
+    _session(uid, sets[-1]["exercise_key"], sets[-1]["reps"])
+    r = client.post(f"/api/v2/arise/domains/{d['id']}/workout/complete", headers=headers)
+    assert r.json()["completed"] is True, r.text
+    assert r.json()["domain"]["workout"]["sets"] == sets
+    print("PASS test_exceed_attaches_the_workout_only_when_every_set_is_done")
+
+
+def test_attack_rules() -> None:
+    defender, _ = _player("defender")
+    attacker, attacker_id = _player("attacker")
+    origin = _north(BASE, 12000)
+    d = _claim(defender, origin, side=400, speed=3.0, key="def").json()
+    start = _north(_east(origin, -25), -25)
+
+    def attack(points, key):
+        run_id = _run(attacker, points, key)
+        return client.post(f"/api/v2/arise/domains/{d['id']}/attack", headers=attacker, json={"run_session_id": run_id})
+
+    own = client.post(
+        f"/api/v2/arise/domains/{d['id']}/attack", headers=defender, json={"run_session_id": d["source_run_session_id"]},
+    )
+    assert own.status_code == 409, own.text
+    slow = attack(_square(start, 450, 2.8), "slow").json()
+    assert slow["status"] == "failed" and "TOO_SLOW" in slow["reasons"], slow
+    short = attack(_square(_north(_east(origin, 100), 100), 250, 4.0), "short").json()
+    assert short["status"] == "failed" and "TOO_SHORT" in short["reasons"], short
+    away = attack(_square(_north(origin, 3000), 450, 4.0), "away").json()
+    assert away["status"] == "failed" and "NOT_ENCLOSING" in away["reasons"], away
+    listed = client.get(
+        "/api/v2/arise/domains", headers=attacker, params={"lat": origin[0], "lng": origin[1], "radius_km": 5},
+    ).json()
+    assert d["id"] in [x["id"] for x in listed["suggested"]], listed
+    won = attack(_square(start, 450, 4.0), "won").json()
+    assert won["status"] == "won", won
+    db = database.SessionLocal()
+    try:
+        assert db.query(models.Domain).filter(models.Domain.id == d["id"]).one().owner_id == attacker_id
+    finally:
+        db.close()
+    print("PASS test_attack_rules")
+
+
+def test_a_defended_domain_needs_the_same_workout() -> None:
+    defender, defender_id = _player("wall")
+    attacker, attacker_id = _player("raider")
+    origin = _north(BASE, 16000)
+    d = _claim(defender, origin, key="wall").json()
+    sets = client.post(f"/api/v2/arise/domains/{d['id']}/workout", headers=defender).json()["sets"]
+    for s in sets:
+        _session(defender_id, s["exercise_key"], s["reps"])
+    assert client.post(f"/api/v2/arise/domains/{d['id']}/workout/complete", headers=defender).json()["completed"]
+    run_id = _run(attacker, _square(_north(_east(origin, -25), -25), 450, 4.0), "raid")
+    r = client.post(f"/api/v2/arise/domains/{d['id']}/attack", headers=attacker, json={"run_session_id": run_id}).json()
+    assert r["status"] == "needs_workout" and r["workout"]["sets"] == sets, r
+    pending = client.post(f"/api/v2/arise/attacks/{r['attack_id']}/workout/complete", headers=attacker).json()
+    assert pending["status"] == "needs_workout", pending
+    for s in sets:
+        _session(attacker_id, s["exercise_key"], s["reps"])
+    done = client.post(f"/api/v2/arise/attacks/{r['attack_id']}/workout/complete", headers=attacker).json()
+    assert done["status"] == "won", done
+    print("PASS test_a_defended_domain_needs_the_same_workout")
+
+
+def test_domain_photo_owner_only_and_limited() -> None:
+    owner, _ = _player("painter")
+    other, _ = _player("vandal")
+    d = _claim(owner, _north(BASE, 20000), key="photo").json()
+    jpeg = b"\xff\xd8\xff\xe0" + b"0" * 1000
+    body = {"jpeg_base64": base64.b64encode(jpeg).decode()}
+    url = f"/api/v2/arise/domains/{d['id']}/photo"
+    assert client.put(url, headers=other, json=body).status_code == 403
+    gif = {"jpeg_base64": base64.b64encode(b"GIF89a").decode()}
+    assert client.put(url, headers=owner, json=gif).status_code == 422
+    big = {"jpeg_base64": base64.b64encode(b"\xff\xd8" + b"0" * 350_000).decode()}
+    assert client.put(url, headers=owner, json=big).status_code == 413
+    r = client.put(url, headers=owner, json=body)
+    assert r.status_code == 200 and r.json()["photo_url"], r.text
+    got = client.get(url)
+    assert got.status_code == 200 and got.content == jpeg and got.headers["content-type"] == "image/jpeg"
+    print("PASS test_domain_photo_owner_only_and_limited")
+
+
 TESTS = [
     test_public_line_helper,
     test_trail_runs_can_be_recorded,
@@ -230,6 +374,12 @@ TESTS = [
     test_publish_with_visible_ends_starts_at_the_run_start,
     test_unfinished_and_foreign_runs_cannot_be_published,
     test_nearby_routes_lists_public_routes_within_the_radius,
+    test_workout_generator_bounds_and_determinism,
+    test_only_an_accepted_loop_claims_a_domain,
+    test_exceed_attaches_the_workout_only_when_every_set_is_done,
+    test_attack_rules,
+    test_a_defended_domain_needs_the_same_workout,
+    test_domain_photo_owner_only_and_limited,
 ]
 
 

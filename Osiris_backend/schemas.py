@@ -727,3 +727,58 @@ class AriseRoute(BaseModel):
     hide_ends: bool
     owner_name: str
     line: List[List[float]]
+
+
+# --- Arise: domains and attacks ----------------------------------------------------
+
+class AriseClaim(BaseModel):
+    run_session_id: int
+
+
+class AriseWorkoutSet(BaseModel):
+    exercise_key: str
+    reps: int
+    rest_s: int
+
+
+class AriseWorkout(BaseModel):
+    sets: List[AriseWorkoutSet]
+    total_reps: int
+
+
+class AriseDomain(BaseModel):
+    id: int
+    owner_id: int
+    owner_name: str
+    area_sqkm: float
+    distance_m: float
+    duration_s: float
+    centroid_lat: float
+    centroid_lng: float
+    geometry: List[List[float]]
+    source_run_session_id: Optional[int] = None
+    workout: Optional[AriseWorkout] = None
+    photo_url: Optional[str] = None
+    difficulty: Optional[str] = None
+
+
+class AriseDomains(BaseModel):
+    suggested: List[AriseDomain]
+    hard: List[AriseDomain]
+
+
+class AriseWorkoutResult(BaseModel):
+    completed: bool
+    domain: AriseDomain
+
+
+class AriseAttackResult(BaseModel):
+    attack_id: int
+    status: str                      # won | needs_workout | failed
+    reasons: List[str]
+    workout: Optional[AriseWorkout] = None
+    domain: AriseDomain
+
+
+class AriseDomainPhoto(BaseModel):
+    jpeg_base64: str = Field(..., max_length=500_000)   # 300 KB of JPEG is ~400k base64 characters

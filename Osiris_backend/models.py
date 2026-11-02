@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey, LargeBinary, UniqueConstraint
 from sqlalchemy import false as sa_false, true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -78,7 +78,40 @@ class Domain(Base):
     # vault_balance doubles as the required Challenger Match amount for a siege.
     vault_balance: Mapped[int | None] = mapped_column(Integer, default=0)
 
+    # Arise domains (defense_type "arise"): the claiming run's distance and time are the bar an
+    # attacker must beat; `defense_workout_json` is the optional Exceed workout they must repeat.
+    distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_run_session_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("run_sessions.id"), nullable=True, unique=True)
+    defense_workout_json: Mapped[str | None] = mapped_column(String, nullable=True)
+    pending_workout_json: Mapped[str | None] = mapped_column(String, nullable=True)
+    pending_workout_issued_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
     owner = relationship("User", back_populates="domains")
+
+
+class AriseAttack(Base):
+    """One attack run against an Arise domain. status: needs_workout -> won, or failed."""
+    __tablename__ = "arise_attacks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    attacker_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), nullable=False, index=True)
+    run_session_id: Mapped[int] = mapped_column(Integer, ForeignKey("run_sessions.id"), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    reasons_json: Mapped[str] = mapped_column(String, nullable=False, default="[]")
+    workout_json: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+    resolved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DomainPhoto(Base):
+    """The defender's picture for a domain, shown on attack cards. Shortcut: JPEG bytes in the database;
+    move to object storage (R2) if photos pass ~10k."""
+    __tablename__ = "domain_photos"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), nullable=False, unique=True)
+    jpeg: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
 class SiegeLog(Base):
     __tablename__ = "sieges_log"
