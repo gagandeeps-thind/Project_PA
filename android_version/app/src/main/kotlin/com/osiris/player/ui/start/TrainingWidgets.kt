@@ -1,7 +1,11 @@
 package com.osiris.player.ui.start
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +17,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.osiris.player.ui.common.Chip
 import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.design.KeyButton
 import com.osiris.player.ui.theme.OsirisColors
@@ -70,13 +77,16 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
 
-private const val RIBBON_DEGREES_PER_SECOND = 6f
+private const val RIBBON_DEGREES_PER_SECOND = 5.5f
 private const val FULL_TURN = 360f
 private const val NANOS = 1_000_000_000f
-private const val CHIP_SLOT_DP = 140f
+private const val CHIP_SLOT_DP = 132f
 private const val MIN_FACING = 0.05f
 private const val CHIP_SHRINK = 0.3f
 private const val TO_RADIANS = PI.toFloat() / 180f
+private const val PULSE_DURATION_MS = 1600
+private const val PULSE_MAX_SCALE = 1.16f
+private const val PULSE_ALPHA = 0.28f
 
 /** Accent per kind of activity, for the ribbon chips and the picker. */
 fun ActivityKind.tint(): Color = when (this) {
@@ -96,11 +106,16 @@ private val SensorGreen = Color(0xFF66BB6A)
 @Composable
 fun ActivityRibbon(activities: List<TrainingActivity>, selected: String?, onSelect: (TrainingActivity) -> Unit) {
     if (activities.isEmpty()) {
-        Spacer(Modifier.height(44.dp))
+        Spacer(Modifier.height(48.dp))
         return
     }
+    val step = FULL_TURN / activities.size
     var rotation by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(selected, activities.size) {
+        val index = activities.indexOfFirst { it.key == selected }
+        if (index >= 0) rotation = index * step
+    }
     LaunchedEffect(Unit) {
         var last = 0L
         while (true) {
@@ -110,12 +125,11 @@ fun ActivityRibbon(activities: List<TrainingActivity>, selected: String?, onSele
             }
         }
     }
-    val step = FULL_TURN / activities.size
     var degreesPerPx by remember { mutableFloatStateOf(0f) }
     // On the parent, so a drag that starts on a chip still spins the ribbon.
     val drag = rememberDraggableState { delta -> rotation -= delta * degreesPerPx }
     BoxWithConstraints(
-        Modifier.fillMaxWidth().height(44.dp).clipToBounds().draggable(
+        Modifier.fillMaxWidth().height(48.dp).clipToBounds().draggable(
             drag, Orientation.Horizontal,
             onDragStarted = { dragging = true },
             onDragStopped = { dragging = false },
@@ -141,7 +155,10 @@ fun ActivityRibbon(activities: List<TrainingActivity>, selected: String?, onSele
                         scaleY = scale
                         cameraDistance = 12f * density.density
                     },
-                ) { onSelect(activity) }
+                ) {
+                    rotation = i * step
+                    onSelect(activity)
+                }
             }
         }
     }
@@ -154,17 +171,18 @@ private fun RibbonChip(activity: TrainingActivity, selected: Boolean, modifier: 
     Text(
         activity.name,
         style = MaterialTheme.typography.labelLarge,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         color = if (selected) Color.White else MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
         modifier = modifier
-            .width(128.dp)
+            .width(126.dp)
             .clip(shape)
             .background(if (selected) tint else tint.copy(alpha = 0.16f))
-            .border(1.dp, tint.copy(alpha = 0.6f), shape)
+            .border(if (selected) 1.5.dp else 1.dp, tint.copy(alpha = if (selected) 0.95f else 0.55f), shape)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }
 
@@ -172,6 +190,8 @@ private fun RibbonChip(activity: TrainingActivity, selected: Boolean, modifier: 
 @Composable
 fun QuoteBoard(quote: Quote?, modifier: Modifier = Modifier) {
     FrostCard(modifier.fillMaxWidth()) {
+        Chip("DAILY FOCUS", OsirisColors.Secondary)
+        Spacer(Modifier.height(8.dp))
         if (quote == null) {
             Text("Every session counts.", style = MaterialTheme.typography.titleMedium, fontStyle = FontStyle.Italic)
         } else {
@@ -184,25 +204,49 @@ fun QuoteBoard(quote: Quote?, modifier: Modifier = Modifier) {
 /** The small round start key in the middle of the page. */
 @Composable
 fun StartButton(activity: TrainingActivity?, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(96.dp)
-                .clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(Color(0xFFFF8A3D), OsirisColors.Primary)))
-                .clickable(role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = "Start ${activity?.name ?: "a workout"}" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(StartIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(44.dp))
+    val pulse = rememberInfiniteTransition(label = "startPulse")
+    val ringScale by pulse.animateFloat(
+        initialValue = 1f,
+        targetValue = PULSE_MAX_SCALE,
+        animationSpec = infiniteRepeatable(tween(PULSE_DURATION_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "ringScale",
+    )
+    val accent = activity?.kind?.tint() ?: OsirisColors.Primary
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(104.dp)
+                    .graphicsLayer {
+                        scaleX = ringScale
+                        scaleY = ringScale
+                    }
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(accent.copy(alpha = PULSE_ALPHA), Color.Transparent))),
+            )
+            Box(
+                Modifier
+                    .size(92.dp)
+                    .clip(CircleShape)
+                    .background(Brush.verticalGradient(listOf(Color(0xFFFF8A3D), OsirisColors.Primary)))
+                    .border(2.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                    .clickable(role = Role.Button, onClick = onClick)
+                    .semantics { contentDescription = "Start ${activity?.name ?: "a workout"}" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(StartIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
+            }
         }
         Text(
             "Start",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 6.dp),
         )
-        activity?.let { Text(it.name, color = OsirisColors.Muted) }
+        activity?.let {
+            Spacer(Modifier.height(4.dp))
+            Chip(it.name, it.kind.tint())
+        }
     }
 }
 
@@ -261,15 +305,30 @@ fun ResultsRow(summary: TrainingSummary, activity: TrainingActivity) {
         if (camera) "Total reps" to "${summary.totalReps}" else "Distance" to Format.distance(summary.totalDistanceM),
         "This week" to "${summary.weekSessions}",
     )
-    val captions = mapOf("Segments" to "workouts · challenges", "This week" to "sessions")
+    val captions = mapOf(
+        "PR" to "personal record",
+        "Segments" to "workouts · challenges",
+        "Total time" to "all-time active",
+        "Total reps" to "verified reps",
+        "Distance" to "total covered",
+        "This week" to "sessions",
+    )
+    val accent = activity.kind.tint()
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         for ((label, value) in tiles) {
-            FrostCard(Modifier.width(136.dp).height(116.dp)) {
+            FrostCard(Modifier.width(138.dp).height(116.dp)) {
                 Text(label, style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
-                Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    value,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (label == "PR") accent else Color.Unspecified,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 captions[label]?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = OsirisColors.Faint) }
             }
         }

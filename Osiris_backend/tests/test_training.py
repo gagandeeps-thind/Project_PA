@@ -400,6 +400,16 @@ def test_group_leaderboard_order() -> None:
     board = client.get(f"/api/v2/group-challenges/{gid}", headers=owner).json()["leaderboard"]
     assert [m["progress"] for m in board] == [2.0, 1.0, 0.0], board
     assert board[0]["user_id"] == _me_id(b)
+    # Blocking a participant hides them from the viewer's group challenge leaderboard and top list.
+    db = database.SessionLocal()
+    try:
+        db.add(models.UserBlock(blocker_id=owner_id, blocked_id=_me_id(b)))
+        db.commit()
+    finally:
+        db.close()
+    after_block = client.get(f"/api/v2/group-challenges/{gid}", headers=owner).json()
+    assert _me_id(b) not in [m["user_id"] for m in after_block["leaderboard"]], after_block
+    assert _me_id(b) not in [m["user_id"] for m in after_block["top"]], after_block
     print("PASS test_group_leaderboard_order")
 
 

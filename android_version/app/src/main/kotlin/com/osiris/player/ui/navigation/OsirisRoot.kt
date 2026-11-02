@@ -184,7 +184,7 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
         when (pending) {
             null -> return@LaunchedEffect
             is Destination.Section -> when {
-                pending.tab == Tab.WALLET -> if (graph.hasWallet) nav.open(Routes.WALLET)
+                pending.tab == Tab.WALLET -> nav.open(Routes.WALLET)
                 else -> sections.firstOrNull { it.tab == pending.tab }?.let { nav.selectTab(it.route) }
             }
             is Destination.Challenge -> nav.open(Routes.challenge(pending.id))
@@ -289,7 +289,7 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
             SocialScreen(graph, onLocal = { nav.open(Routes.RANKINGS) }, onCommunities = { nav.open(Routes.COMMUNITIES) })
         }
         composable(Routes.RANKINGS) { RankingsScreen(graph, onBack = nav::popBackStack, onSettings = { nav.open(Routes.SETTINGS) }) }
-        if (graph.hasWallet) composable(Routes.WALLET) { WalletScreen(graph, onBack = nav::popBackStack) }
+        composable(Routes.WALLET) { WalletScreen(graph, onBack = nav::popBackStack) }
         startGraph(graph, nav)
         composable(Routes.PROFILE) {
             ProfileScreen(graph, actions = {

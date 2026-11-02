@@ -22,7 +22,7 @@ from schemas import (
     GroupChallengeOut,
     GroupMemberOut,
 )
-from services import training
+from services import player_safety, training
 
 router = APIRouter()
 
@@ -65,11 +65,15 @@ def _visible(db: Session, ch: models.GroupChallenge, uid: int, mine: dict[int, s
 def _cards(db: Session, uid: int, challenges: list[models.GroupChallenge], mine: dict[int, str],
            full: bool = False) -> list[GroupChallengeOut]:
     progress = training.group_progress(db, challenges)
-    people = connection_cards(db, {u for p in progress.values() for u in p})
+    blocked = player_safety.blocked_user_ids(db, uid) if uid > 0 else set()
+    people = connection_cards(db, {u for p in progress.values() for u in p if u not in blocked})
     out: list[GroupChallengeOut] = []
     for ch in challenges:
-        board = sorted(progress.get(ch.id, {}).items(), key=lambda kv: (-kv[1], kv[0]))
-        members = [GroupMemberOut(**people[u].model_dump(), progress=v) for u, v in board]
+        board = sorted(
+            ((u, v) for u, v in progress.get(ch.id, {}).items() if u not in blocked),
+            key=lambda kv: (-kv[1], kv[0]),
+        )
+        members = [GroupMemberOut(**people[u].model_dump(), progress=v) for u, v in board if u in people]
         fields = dict(
             id=ch.id, title=ch.title, activity_key=ch.activity_key, metric=ch.metric, target=ch.target,
             starts_at=ch.starts_at, ends_at=ch.ends_at, is_official=ch.is_official, creator_id=ch.creator_id,
@@ -206,4 +210,3 @@ def list_official_challenges(db: Session = Depends(get_db), token_data: dict = D
     rows = db.query(models.GroupChallenge).filter(models.GroupChallenge.is_official.is_(True)) \
         .order_by(models.GroupChallenge.created_at.desc()).limit(200).all()
     return _cards(db, -1, rows, {})
-

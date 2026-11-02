@@ -115,7 +115,7 @@ fun LazyListScope.challengeSections(
         item { SectionHeader("Suggested challenges") }
         for (row in suggested.chunked(SUGGESTED_PER_ROW)) {
             item(key = "suggested-${row.first().id}") {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for (c in row) SuggestedCard(c, { onChallenge(c.id) }, Modifier.weight(1f))
                     if (row.size < SUGGESTED_PER_ROW) Spacer(Modifier.weight(1f))
                 }
@@ -186,15 +186,21 @@ private fun ViewAllTile(onClick: () -> Unit) {
 
 @Composable
 private fun SuggestedCard(c: SuggestedChallenge, onClick: () -> Unit, modifier: Modifier) {
-    FrostCard(modifier.height(150.dp), onClick = onClick) {
-        Text(c.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(c.distanceLabel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    FrostCard(modifier.height(132.dp), onClick = onClick) {
+        Text(c.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            c.distanceLabel,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = OsirisColors.Primary,
+        )
         Text("Beat ${Format.duration(c.targetSeconds)}", color = OsirisColors.Muted, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.weight(1f))
         Text(
             if (c.joined) "Joined · ${c.participants} in" else "+${c.winXp} XP · ${c.participants} in",
             color = if (c.joined) OsirisColors.Success else OsirisColors.Secondary,
             style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
