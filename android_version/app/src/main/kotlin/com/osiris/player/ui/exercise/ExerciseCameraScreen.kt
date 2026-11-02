@@ -1,5 +1,7 @@
 package com.osiris.player.ui.exercise
 
+import kotlin.time.Clock
+import kotlin.time.Instant
 import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
@@ -82,6 +84,8 @@ fun ExerciseCameraScreen(
     reps: Int = 0,
     holdS: Int = 0,
     onDone: () -> Unit,
+    /** Opened from the Start tab: hands the uploaded set back so the page saves its session. */
+    onStartSet: ((setId: String, startedAt: Instant) -> Unit)? = null,
 ) {
     // The catalog is cached by the repository (bundled copy offline), so this is immediate.
     val loaded by produceState<Loadable<Pair<ExerciseSpec, ExerciseCatalog>>>(Loadable.Loading, key) {
@@ -92,7 +96,7 @@ fun ExerciseCameraScreen(
         }
     }
     when (val l = loaded) {
-        is Loadable.Ready -> Session(graph, l.value.first, l.value.second, sets, reps, holdS, onDone)
+        is Loadable.Ready -> Session(graph, l.value.first, l.value.second, sets, reps, holdS, onDone, onStartSet)
         else -> OsirisScaffold("Bodyweight", null, onBack = onDone) { padding ->
             LoadableContent(l, onRetry = {}, modifier = Modifier.padding(padding)) {}
         }
@@ -109,6 +113,7 @@ private fun Session(
     reps: Int,
     holdS: Int,
     onDone: () -> Unit,
+    onStartSet: ((setId: String, startedAt: Instant) -> Unit)?,
 ) {
     val vm = rememberShared(key = "exercise-${spec.key}-$sets-$reps-$holdS") {
         graph.exerciseSession(spec, catalog, totalSets = sets, targetRepsPerSet = reps, targetHoldSecondsPerSet = holdS)
@@ -226,7 +231,21 @@ private fun Session(
             keyboard = KeyboardType.Decimal,
         )
     }
-    s.result?.let { ResultSheet(it, onNextSet = vm::nextSet, onShareToFeed = { vm.shareWorkoutToFeed() }, onDone = onDone) }
+    // From the Start tab the page asks Post or Just save itself, so the sheet offers no second post.
+    val finish = {
+        val r = s.result
+        val setId = r?.uploadedSetId
+        if (onStartSet != null && setId != null) onStartSet(setId, r.setStartedAt ?: Clock.System.now())
+        onDone()
+    }
+    s.result?.let {
+        ResultSheet(
+            if (onStartSet != null) it.copy(canShareToFeed = false) else it,
+            onNextSet = vm::nextSet,
+            onShareToFeed = { vm.shareWorkoutToFeed() },
+            onDone = finish,
+        )
+    }
 }
 
 /** Debug builds only: the pose timing read-out for the result sheet. */

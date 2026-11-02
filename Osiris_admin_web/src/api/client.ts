@@ -18,6 +18,9 @@ import type {
   SeasonOut,
   AdminExerciseSet,
   AdminExerciseReviewResult,
+  TrainingActivity,
+  GroupChallenge,
+  CreateOfficialChallengePayload,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -282,5 +285,21 @@ export async function reviewExerciseSet(
     decision,
     note,
   });
+  return data;
+}
+
+/* ── Official group challenges (Start tab) ───────────────── */
+export async function getTrainingActivities(): Promise<TrainingActivity[]> {
+  const { data } = await api.get<TrainingActivity[]>("/api/v2/training/activities");
+  return data;
+}
+
+export async function getOfficialChallenges(): Promise<GroupChallenge[]> {
+  const { data } = await api.get<GroupChallenge[]>("/api/v2/admin/group-challenges");
+  return data;
+}
+
+export async function createOfficialChallenge(body: CreateOfficialChallengePayload): Promise<GroupChallenge> {
+  const { data } = await api.post<GroupChallenge>("/api/v2/admin/group-challenges", body);
   return data;
 }

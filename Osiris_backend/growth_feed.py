@@ -427,7 +427,7 @@ def suggested_global_challenges(
                 target_seconds=round(ch.target_seconds, 1),
                 win_xp=ch.win_xp,
                 participants=counts.get(ch.id, 0),
-                joined=ch.id in stats.my_attempts,
+                joined=ch.id in stats.mine,
                 is_global=True,
             )
         )

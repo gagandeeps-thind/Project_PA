@@ -58,6 +58,7 @@ fun ProfileScreen(graph: AppGraph, actions: @Composable RowScope.() -> Unit = {}
                     Gauge(p)
                     Metrics(p)
                     Badges(p)
+                    ProgressSection(graph)
                 }
             }
         }

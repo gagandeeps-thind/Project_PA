@@ -5,6 +5,8 @@ import com.osiris.shared.data.DataGraph
 import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.domain.exercise.ExerciseCatalog
 import com.osiris.shared.domain.exercise.ExerciseSpec
+import com.osiris.shared.domain.model.StartMode
+import com.osiris.shared.domain.model.TrainingActivity
 import com.osiris.shared.domain.repository.DevicePermission
 import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.arise.AriseViewModel
@@ -28,6 +30,11 @@ import com.osiris.shared.presentation.session.LoginViewModel
 import com.osiris.shared.presentation.session.OnboardingViewModel
 import com.osiris.shared.presentation.settings.SettingsViewModel
 import com.osiris.shared.presentation.social.GlobalBoardsViewModel
+import com.osiris.shared.presentation.start.GroupChallengeDetailViewModel
+import com.osiris.shared.presentation.start.GroupChallengesViewModel
+import com.osiris.shared.presentation.start.LiveSessionViewModel
+import com.osiris.shared.presentation.start.ProgressViewModel
+import com.osiris.shared.presentation.start.StartViewModel
 import com.osiris.shared.presentation.support.SupportChatViewModel
 import com.osiris.shared.presentation.today.TodayViewModel
 import com.osiris.shared.presentation.wallet.WalletViewModel
@@ -70,6 +77,11 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun arise() = AriseViewModel(data.arise)
     fun globalBoards() = GlobalBoardsViewModel(data.communities)
     fun supportChat() = SupportChatViewModel(data.support)
+    fun start(mode: StartMode) = StartViewModel(data.training, data.groupChallenges, data.player, mode)
+    fun liveSession(activity: TrainingActivity, mode: StartMode) = LiveSessionViewModel(data.training, activity, mode)
+    fun groupChallenges() = GroupChallengesViewModel(data.groupChallenges, data.training)
+    fun groupChallenge(id: Int) = GroupChallengeDetailViewModel(id, data.groupChallenges)
+    fun progress() = ProgressViewModel(data.training)
 
     /** Whether this build has a Wallet tab; [wallet] is only valid when it does. */
     val hasWallet: Boolean get() = data.wallet != null

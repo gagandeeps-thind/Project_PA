@@ -176,6 +176,8 @@ dependencies {
     "implementation"(libs.osmdroid)
     "implementation"(libs.haze)
     "implementation"(libs.mapbox.maps)
+    "implementation"(libs.health.connect)
+    "implementation"(libs.guava)
 
     "testImplementation"(libs.junit)
     "testImplementation"(libs.kotlinx.coroutines.test)

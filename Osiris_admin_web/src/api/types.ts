@@ -191,3 +191,34 @@ export interface AdminExerciseReviewResult {
   status: string;
   xp_awarded: number;
 }
+
+/* ── Start tab: official group challenges ─────────────────── */
+export interface TrainingActivity {
+  key: string;
+  name: string;
+  kind: "camera" | "gps" | "sensor";
+  metric: "distance_m" | "duration_s" | "reps";
+}
+
+export type GroupMetric = "distance_m" | "duration_s" | "reps" | "sessions";
+
+export interface GroupChallenge {
+  id: number;
+  title: string;
+  activity_key: string;
+  metric: GroupMetric;
+  target: number;
+  starts_at: string;
+  ends_at: string;
+  is_official: boolean;
+  status: "active" | "ended" | "cancelled";
+  members: number;
+}
+
+export interface CreateOfficialChallengePayload {
+  title: string;
+  activity_key: string;
+  metric: GroupMetric;
+  target: number;
+  days: number;
+}

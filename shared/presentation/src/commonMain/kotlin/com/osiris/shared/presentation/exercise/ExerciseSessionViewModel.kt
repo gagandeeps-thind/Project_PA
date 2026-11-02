@@ -54,6 +54,9 @@ data class SetResult(
     val canStartNextSet: Boolean = false,
     val canShareToFeed: Boolean = true,
     val postedToFeed: Boolean = false,
+    /** The uploaded set's id, for the Start tab to link its session to; null until uploaded. */
+    val uploadedSetId: String? = null,
+    val setStartedAt: Instant? = null,
 )
 
 data class ExerciseSessionState(
@@ -268,7 +271,11 @@ class ExerciseSessionViewModel(
             cumulativeHoldS += summary.holdS
             cumulativeDurationS += summary.durationS
             cumulativeXp += outcome?.xpAwarded ?: 0
-            _state.update { it.copy(phase = ExerciseSessionState.Phase.DONE, result = result(summary, outcome, perf)) }
+            val done = result(summary, outcome, perf).copy(
+                uploadedSetId = outcome?.takeIf { it.uploaded }?.clientSessionId?.ifEmpty { null },
+                setStartedAt = startedAt,
+            )
+            _state.update { it.copy(phase = ExerciseSessionState.Phase.DONE, result = done) }
         }
     }
 

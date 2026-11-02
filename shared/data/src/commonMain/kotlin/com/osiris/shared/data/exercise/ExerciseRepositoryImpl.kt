@@ -96,7 +96,7 @@ class ExerciseRepositoryImpl(
     override suspend fun saveSet(summary: SessionSummary, startedAt: Instant): Outcome<SetOutcome> = outcomeOf {
         val userId = currentUserId() ?: throw AppError.Unauthorized()
         val db = storeOrThrow()
-        try {
+        val id = try {
             withContext(io) { db.saveSession(summary, userId, startedAt, clock.now()) }
         } catch (e: CancellationException) {
             throw e
@@ -112,7 +112,7 @@ class ExerciseRepositoryImpl(
             logger.warn(TAG, "Upload after save failed", e)
             SyncResult(0, 0, offline = true)
         }
-        SetOutcome(uploaded = !result.offline && result.uploaded > 0, xpAwarded = result.xpAwarded)
+        SetOutcome(uploaded = !result.offline && result.uploaded > 0, xpAwarded = result.xpAwarded, clientSessionId = id)
     }
 
     override suspend fun history(): ExerciseHistory {

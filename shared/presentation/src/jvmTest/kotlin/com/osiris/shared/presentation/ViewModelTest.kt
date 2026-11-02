@@ -348,6 +348,9 @@ class ViewModelTest {
         assertEquals("Push-ups: 6 reps", result.amount.replace(Regex("^[^:]+"), "Push-ups"))
         assertEquals("+15 XP", result.sync)
         assertEquals(6, exercises.saved.single().repsValid)
+        // The Start tab links its session to this uploaded set.
+        assertEquals("set-1", result.uploadedSetId)
+        assertEquals(noon, result.setStartedAt)
     }
 
     @Test
@@ -357,6 +360,7 @@ class ViewModelTest {
         vm.start()
         vm.finish()
         assertEquals("This set could not be saved on your phone.", vm.state.value.result?.sync)
+        assertNull(vm.state.value.result?.uploadedSetId)
     }
 
     @Test

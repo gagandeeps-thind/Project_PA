@@ -49,7 +49,7 @@ import com.osiris.shared.presentation.AppGraph
 
 /** Balances, Google Play Billing store, saved methods and history. Demo builds label every figure as demo data. */
 @Composable
-fun WalletScreen(graph: AppGraph) {
+fun WalletScreen(graph: AppGraph, onBack: (() -> Unit)? = null) {
     val vm = rememberShared { graph.wallet() }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -58,7 +58,7 @@ fun WalletScreen(graph: AppGraph) {
     val billingState by billingService.state.collectAsStateWithLifecycle()
     var addingChain by rememberSaveable { mutableStateOf<Chain?>(null) }
 
-    OsirisScaffold("Wallet", vm) { padding ->
+    OsirisScaffold("Wallet", vm, onBack = onBack) { padding ->
         PullToRefreshBox(
             isRefreshing = false,
             onRefresh = {

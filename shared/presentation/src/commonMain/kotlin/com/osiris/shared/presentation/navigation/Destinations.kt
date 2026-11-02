@@ -4,6 +4,7 @@ package com.osiris.shared.presentation.navigation
 enum class Tab(val path: String) {
     HOME("home"),
     ARISE("arise"),
+    START("start"),
     SOCIAL("social"),
     WALLET("wallet"),
     PROFILE("profile"),

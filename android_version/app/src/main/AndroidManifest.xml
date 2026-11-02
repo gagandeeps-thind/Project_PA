@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Google Play Billing for global in-app purchases and subscriptions. -->
     <uses-permission android:name="com.android.vending.BILLING" />
@@ -16,6 +20,19 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Step sensor and activity classification for the anti-cheat cross-check. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Start tab: live heart rate, power and speed from Bluetooth fitness sensors and watches.
+         Scanning never derives location, so Android 12+ needs no location permission for it. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Start tab: import past workouts from Health Connect (read only). -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <uses-permission android:name="android.permission.health.READ_POWER" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
@@ -55,6 +72,27 @@
                 <data android:scheme="https" android:host="${webLinkHost}" android:pathPrefix="/join/" />
             </intent-filter>
         </activity>
+
+        <!-- Health Connect shows why Osiris reads workouts: Android 13 and older ask this activity,
+             Android 14+ the alias below. -->
+        <activity
+            android:name=".platform.health.HealthRationaleActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Osiris">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".platform.health.HealthRationaleActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".platform.location.RunTrackingService"
