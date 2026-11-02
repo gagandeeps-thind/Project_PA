@@ -424,6 +424,12 @@ def test_heatmap_kinds() -> None:
     print("PASS test_heatmap_kinds")
 
 
+def test_heatmap_box_query_is_indexed() -> None:
+    names = {ix.name for ix in models.RoutePoint.__table__.indexes}
+    assert "ix_route_points_lat_lng" in names, names
+    print("PASS test_heatmap_box_query_is_indexed")
+
+
 TESTS = [
     test_public_line_helper,
     test_trail_runs_can_be_recorded,
@@ -439,6 +445,7 @@ TESTS = [
     test_domain_photo_owner_only_and_limited,
     test_heat_cells_trim_the_ends_and_hide_rare_cells,
     test_heatmap_kinds,
+    test_heatmap_box_query_is_indexed,
 ]
 
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey, LargeBinary, UniqueConstraint
+from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey, Index, LargeBinary, UniqueConstraint
 from sqlalchemy import false as sa_false, true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -509,7 +509,11 @@ class RoutePoint(Base):
     altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     received_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
-    __table_args__ = (UniqueConstraint("run_session_id", "sequence", name="uq_route_points_session_sequence"),)
+    __table_args__ = (
+        UniqueConstraint("run_session_id", "sequence", name="uq_route_points_session_sequence"),
+        # Arise heatmaps select points inside a map box.
+        Index("ix_route_points_lat_lng", "lat", "lng"),
+    )
 
 
 class VerificationDecision(Base):
