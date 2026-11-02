@@ -1,5 +1,6 @@
 package com.osiris.shared.presentation.arise
 
+import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
 import com.osiris.shared.domain.model.Heatmap
 import com.osiris.shared.domain.model.MapStyle
@@ -39,6 +40,8 @@ data class AriseState(
     val routes: List<AriseRoute> = emptyList(),
     val selectedRoute: AriseRoute? = null,
     val picker: PickerState? = null,
+    /** Attack mode's domains; null until loaded. */
+    val domains: AriseDomains? = null,
 )
 
 /** The Arise map: its look and layers, public routes around the player, the + menu and attack mode. */
@@ -49,6 +52,7 @@ class AriseViewModel(
     private val _state = MutableStateFlow(AriseState())
     val state: StateFlow<AriseState> = _state.asStateFlow()
     private var loadedAt: LatLng? = null
+    private var position: LatLng? = null
 
     fun setStyle(style: MapStyle) = _state.update { it.copy(style = style) }
 
@@ -64,7 +68,16 @@ class AriseViewModel(
 
     fun toggleFab() = _state.update { it.copy(fabOpen = !it.fabOpen, attackMode = false) }
 
-    fun toggleAttack() = _state.update { it.copy(attackMode = !it.attackMode, fabOpen = false) }
+    fun toggleAttack() {
+        _state.update { it.copy(attackMode = !it.attackMode, fabOpen = false) }
+        if (_state.value.attackMode) loadDomains()
+    }
+
+    /** Reloads attack mode's domains around the last known position. */
+    fun loadDomains() {
+        val at = position ?: return
+        scope.launch { arise.nearbyDomains(at).orShow()?.let { list -> _state.update { it.copy(domains = list) } } }
+    }
 
     fun openPicker(mode: RouteMode) = _state.update { it.copy(picker = PickerState(mode), fabOpen = false) }
 
@@ -76,6 +89,9 @@ class AriseViewModel(
 
     /** Loads routes at the first position, then again once the player is [RELOAD_M] from where they last loaded. */
     fun onLocation(position: LatLng) {
+        val first = this.position == null
+        this.position = position
+        if (first && _state.value.attackMode) loadDomains()
         val last = loadedAt
         if (last != null && Geo.distanceM(last, position) < RELOAD_M) return
         loadedAt = position

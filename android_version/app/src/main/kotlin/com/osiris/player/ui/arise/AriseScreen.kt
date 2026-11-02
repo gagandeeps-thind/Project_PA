@@ -72,6 +72,7 @@ private val PEEK = 64.dp
 fun AriseScreen(
     graph: AppGraph,
     onRun: (sport: Sport, record: Boolean, routeId: Int?) -> Unit,
+    onAttack: (domainId: Int) -> Unit,
     onOpenChallenge: (Int) -> Unit,
     onCreateChallenge: () -> Unit,
     onNearbyChallenges: () -> Unit,
@@ -108,9 +109,7 @@ fun AriseScreen(
                     )
                 }
                 if (state.attackMode) {
-                    item(key = "attack-empty") {
-                        Text("No domains near you yet.", color = OsirisColors.Faint, modifier = Modifier.padding(16.dp))
-                    }
+                    domainCarousels(state.domains, graph.config.apiBaseUrl) { onAttack(it.id) }
                 } else {
                     state.selectedRoute?.let { route ->
                         item(key = "route-${route.id}") {

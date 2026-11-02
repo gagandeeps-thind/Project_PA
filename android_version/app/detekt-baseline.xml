@@ -4,7 +4,7 @@
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:ExerciseCameraScreen.kt$@Composable private fun Session(graph: AppGraph, spec: ExerciseSpec, catalog: ExerciseCatalog, onDone: () -&gt; Unit)</ID>
     <ID>CyclomaticComplexMethod:ExerciseCameraScreen.kt$@Composable private fun Skeleton(frame: () -&gt; PoseFrame?, image: PoseImage?, minLikelihood: Double)</ID>
-    <ID>CyclomaticComplexMethod:RunScreen.kt$@Composable fun RunScreen( graph: AppGraph, challengeId: Int?, onBack: () -&gt; Unit, onOpenChallenge: (Int) -&gt; Unit, sport: Sport? = null, record: Boolean = false, guideRouteId: Int? = null, )</ID>
+    <ID>CyclomaticComplexMethod:RunScreen.kt$@Composable fun RunScreen( graph: AppGraph, challengeId: Int?, onBack: () -&gt; Unit, onOpenChallenge: (Int) -&gt; Unit, sport: Sport? = null, record: Boolean = false, guideRouteId: Int? = null, attackDomainId: Int? = null, onWorkout: (WorkoutTarget) -&gt; Unit = {}, )</ID>
     <ID>EmptyElseBlock:SettingsScreen.kt$if (allow) vm.setExerciseConsent(true)</ID>
     <ID>EmptyElseBlock:SettingsScreen.kt$if (it.isNotEmpty()) vm.erase(it)</ID>
     <ID>MagicNumber:LeaderboardView.kt$0xFF000000</ID>

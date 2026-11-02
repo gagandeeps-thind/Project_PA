@@ -8,6 +8,8 @@ import com.osiris.shared.domain.exercise.ExerciseSpec
 import com.osiris.shared.domain.repository.DevicePermission
 import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.arise.AriseViewModel
+import com.osiris.shared.presentation.arise.WorkoutTarget
+import com.osiris.shared.presentation.arise.WorkoutViewModel
 import com.osiris.shared.presentation.challenge.ChallengeBoardViewModel
 import com.osiris.shared.presentation.challenge.ChallengeDetailViewModel
 import com.osiris.shared.presentation.challenge.CoursesViewModel
@@ -49,8 +51,14 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun onboarding(inviteToken: String? = null, referralCode: String? = null) =
         OnboardingViewModel(data.auth, data.player, inviteToken, referralCode)
     fun today() = TodayViewModel(data.player, challenges = data.challenges)
-    fun run(challengeId: Int? = null, sport: Sport? = null, record: Boolean = false, guideRouteId: Int? = null) =
-        RunViewModel(data.runs, data.challenges, data.player, challengeId, sport, record, guideRouteId, data.arise)
+    fun run(
+        challengeId: Int? = null,
+        sport: Sport? = null,
+        record: Boolean = false,
+        guideRouteId: Int? = null,
+        attackDomainId: Int? = null,
+    ) = RunViewModel(data.runs, data.challenges, data.player, challengeId, sport, record, guideRouteId, attackDomainId, data.arise)
+    fun workout(target: WorkoutTarget) = WorkoutViewModel(data.arise, target)
     fun challengeBoard() = ChallengeBoardViewModel(data.challenges)
     fun challengeDetail(id: Int) = ChallengeDetailViewModel(id, data.challenges, data.player)
     fun courses() = CoursesViewModel(data.challenges)

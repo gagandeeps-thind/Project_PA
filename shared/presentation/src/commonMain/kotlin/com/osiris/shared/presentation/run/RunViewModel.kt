@@ -3,6 +3,8 @@ package com.osiris.shared.presentation.run
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.error.Outcome
 import com.osiris.shared.domain.common.Format
+import com.osiris.shared.domain.model.AriseAttackResult
+import com.osiris.shared.domain.model.AriseDomain
 import com.osiris.shared.domain.model.AttemptSummary
 import com.osiris.shared.domain.model.ChallengeSummary
 import com.osiris.shared.domain.model.CourseRoute
@@ -98,6 +100,13 @@ sealed interface RunDialog {
     data class OfferCourse(val runId: Int) : RunDialog
     /** A recorded Arise route: name it and publish it with [RunViewModel.publishRoute], or dismiss. */
     data class PublishRoute(val runId: Int) : RunDialog
+    /**
+     * A domain the player now holds ([captured] by attack, or just claimed): Finish keeps it with the run
+     * alone; Exceed opens a workout that becomes its defense. The photo can be set here too.
+     */
+    data class FinishOrExceed(val runId: Int, val domain: AriseDomain, val captured: Boolean) : RunDialog
+    /** The attack run beat the defender's; the defender's workout comes next. */
+    data class AttackWorkout(val attackId: Int, val totalReps: Int) : RunDialog
     data class Info(val title: String, val body: String) : RunDialog
 }
 
@@ -119,6 +128,8 @@ class RunViewModel(
     private val record: Boolean = false,
     /** Arise "Start this route": its line is drawn as the course to follow. */
     guideRouteId: Int? = null,
+    /** Arise attack mode: an accepted run attacks this domain. */
+    private val attackDomainId: Int? = null,
     private val arise: AriseRepository? = null,
     private val clock: Clock = Clock.System,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
@@ -127,7 +138,10 @@ class RunViewModel(
         RunState(
             challengeId = runs.active.value?.challengeId ?: challengeId,
             sport = sport ?: Sport.RUN,
-            course = guideRouteId?.let { arise?.cached(it) }?.let { CourseRoute(route = it.line) },
+            course = guideRouteId?.let { arise?.cached(it) }?.let { CourseRoute(route = it.line) }
+                // An attack shows the domain's outline, closed, as the loop to run around.
+                ?: attackDomainId?.let { arise?.cachedDomain(it) }?.geometry?.takeIf { it.isNotEmpty() }
+                    ?.let { CourseRoute(route = it + it.first()) },
         ),
     )
     val state: StateFlow<RunState> = _state.asStateFlow()
@@ -266,10 +280,29 @@ class RunViewModel(
         val dialog = _state.value.dialog
         _state.update { it.copy(dialog = null) }
         // After a celebration comes the course offer, as in the Flutter flow.
-        if (dialog is RunDialog.Celebrate) {
-            val next = if (record && arise != null) RunDialog.PublishRoute(dialog.runId) else RunDialog.OfferCourse(dialog.runId)
-            _state.update { it.copy(dialog = next) }
+        val repo = arise
+        when {
+            dialog is RunDialog.Celebrate && record && repo != null -> scope.launch { claimOrPublish(repo, dialog.runId) }
+            dialog is RunDialog.Celebrate -> _state.update { it.copy(dialog = RunDialog.OfferCourse(dialog.runId)) }
+            dialog is RunDialog.FinishOrExceed && record && !dialog.captured ->
+                _state.update { it.copy(dialog = RunDialog.PublishRoute(dialog.runId)) }
         }
+    }
+
+    /** A recorded loop claims its area first; any other recorded run goes straight to publishing. */
+    private suspend fun claimOrPublish(repo: AriseRepository, runId: Int) {
+        val claimed = repo.claimDomain(runId)
+        val domain = claimed.getOrNull()
+        val notALoop = (claimed.errorOrNull() as? AppError.Http)?.code == "NOT_A_LOOP"
+        if (domain == null && !notALoop) claimed.orShow()
+        _state.update {
+            it.copy(dialog = domain?.let { d -> RunDialog.FinishOrExceed(runId, d, captured = false) } ?: RunDialog.PublishRoute(runId))
+        }
+    }
+
+    private suspend fun attack(repo: AriseRepository, domainId: Int, runId: Int) {
+        val result = repo.attack(domainId, runId).orShow() ?: return
+        _state.update { it.copy(dialog = attackDialog(runId, result)) }
     }
 
     fun registerCourse(runId: Int, name: String) {
@@ -289,6 +322,15 @@ class RunViewModel(
         }
     }
 
+    /** The owner's picture for a domain they hold (base64 JPEG). */
+    fun setDomainPhoto(domainId: Int, jpegBase64: String) {
+        val repo = arise ?: return
+        scope.launch {
+            repo.setPhoto(domainId, jpegBase64).orShow() ?: return@launch
+            show("Photo added. Attackers will see it on your domain.", UiMessage.Kind.SUCCESS)
+        }
+    }
+
     /** Returns the share text for the celebration's SHARE button, or null (the failure is shown). */
     suspend fun shareRun(runId: Int): String? = player.shareAchievement("run", runId).orShow()?.text
 
@@ -300,7 +342,10 @@ class RunViewModel(
             return
         }
         val challengeId = run.challengeId
-        if (challengeId != null) {
+        val repo = arise
+        if (attackDomainId != null && repo != null) {
+            attack(repo, attackDomainId, run.runId)
+        } else if (challengeId != null) {
             challenges.submitAttempt(challengeId, run.runId).orShow()?.let { attempt ->
                 _state.update { it.copy(dialog = attemptDialog(attempt)) }
             }
@@ -382,6 +427,19 @@ class RunViewModel(
             week = today?.week?.let { "This week: ${it.activeDays} of ${it.activeDaysTarget} active days" },
             tomorrow = today?.let { "Tomorrow: ${it.tomorrow.title}" },
         )
+
+        fun attackDialog(runId: Int, result: AriseAttackResult): RunDialog = when (result.status) {
+            "won" -> RunDialog.FinishOrExceed(runId, result.domain, captured = true)
+            "needs_workout" -> RunDialog.AttackWorkout(result.attackId, result.workout?.totalReps ?: 0)
+            else -> RunDialog.Info("Attack failed", result.reasons.joinToString("\n") { attackReason(it) })
+        }
+
+        fun attackReason(code: String): String = when (code) {
+            "NOT_ENCLOSING" -> "Your loop has to go all the way around the domain."
+            "TOO_SHORT" -> "Your run has to be at least as long as the defender's."
+            "TOO_SLOW" -> "You were slower than the defender. Beat their time to take it."
+            else -> code
+        }
 
         fun attemptDialog(attempt: AttemptSummary): RunDialog.Info {
             val lines = buildList {

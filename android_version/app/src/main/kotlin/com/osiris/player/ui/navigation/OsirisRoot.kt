@@ -44,6 +44,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.osiris.player.ui.arise.AriseScreen
+import com.osiris.player.ui.arise.WorkoutScreen
 import com.osiris.player.ui.challenge.ChallengeBoardScreen
 import com.osiris.player.ui.challenge.ChallengeDetailScreen
 import com.osiris.player.ui.challenge.CoursesScreen
@@ -68,6 +69,7 @@ import com.osiris.player.ui.today.TodayScreen
 import com.osiris.player.ui.wallet.WalletScreen
 import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.AppGraph
+import com.osiris.shared.presentation.arise.WorkoutTarget
 import com.osiris.shared.presentation.navigation.Destination
 import com.osiris.shared.presentation.navigation.RootState
 import com.osiris.shared.presentation.navigation.Tab
@@ -81,7 +83,8 @@ object Routes {
     const val SOCIAL = "social"
     const val WALLET = "wallet"
     const val PROFILE = "profile"
-    const val RUN = "run?challengeId={challengeId}&sport={sport}&record={record}&route={route}"
+    const val RUN = "run?challengeId={challengeId}&sport={sport}&record={record}&route={route}&attack={attack}"
+    const val WORKOUT = "workout/{kind}/{id}"
     const val CHALLENGES = "challenges"
     const val CHALLENGE = "challenge/{id}"
     const val COURSES = "courses"
@@ -94,8 +97,13 @@ object Routes {
     const val EXERCISE_CAMERA = "exercise/{key}?sets={sets}&reps={reps}&holdS={holdS}"
 
     fun run(challengeId: Int? = null) = if (challengeId == null) "run" else "run?challengeId=$challengeId"
-    fun ariseRun(sport: Sport, record: Boolean, routeId: Int? = null) =
-        "run?sport=${sport.name}&record=$record" + (routeId?.let { "&route=$it" } ?: "")
+    fun ariseRun(sport: Sport, record: Boolean, routeId: Int? = null, attackDomainId: Int? = null) =
+        "run?sport=${sport.name}&record=$record" + (routeId?.let { "&route=$it" } ?: "") +
+            (attackDomainId?.let { "&attack=$it" } ?: "")
+    fun workout(target: WorkoutTarget) = when (target) {
+        is WorkoutTarget.Exceed -> "workout/exceed/${target.domainId}"
+        is WorkoutTarget.Attack -> "workout/attack/${target.attackId}"
+    }
     fun challenge(id: Int) = "challenge/$id"
     fun community(slug: String) = "community/${android.net.Uri.encode(slug)}"
     fun exerciseCamera(key: String, sets: Int = 1, reps: Int = 0, holdS: Int = 0) =
@@ -195,6 +203,7 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
                 navArgument("sport") { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument("record") { type = NavType.BoolType; defaultValue = false },
                 navArgument("route") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("attack") { type = NavType.IntType; defaultValue = -1 },
             ),
         ) { entry ->
             val args = entry.arguments
@@ -206,12 +215,27 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
                 sport = args?.getString("sport")?.let { name -> Sport.entries.firstOrNull { it.name == name } },
                 record = args?.getBoolean("record") ?: false,
                 guideRouteId = args?.getInt("route")?.takeIf { it >= 0 },
+                attackDomainId = args?.getInt("attack")?.takeIf { it >= 0 },
+                onWorkout = { nav.navigate(Routes.workout(it)) },
+            )
+        }
+        composable(
+            Routes.WORKOUT,
+            arguments = listOf(navArgument("kind") { type = NavType.StringType }, navArgument("id") { type = NavType.IntType }),
+        ) { entry ->
+            val id = entry.arguments!!.getInt("id")
+            WorkoutScreen(
+                graph,
+                target = if (entry.arguments!!.getString("kind") == "attack") WorkoutTarget.Attack(id) else WorkoutTarget.Exceed(id),
+                onCamera = { key, reps -> nav.navigate(Routes.exerciseCamera(key, sets = 1, reps = reps)) },
+                onBack = nav::popBackStack,
             )
         }
         composable(Routes.ARISE) {
             AriseScreen(
                 graph,
                 onRun = { sport, record, routeId -> nav.navigate(Routes.ariseRun(sport, record, routeId)) },
+                onAttack = { domainId -> nav.navigate(Routes.ariseRun(Sport.RUN, record = false, attackDomainId = domainId)) },
                 onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
                 onCreateChallenge = { nav.open(Routes.COURSES) },
                 onNearbyChallenges = { nav.open(Routes.CHALLENGES) },

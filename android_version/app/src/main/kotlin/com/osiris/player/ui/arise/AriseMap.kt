@@ -15,6 +15,7 @@ import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
+import com.mapbox.geojson.Polygon
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.MapboxExperimental
@@ -25,6 +26,7 @@ import com.mapbox.maps.ScreenCoordinate
 import com.mapbox.maps.Style
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.generated.fillLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
 import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
@@ -49,6 +51,7 @@ import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.maps.plugin.scalebar.scalebar
 import com.osiris.player.R
 import com.osiris.player.ui.theme.OsirisColors
+import com.osiris.shared.domain.model.AriseDomain
 import com.osiris.shared.domain.model.AriseRoute
 import com.osiris.shared.domain.model.MapStyle
 import com.osiris.shared.domain.model.Overlay
@@ -98,6 +101,7 @@ private class MapController(private val map: MapView) {
     private var last: Point? = null
     private var centred = false
     private var drawn: Pair<List<AriseRoute>, Int?>? = null
+    private var drawnDomains: List<AriseDomain>? = null
     var onPosition: (LatLng) -> Unit = {}
     var onRouteTap: (Int?) -> Unit = {}
 
@@ -122,6 +126,7 @@ private class MapController(private val map: MapView) {
         if (next.style != loadedStyle) {
             loadedStyle = next.style
             drawn = null
+            drawnDomains = null
             map.mapboxMap.loadStyle(styleUri(next.style)) { style -> decorate(style) }
         } else {
             map.mapboxMap.style?.takeIf { it.isStyleLoaded() }?.let(::decorate)
@@ -151,6 +156,37 @@ private class MapController(private val map: MapView) {
         }
         if (s.style == MapStyle.WINTER) style.setSnow(snow { intensity(SNOW_INTENSITY) }) else style.removeSnow()
         routes(style, s.routes, s.selectedRoute?.id)
+        domains(style, if (s.attackMode) s.domains?.let { it.suggested + it.hard }.orEmpty() else emptyList())
+    }
+
+    /** Attack mode's domains as translucent red areas with an outline. */
+    private fun domains(style: Style, list: List<AriseDomain>) {
+        if (drawnDomains == list) return
+        drawnDomains = list
+        val features = FeatureCollection.fromFeatures(
+            list.filter { it.geometry.size >= MIN_POLYGON_POINTS }.map { d ->
+                val ring = (d.geometry + d.geometry.first()).map { Point.fromLngLat(it.lng, it.lat) }
+                Feature.fromGeometry(Polygon.fromLngLats(listOf(ring))).apply { addNumberProperty("id", d.id) }
+            },
+        )
+        val source = style.getSourceAs<GeoJsonSource>(DOMAINS)
+        if (source == null) style.addSource(geoJsonSource(DOMAINS) { featureCollection(features) }) else source.featureCollection(features)
+        if (!style.styleLayerExists(DOMAINS)) {
+            style.addLayer(
+                fillLayer(DOMAINS, DOMAINS) {
+                    fillColor(DOMAIN_COLOR)
+                    fillOpacity(DOMAIN_OPACITY)
+                    if (state.style.isStandard) slot("middle")
+                },
+            )
+            style.addLayer(
+                lineLayer(DOMAIN_EDGES, DOMAINS) {
+                    lineColor(DOMAIN_COLOR)
+                    lineWidth(DOMAIN_EDGE_WIDTH)
+                    if (state.style.isStandard) slot("middle")
+                },
+            )
+        }
     }
 
     /** Public routes as lines coloured by activity; the selected one is drawn wider. Redrawn only when they change. */
@@ -224,6 +260,12 @@ private class MapController(private val map: MapView) {
         const val STREETS = "osiris-streets"
         const val BIKE_LANES = "osiris-bike-lanes"
         const val ROUTES = "osiris-routes"
+        const val DOMAINS = "osiris-domains"
+        const val DOMAIN_EDGES = "osiris-domain-edges"
+        const val DOMAIN_COLOR = "#E53935"
+        const val DOMAIN_OPACITY = 0.25
+        const val DOMAIN_EDGE_WIDTH = 2.0
+        const val MIN_POLYGON_POINTS = 3
         const val TAP_SLOP = 24.0
         const val BIKE_LANE_COLOR = "#3DDC97"
         const val BIKE_LANE_WIDTH = 2.5

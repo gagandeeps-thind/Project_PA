@@ -2,17 +2,25 @@ package com.osiris.shared.presentation
 
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.domain.model.AriseAttackResult
+import com.osiris.shared.domain.model.AriseDomain
+import com.osiris.shared.domain.model.AriseDomains
 import com.osiris.shared.domain.model.AriseRoute
+import com.osiris.shared.domain.model.AriseWorkout
+import com.osiris.shared.domain.model.AriseWorkoutResult
 import com.osiris.shared.domain.model.Heatmap
 import com.osiris.shared.domain.model.MapStyle
 import com.osiris.shared.domain.model.Overlay
 import com.osiris.shared.domain.model.TerrainLayer
+import com.osiris.shared.domain.model.WorkoutSet
 import com.osiris.shared.domain.repository.AriseRepository
 import com.osiris.shared.domain.run.LatLng
 import com.osiris.shared.domain.run.LocationFix
 import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.arise.AriseViewModel
 import com.osiris.shared.presentation.arise.RouteMode
+import com.osiris.shared.presentation.arise.WorkoutTarget
+import com.osiris.shared.presentation.arise.WorkoutViewModel
 import com.osiris.shared.presentation.run.RunDialog
 import com.osiris.shared.presentation.run.RunViewModel
 import kotlin.test.Test
@@ -45,7 +53,55 @@ class FakeArise : AriseRepository {
 
     override fun cached(id: Int): AriseRoute? = routes.firstOrNull { it.id == id }
 
+    var claimError: AppError? = null
+    var attackStatus = "won"
+    var workoutDone = true
+    val completed = mutableListOf<String>()
+    var domainsLoaded = 0
+
+    override suspend fun nearbyDomains(position: LatLng, radiusKm: Double): Outcome<AriseDomains> {
+        domainsLoaded++
+        return ok(AriseDomains(suggested = listOf(domain(8)), hard = listOf(domain(9))))
+    }
+
+    override suspend fun claimDomain(runId: Int): Outcome<AriseDomain> =
+        claimError?.let { Outcome.Failure(it) } ?: ok(domain(30))
+
+    override suspend fun exceed(domainId: Int): Outcome<AriseWorkout> = ok(workout)
+
+    override suspend fun completeExceed(domainId: Int): Outcome<AriseWorkoutResult> {
+        completed += "exceed:$domainId"
+        return ok(AriseWorkoutResult(workoutDone, domain(domainId)))
+    }
+
+    override suspend fun attack(domainId: Int, runId: Int): Outcome<AriseAttackResult> =
+        ok(
+            AriseAttackResult(
+                44, attackStatus, if (attackStatus == "failed") listOf("TOO_SLOW") else emptyList(), workout, domain(domainId),
+            ),
+        )
+
+    override suspend fun completeAttack(attackId: Int): Outcome<AriseAttackResult> {
+        completed += "attack:$attackId"
+        return ok(AriseAttackResult(attackId, if (workoutDone) "won" else "needs_workout", emptyList(), workout, domain(8)))
+    }
+
+    override fun cachedAttack(attackId: Int): AriseAttackResult? =
+        AriseAttackResult(attackId, "needs_workout", emptyList(), workout, domain(8))
+
+    override fun cachedDomain(id: Int): AriseDomain? = domain(id)
+
+    override suspend fun setPhoto(domainId: Int, jpegBase64: String): Outcome<AriseDomain> = ok(domain(domainId))
+
     companion object {
+        val workout = AriseWorkout(listOf(WorkoutSet("pushup", 10, 10), WorkoutSet("squat", 15, 20)), 25)
+
+        fun domain(id: Int) = AriseDomain(
+            id = id, ownerId = 2, ownerName = "Runner 2", areaSqkm = 0.2, distanceM = 1600.0, durationS = 540.0,
+            centroidLat = 52.37, centroidLng = 4.89,
+            geometry = listOf(LatLng(52.37, 4.89), LatLng(52.38, 4.89), LatLng(52.38, 4.90)),
+        )
+
         fun route(id: Int) = AriseRoute(
             id = id, name = "River loop", activityType = "trail", distanceM = 2400.0, benchmarkSeconds = 900.0,
             hideEnds = true, ownerName = "Runner 1", line = listOf(LatLng(52.37, 4.89), LatLng(52.38, 4.89)),
@@ -169,8 +225,104 @@ class AriseViewModelTest {
     }
 
     @Test
-    fun `a recorded run offers to publish the route instead of a private course`() = runTest {
+    fun `attack mode loads the domains around the player`() = runTest {
         val arise = FakeArise()
+        val vm = vm(arise)
+        vm.onLocation(LatLng(52.37, 4.89))
+        vm.toggleAttack()
+        assertEquals(listOf(8), vm.state.value.domains?.suggested?.map { it.id })
+        assertEquals(1, arise.domainsLoaded)
+    }
+
+    private fun TestScope.runVm(arise: FakeArise, record: Boolean = false, attack: Int? = null) = RunViewModel(
+        FakeRuns(), FakeChallenges(), FakePlayer(), sport = Sport.RUN, record = record, attackDomainId = attack, arise = arise,
+        clock = FixedClock(Instant.parse("2026-06-21T12:00:00Z")), dispatcher = main(),
+    ).apply {
+        onLocation(LocationFix(52.37, 4.89))
+        start()
+        finish()
+    }
+
+    @Test
+    fun `a recorded loop claims a domain and asks finish or exceed, then offers the route`() = runTest {
+        val vm = runVm(FakeArise(), record = true)
+        vm.dismissDialog()
+        val ask = assertIs<RunDialog.FinishOrExceed>(vm.state.value.dialog)
+        assertEquals(30, ask.domain.id)
+        assertFalse(ask.captured)
+        vm.dismissDialog()
+        assertIs<RunDialog.PublishRoute>(vm.state.value.dialog)
+        vm.clear()
+    }
+
+    @Test
+    fun `a recorded run that is not a loop goes straight to publishing`() = runTest {
+        val arise = FakeArise().apply { claimError = AppError.Http(422, "NOT_A_LOOP", "Finish where you started") }
+        val vm = runVm(arise, record = true)
+        vm.dismissDialog()
+        assertIs<RunDialog.PublishRoute>(vm.state.value.dialog)
+        vm.clear()
+    }
+
+    @Test
+    fun `an attack run draws the domain's outline to run around`() = runTest {
+        val vm = RunViewModel(
+            FakeRuns(), FakeChallenges(), FakePlayer(), attackDomainId = 8, arise = FakeArise(), dispatcher = main(),
+        )
+        val ring = vm.state.value.course?.route
+        assertEquals(4, ring?.size)
+        assertEquals(ring?.first(), ring?.last())
+        vm.clear()
+    }
+
+    @Test
+    fun `an attack run reports a capture, a workout to do, or why it failed`() = runTest {
+        val won = runVm(FakeArise(), attack = 8)
+        assertTrue(assertIs<RunDialog.FinishOrExceed>(won.state.value.dialog).captured)
+        won.clear()
+        val workout = runVm(FakeArise().apply { attackStatus = "needs_workout" }, attack = 8)
+        assertEquals(44, assertIs<RunDialog.AttackWorkout>(workout.state.value.dialog).attackId)
+        workout.clear()
+        val failed = runVm(FakeArise().apply { attackStatus = "failed" }, attack = 8)
+        val info = assertIs<RunDialog.Info>(failed.state.value.dialog)
+        assertEquals("Attack failed", info.title)
+        assertTrue("slower" in info.body)
+        failed.clear()
+    }
+
+    @Test
+    fun `the workout walks through sets with rests and submits`() = runTest {
+        val arise = FakeArise().apply { workoutDone = false }
+        val vm = WorkoutViewModel(arise, WorkoutTarget.Exceed(30), dispatcher = main())
+        assertEquals(2, vm.state.value.workout?.sets?.size)
+        vm.setDone(0)
+        assertEquals(10, vm.state.value.restLeft)
+        advanceTimeBy(10_500)
+        assertNull(vm.state.value.restLeft)
+        vm.submit()
+        assertEquals(listOf("exceed:30"), arise.completed)
+        assertFalse(vm.state.value.finished)
+        arise.workoutDone = true
+        vm.setDone(1)
+        vm.submit()
+        assertTrue(vm.state.value.finished)
+        vm.clear()
+    }
+
+    @Test
+    fun `an attack workout comes from the attack result`() = runTest {
+        val arise = FakeArise()
+        val vm = WorkoutViewModel(arise, WorkoutTarget.Attack(44), dispatcher = main())
+        assertEquals(25, vm.state.value.workout?.totalReps)
+        vm.submit()
+        assertEquals(listOf("attack:44"), arise.completed)
+        assertTrue(vm.state.value.finished)
+        vm.clear()
+    }
+
+    @Test
+    fun `a recorded run offers to publish the route instead of a private course`() = runTest {
+        val arise = FakeArise().apply { claimError = AppError.Http(422, "NOT_A_LOOP", "Not a loop") }
         val vm = RunViewModel(
             FakeRuns(), FakeChallenges(), FakePlayer(), sport = Sport.TRAIL, record = true, arise = arise,
             clock = FixedClock(Instant.parse("2026-06-21T12:00:00Z")), dispatcher = main(),

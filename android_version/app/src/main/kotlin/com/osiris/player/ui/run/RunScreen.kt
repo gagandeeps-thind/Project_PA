@@ -49,6 +49,7 @@ import com.osiris.player.platform.permission.openAppSettings
 import com.osiris.player.platform.permission.rememberPermission
 import com.osiris.player.platform.share.share
 import com.osiris.player.platform.speech.rememberSpeech
+import com.osiris.player.ui.arise.FinishOrExceedDialog
 import com.osiris.player.ui.arise.PublishRouteDialog
 import com.osiris.player.ui.common.ConfirmDialog
 import com.osiris.player.ui.common.InfoDialog
@@ -65,6 +66,7 @@ import com.osiris.player.ui.design.HeroMetric
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.presentation.AppGraph
+import com.osiris.shared.presentation.arise.WorkoutTarget
 import com.osiris.shared.presentation.run.RunDialog
 import com.osiris.shared.presentation.run.RunState
 import com.osiris.shared.presentation.run.RunViewModel
@@ -85,8 +87,10 @@ fun RunScreen(
     sport: Sport? = null,
     record: Boolean = false,
     guideRouteId: Int? = null,
+    attackDomainId: Int? = null,
+    onWorkout: (WorkoutTarget) -> Unit = {},
 ) {
-    val vm = rememberShared { graph.run(challengeId, sport, record, guideRouteId) }
+    val vm = rememberShared { graph.run(challengeId, sport, record, guideRouteId, attackDomainId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val location = remember { LocationClient(context) }
@@ -158,7 +162,7 @@ fun RunScreen(
             RunButton(s, vm::toggle, Modifier.align(Alignment.BottomEnd).padding(16.dp))
         }
     }
-    Dialogs(s.dialog, vm)
+    Dialogs(s.dialog, vm, onWorkout)
 }
 
 /** No position: why, and the way to fix it. Runs cannot be verified without location. */
@@ -265,7 +269,7 @@ private fun RunButton(s: RunState, onClick: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun Dialogs(dialog: RunDialog?, vm: RunViewModel) {
+private fun Dialogs(dialog: RunDialog?, vm: RunViewModel, onWorkout: (WorkoutTarget) -> Unit) {
     when (dialog) {
         null -> Unit
         RunDialog.StaleRun -> ConfirmDialog(
@@ -306,6 +310,26 @@ private fun Dialogs(dialog: RunDialog?, vm: RunViewModel) {
         )
         is RunDialog.PublishRoute -> PublishRouteDialog(
             onPublish = { name, hideEnds -> vm.publishRoute(dialog.runId, name, hideEnds) },
+            onDismiss = vm::dismissDialog,
+        )
+        is RunDialog.FinishOrExceed -> FinishOrExceedDialog(
+            dialog,
+            onFinish = vm::dismissDialog,
+            onExceed = {
+                vm.dismissDialog()
+                onWorkout(WorkoutTarget.Exceed(dialog.domain.id))
+            },
+            onPhoto = { vm.setDomainPhoto(dialog.domain.id, it) },
+        )
+        is RunDialog.AttackWorkout -> ConfirmDialog(
+            title = "You beat the run!",
+            body = "Now repeat the defender's workout: ${dialog.totalReps} reps on camera. Finish it to take the domain.",
+            confirm = "Start workout",
+            onConfirm = {
+                vm.dismissDialog()
+                onWorkout(WorkoutTarget.Attack(dialog.attackId))
+            },
+            dismiss = "Later",
             onDismiss = vm::dismissDialog,
         )
         is RunDialog.Info -> InfoDialog(dialog.title, dialog.body, vm::dismissDialog)
