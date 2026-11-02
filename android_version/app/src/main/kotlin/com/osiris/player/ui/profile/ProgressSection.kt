@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -71,7 +72,8 @@ fun ProgressSection(graph: AppGraph) {
     val names by produceState(emptyMap<String, String>()) {
         value = graph.data.training.activities().getOrNull()?.associate { it.key to it.name }.orEmpty()
     }
-    var resumed by remember { mutableStateOf(false) }
+    // Saveable: this screen leaves composition while another is open, and must still refresh on return.
+    var resumed by rememberSaveable { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
         if (resumed) vm.refresh() else resumed = true
         onPauseOrDispose { }

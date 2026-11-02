@@ -52,7 +52,8 @@ fun TrainingPage(
     val s by vm.state.collectAsStateWithLifecycle()
     var picking by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var resumed by remember { mutableStateOf(false) }
+    // Saveable: this screen leaves composition while another is open, and must still refresh on return.
+    var resumed by rememberSaveable { mutableStateOf(false) }
     // Back from a session or a challenge, the numbers here may have moved.
     LifecycleResumeEffect(Unit) {
         if (resumed) vm.refresh() else resumed = true
