@@ -49,4 +49,7 @@ interface GroupChallengeRepository {
     suspend fun join(id: Int): Outcome<GroupChallenge>
 
     suspend fun leave(id: Int): Outcome<GroupChallenge>
+
+    /** Creator only: ends the challenge for everyone. */
+    suspend fun cancel(id: Int): Outcome<GroupChallenge>
 }

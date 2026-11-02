@@ -92,6 +92,8 @@ class FakeGroups : GroupChallengeRepository {
     override suspend fun create(challenge: NewGroupChallenge) = ok(group(5, "joined")).also { created += challenge }
     override suspend fun join(id: Int) = ok(group(id, "joined")).also { joined += id }
     override suspend fun leave(id: Int) = ok(group(id))
+    val cancelled = mutableListOf<Int>()
+    override suspend fun cancel(id: Int) = ok(group(id).copy(status = "cancelled")).also { cancelled += id }
 }
 
 private object StepClock : Clock {
@@ -135,7 +137,7 @@ class StartViewModelTest {
     fun `camera set saves a linked session and offers post or save`() = runTest {
         val training = FakeTraining()
         val vm = start(StartMode.CHALLENGE, training)
-        vm.saveCameraSet("pushup", setId = "set-44", startedAt = t0, durationS = 30.0)
+        vm.saveCameraSet("pushup", setId = "set-44", startedAt = t0)
         val upload = training.uploads.single()
         assertEquals("set-44", upload.exerciseSetId)
         assertEquals("camera", upload.source)
@@ -236,6 +238,9 @@ class GroupChallengeViewModelsTest {
         vm.join()
         assertEquals(listOf(7), groups.joined)
         assertTrue(vm.state.value.challenge.valueOrNull!!.joined)
+        vm.cancel()
+        assertEquals(listOf(7), groups.cancelled)
+        assertEquals("cancelled", vm.state.value.challenge.valueOrNull!!.status)
         vm.clear()
     }
 

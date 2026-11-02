@@ -3786,6 +3786,11 @@
             "title": "Activity Key",
             "type": "string"
           },
+          "created_by_me": {
+            "default": false,
+            "title": "Created By Me",
+            "type": "boolean"
+          },
           "creator_id": {
             "anyOf": [
               {

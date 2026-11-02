@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SupportAgent
@@ -64,9 +63,11 @@ import com.osiris.player.ui.session.LoginScreen
 import com.osiris.player.ui.session.OnboardingScreen
 import com.osiris.player.ui.settings.SettingsScreen
 import com.osiris.player.ui.social.SocialScreen
+import com.osiris.player.ui.start.StartIcon
 import com.osiris.player.ui.support.SupportChatScreen
 import com.osiris.player.ui.today.TodayScreen
 import com.osiris.player.ui.wallet.WalletScreen
+import com.osiris.shared.domain.model.StartMode
 import com.osiris.shared.domain.run.Sport
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.arise.WorkoutTarget
@@ -81,6 +82,11 @@ object Routes {
     const val TODAY = "today"
     const val ARISE = "arise"
     const val SOCIAL = "social"
+    const val START = "start"
+    const val TRAINING = "training/{mode}"
+    const val LIVE = "live/{mode}/{activity}"
+    const val GROUPS = "groups"
+    const val GROUP = "group/{id}"
     const val WALLET = "wallet"
     const val PROFILE = "profile"
     const val RUN = "run?challengeId={challengeId}&sport={sport}&record={record}&route={route}&attack={attack}"
@@ -94,7 +100,10 @@ object Routes {
     const val SETTINGS = "settings"
     const val SUPPORT = "support"
     const val EXERCISE = "exercise"
-    const val EXERCISE_CAMERA = "exercise/{key}?sets={sets}&reps={reps}&holdS={holdS}"
+    const val EXERCISE_CAMERA = "exercise/{key}?sets={sets}&reps={reps}&holdS={holdS}&start={start}"
+
+    /** Saved-state key the camera coach hands a Start set back under. */
+    const val CAMERA_SET = "camera_set"
 
     fun run(challengeId: Int? = null) = if (challengeId == null) "run" else "run?challengeId=$challengeId"
     fun ariseRun(sport: Sport, record: Boolean, routeId: Int? = null, attackDomainId: Int? = null) =
@@ -106,18 +115,21 @@ object Routes {
     }
     fun challenge(id: Int) = "challenge/$id"
     fun community(slug: String) = "community/${android.net.Uri.encode(slug)}"
-    fun exerciseCamera(key: String, sets: Int = 1, reps: Int = 0, holdS: Int = 0) =
-        "exercise/$key?sets=$sets&reps=$reps&holdS=$holdS"
+    fun exerciseCamera(key: String, sets: Int = 1, reps: Int = 0, holdS: Int = 0, start: StartMode? = null) =
+        "exercise/$key?sets=$sets&reps=$reps&holdS=$holdS" + (start?.let { "&start=${it.wire}" } ?: "")
+    fun training(mode: StartMode) = "training/${mode.wire}"
+    fun live(mode: StartMode, activityKey: String) = "live/${mode.wire}/$activityKey"
+    fun group(id: Int) = "group/$id"
 }
 
-/** The bar's sections and the route each one opens. Wallet shows only in builds that have one. */
+/** The bar's sections and the route each one opens. The wallet opens from Start's top-right corner. */
 private class Section(val tab: Tab, val route: String, val label: String, val icon: ImageVector)
 
-private fun sections(hasWallet: Boolean) = listOfNotNull(
+private val sections = listOf(
     Section(Tab.HOME, Routes.TODAY, "Home", Icons.Outlined.Home),
     Section(Tab.ARISE, Routes.ARISE, "Arise", Icons.Outlined.Explore),
+    Section(Tab.START, Routes.START, "Start", StartIcon),
     Section(Tab.SOCIAL, Routes.SOCIAL, "Social", Icons.Outlined.Groups),
-    Section(Tab.WALLET, Routes.WALLET, "Wallet", Icons.Outlined.AccountBalanceWallet).takeIf { hasWallet },
     Section(Tab.PROFILE, Routes.PROFILE, "Profile", Icons.Outlined.Person),
 )
 
@@ -168,11 +180,13 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val sections = remember(graph) { sections(graph.hasWallet) }
     LaunchedEffect(pending) {
         when (pending) {
             null -> return@LaunchedEffect
-            is Destination.Section -> sections.firstOrNull { it.tab == pending.tab }?.let { nav.selectTab(it.route) }
+            is Destination.Section -> when {
+                pending.tab == Tab.WALLET -> if (graph.hasWallet) nav.open(Routes.WALLET)
+                else -> sections.firstOrNull { it.tab == pending.tab }?.let { nav.selectTab(it.route) }
+            }
             is Destination.Challenge -> nav.open(Routes.challenge(pending.id))
             is Destination.Community -> nav.open(Routes.community(pending.slug))
             // A signed-in player already has an account; the invite's challenge is on Arise.
@@ -275,7 +289,8 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
             SocialScreen(graph, onLocal = { nav.open(Routes.RANKINGS) }, onCommunities = { nav.open(Routes.COMMUNITIES) })
         }
         composable(Routes.RANKINGS) { RankingsScreen(graph, onBack = nav::popBackStack, onSettings = { nav.open(Routes.SETTINGS) }) }
-        if (graph.hasWallet) composable(Routes.WALLET) { WalletScreen(graph) }
+        if (graph.hasWallet) composable(Routes.WALLET) { WalletScreen(graph, onBack = nav::popBackStack) }
+        startGraph(graph, nav)
         composable(Routes.PROFILE) {
             ProfileScreen(graph, actions = {
                 IconButton(onClick = { nav.open(Routes.SUPPORT) }) { Icon(Icons.Outlined.SupportAgent, "Live support") }
@@ -292,16 +307,23 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
                 navArgument("sets") { type = NavType.IntType; defaultValue = 1 },
                 navArgument("reps") { type = NavType.IntType; defaultValue = 0 },
                 navArgument("holdS") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("start") { type = NavType.StringType; nullable = true; defaultValue = null },
             ),
         ) { entry ->
             val args = entry.arguments!!
+            val key = args.getString("key")!!
             ExerciseCameraScreen(
                 graph,
-                key = args.getString("key")!!,
+                key = key,
                 sets = args.getInt("sets", 1),
                 reps = args.getInt("reps", 0),
                 holdS = args.getInt("holdS", 0),
                 onDone = nav::popBackStack,
+                onStartSet = args.getString("start")?.let {
+                    { setId, startedAt ->
+                        nav.previousBackStackEntry?.savedStateHandle?.set(Routes.CAMERA_SET, "$key|$setId|$startedAt")
+                    }
+                },
             )
         }
     }

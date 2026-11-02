@@ -147,6 +147,7 @@ data class GroupChallenge(
     @SerialName("ends_at") val endsAt: Instant,
     @SerialName("is_official") val isOfficial: Boolean = false,
     @SerialName("creator_id") val creatorId: Int? = null,
+    @SerialName("created_by_me") val createdByMe: Boolean = false,
     val status: String = "active",
     @SerialName("my_status") val myStatus: String? = null,
     @SerialName("my_progress") val myProgress: Double = 0.0,

@@ -48,4 +48,6 @@ class GroupChallengeApi(private val api: ApiClient) {
     suspend fun join(id: Int): GroupChallenge = api.post("/api/v2/group-challenges/$id/join")
 
     suspend fun leave(id: Int): GroupChallenge = api.post("/api/v2/group-challenges/$id/leave")
+
+    suspend fun cancel(id: Int): GroupChallenge = api.post("/api/v2/group-challenges/$id/cancel")
 }

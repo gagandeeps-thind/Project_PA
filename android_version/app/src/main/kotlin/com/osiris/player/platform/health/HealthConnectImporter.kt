@@ -57,27 +57,30 @@ class HealthConnectImporter(context: Context, private val training: TrainingRepo
         val sessions = hc.readRecords(
             ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(now.minus(Duration.ofDays(days)), now)),
         ).records
-        var saved = 0
-        for (s in sessions) {
-            val key = ACTIVITY_KEYS[s.exerciseType] ?: continue
-            val range = TimeRangeFilter.between(s.startTime, s.endTime)
-            val durationS = Duration.between(s.startTime, s.endTime).seconds.toDouble()
-            if (durationS < 1) continue
-            fun t(at: Instant) = Duration.between(s.startTime, at).toMillis() / MS
-            val hr = read(hc, HeartRateRecord::class, range).flatMap { r -> r.samples.map { listOf(t(it.time), it.beatsPerMinute.toDouble()) } }
-            val speed = read(hc, SpeedRecord::class, range).flatMap { r -> r.samples.map { listOf(t(it.time), it.speed.inMetersPerSecond) } }
-            val power = read(hc, PowerRecord::class, range).flatMap { r -> r.samples.map { listOf(t(it.time), it.power.inWatts) } }
-            val distance = hc.aggregate(AggregateRequest(setOf(DistanceRecord.DISTANCE_TOTAL), range))[DistanceRecord.DISTANCE_TOTAL]
-            val body = NewTrainingSession(
-                clientSessionId = "hc-${s.metadata.id}".take(CLIENT_ID_MAX), activityKey = key, mode = "train",
-                source = "health_connect", startedAt = s.startTime.toString(), durationS = durationS,
-                distanceM = distance?.inMeters ?: 0.0,
-                series = TrainingSeries(hr = cap(hr), power = cap(power), speed = cap(speed)),
-            )
-            // An implausible record (a watch glitch) is skipped rather than stopping the import.
-            if (training.upload(body) is Outcome.Success) saved++
-        }
-        saved
+        // An implausible record (a watch glitch) is skipped rather than stopping the import.
+        sessions.mapNotNull { body(hc, it) }.count { training.upload(it) is Outcome.Success }
+    }
+
+    /** One Health Connect workout as a Train session, or null for an activity Osiris does not track. */
+    private suspend fun body(hc: HealthConnectClient, s: ExerciseSessionRecord): NewTrainingSession? {
+        val key = ACTIVITY_KEYS[s.exerciseType]
+        val durationS = Duration.between(s.startTime, s.endTime).seconds.toDouble()
+        if (key == null || durationS < 1) return null
+        val range = TimeRangeFilter.between(s.startTime, s.endTime)
+        fun t(at: Instant) = Duration.between(s.startTime, at).toMillis() / MS
+        val hr = read(hc, HeartRateRecord::class, range)
+            .flatMap { r -> r.samples.map { listOf(t(it.time), it.beatsPerMinute.toDouble()) } }
+        val speed = read(hc, SpeedRecord::class, range)
+            .flatMap { r -> r.samples.map { listOf(t(it.time), it.speed.inMetersPerSecond) } }
+        val power = read(hc, PowerRecord::class, range)
+            .flatMap { r -> r.samples.map { listOf(t(it.time), it.power.inWatts) } }
+        val distance = hc.aggregate(AggregateRequest(setOf(DistanceRecord.DISTANCE_TOTAL), range))[DistanceRecord.DISTANCE_TOTAL]
+        return NewTrainingSession(
+            clientSessionId = "hc-${s.metadata.id}".take(CLIENT_ID_MAX), activityKey = key, mode = "train",
+            source = "health_connect", startedAt = s.startTime.toString(), durationS = durationS,
+            distanceM = distance?.inMeters ?: 0.0,
+            series = TrainingSeries(hr = cap(hr), power = cap(power), speed = cap(speed)),
+        )
     }
 
     private fun client() = HealthConnectClient.getOrCreate(app)

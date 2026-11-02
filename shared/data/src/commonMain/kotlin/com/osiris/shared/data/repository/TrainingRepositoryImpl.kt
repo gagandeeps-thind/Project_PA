@@ -65,4 +65,6 @@ class GroupChallengeRepositoryImpl(private val api: GroupChallengeApi) : GroupCh
     override suspend fun join(id: Int): Outcome<GroupChallenge> = outcomeOf { api.join(id) }
 
     override suspend fun leave(id: Int): Outcome<GroupChallenge> = outcomeOf { api.leave(id) }
+
+    override suspend fun cancel(id: Int): Outcome<GroupChallenge> = outcomeOf { api.cancel(id) }
 }

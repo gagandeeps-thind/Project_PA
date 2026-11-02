@@ -920,6 +920,7 @@ class GroupChallengeOut(BaseModel):
     ends_at: datetime
     is_official: bool
     creator_id: Optional[int] = None
+    created_by_me: bool = False      # the creator cancels instead of leaving
     status: str                      # active | ended | cancelled
     my_status: Optional[str] = None  # joined | invited
     my_progress: float

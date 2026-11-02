@@ -121,6 +121,7 @@ class ContractTest {
         Triple("GET", "/api/v2/group-challenges/{}", GroupChallenge.serializer()),
         Triple("POST", "/api/v2/group-challenges", GroupChallenge.serializer()),
         Triple("POST", "/api/v2/group-challenges/{}/join", GroupChallenge.serializer()),
+        Triple("POST", "/api/v2/group-challenges/{}/cancel", GroupChallenge.serializer()),
     )
 
     private val requests: List<Triple<String, String, KSerializer<*>>> = listOf(

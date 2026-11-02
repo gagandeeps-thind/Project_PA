@@ -317,6 +317,8 @@ def test_group_create_and_invites() -> None:
     assert r.status_code == 201, r.text
     g = r.json()
     assert g["my_status"] == "joined" and g["members"] == 1 and g["status"] == "active", g
+    assert g["created_by_me"] is True
+    assert client.get(f"/api/v2/group-challenges/{g['id']}", headers=friend).json()["created_by_me"] is False
     lists = client.get("/api/v2/group-challenges", headers=friend).json()
     assert [c["id"] for c in lists["invited"]] == [g["id"]], lists
     notes = client.get("/api/v2/me/notifications", headers=friend).json()

@@ -82,6 +82,8 @@ class GroupChallengeDetailViewModel(
 
     fun leave() = act { groups.leave(id) }
 
+    fun cancel() = act { groups.cancel(id) }
+
     private fun act(call: suspend () -> Outcome<GroupChallenge>) {
         _state.update { it.copy(busy = true) }
         scope.launch {

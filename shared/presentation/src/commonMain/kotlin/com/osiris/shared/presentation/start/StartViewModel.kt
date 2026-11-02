@@ -76,12 +76,13 @@ class StartViewModel(
         if (_state.value.mode == StartMode.CHALLENGE) loadChallenges()
     }
 
-    /** The camera coach saved a verified set; record it as this page's session, linked to that set. */
+    /** The camera coach uploaded a set; record it as this page's session, linked to that set. */
     @OptIn(ExperimentalUuidApi::class)
-    fun saveCameraSet(activityKey: String, setId: String, startedAt: Instant, durationS: Double) {
+    fun saveCameraSet(activityKey: String, setId: String, startedAt: Instant) {
         val body = NewTrainingSession(
             clientSessionId = Uuid.random().toString(), activityKey = activityKey, mode = _state.value.mode.wire,
-            source = SOURCE_CAMERA, startedAt = startedAt.toString(), durationS = durationS.coerceAtLeast(1.0),
+            source = SOURCE_CAMERA, // The server takes the duration from the verified set.
+            startedAt = startedAt.toString(), durationS = 1.0,
             exerciseSetId = setId,
         )
         scope.launch {

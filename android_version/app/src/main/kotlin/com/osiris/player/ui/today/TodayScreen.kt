@@ -192,7 +192,8 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
                     "exercise" -> nav.open(Routes.EXERCISE)
                     "challenges" -> nav.open(Routes.CHALLENGES)
                     "communities" -> nav.open(Routes.COMMUNITIES)
-                    else -> Unit
+                    else -> route.removePrefix("group/").toIntOrNull()?.takeIf { route.startsWith("group/") }
+                        ?.let { nav.open(Routes.group(it)) }
                 }
             },
             onDismiss = { vm.openNotifications(false) },

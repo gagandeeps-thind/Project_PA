@@ -62,7 +62,8 @@ class BleSensors(context: Context) {
                 val uuids = result.scanRecord?.serviceUuids.orEmpty().map { it.uuid.toString() }
                 val channels = uuids.mapNotNull(BleParsers.services::get).toSet()
                 if (channels.isEmpty()) return
-                val name = result.scanRecord?.deviceName ?: result.device.name ?: "Sensor ${result.device.address.takeLast(5)}"
+                val name = result.scanRecord?.deviceName ?: result.device.name
+                    ?: "Sensor ${result.device.address.takeLast(ADDRESS_TAIL)}"
                 found[result.device.address] = FoundSensor(result.device.address, name, channels)
                 trySend(found.values.toList())
             }
@@ -90,27 +91,11 @@ class BleSensors(context: Context) {
         var closed = false
 
         fun emit(uuid: String, bytes: ByteArray) {
-            val reading = when (uuid) {
-                BleParsers.HR_MEASUREMENT -> BleParsers.heartRate(bytes)?.let { Channel.HR to it.toDouble() }
-                BleParsers.CP_MEASUREMENT -> BleParsers.cyclingPower(bytes)?.let { Channel.POWER to it.toDouble() }
-                BleParsers.RSC_MEASUREMENT -> BleParsers.rscSpeedMps(bytes)?.let { Channel.SPEED to it }
-                BleParsers.CSC_MEASUREMENT -> csc.next(bytes)?.let { Channel.SPEED to it }
-                else -> null
-            }
-            reading?.let { trySend(it) }
+            reading(uuid, bytes, csc)?.let { trySend(it) }
         }
 
         fun writeNext(gatt: BluetoothGatt) {
-            val descriptor = pending.removeFirstOrNull() ?: return
-            val on = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt.writeDescriptor(descriptor, on)
-            } else {
-                @Suppress("DEPRECATION")
-                descriptor.value = on
-                @Suppress("DEPRECATION")
-                gatt.writeDescriptor(descriptor)
-            }
+            pending.removeFirstOrNull()?.let { gatt.enableNotifications(it) }
         }
 
         val callback = object : BluetoothGattCallback() {
@@ -123,12 +108,7 @@ class BleSensors(context: Context) {
 
             override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                 pending.clear()
-                for ((service, measurement) in BleParsers.measurements) {
-                    val characteristic = gatt.getService(UUID.fromString(service))
-                        ?.getCharacteristic(UUID.fromString(measurement)) ?: continue
-                    gatt.setCharacteristicNotification(characteristic, true)
-                    characteristic.getDescriptor(UUID.fromString(BleParsers.NOTIFY_DESCRIPTOR))?.let(pending::addLast)
-                }
+                pending.addAll(gatt.measurementDescriptors())
                 // GATT runs one write at a time; the next goes out when this one lands.
                 writeNext(gatt)
             }
@@ -155,5 +135,39 @@ class BleSensors(context: Context) {
                 gatt.close()
             }
         }
+    }
+}
+
+private const val ADDRESS_TAIL = 5
+
+/** One measurement packet as a reading, or null if it does not decode. */
+private fun reading(uuid: String, bytes: ByteArray, csc: BleParsers.CscSpeed): Pair<Channel, Double>? = when (uuid) {
+    BleParsers.HR_MEASUREMENT -> BleParsers.heartRate(bytes)?.let { Channel.HR to it.toDouble() }
+    BleParsers.CP_MEASUREMENT -> BleParsers.cyclingPower(bytes)?.let { Channel.POWER to it.toDouble() }
+    BleParsers.RSC_MEASUREMENT -> BleParsers.rscSpeedMps(bytes)?.let { Channel.SPEED to it }
+    BleParsers.CSC_MEASUREMENT -> csc.next(bytes)?.let { Channel.SPEED to it }
+    else -> null
+}
+
+/** Turns notifications on for every supported measurement; returns the descriptors still to write. */
+@SuppressLint("MissingPermission")
+private fun BluetoothGatt.measurementDescriptors(): List<BluetoothGattDescriptor> =
+    BleParsers.measurements.mapNotNull { (service, measurement) ->
+        getService(UUID.fromString(service))?.getCharacteristic(UUID.fromString(measurement))?.let { c ->
+            setCharacteristicNotification(c, true)
+            c.getDescriptor(UUID.fromString(BleParsers.NOTIFY_DESCRIPTOR))
+        }
+    }
+
+@SuppressLint("MissingPermission")
+private fun BluetoothGatt.enableNotifications(descriptor: BluetoothGattDescriptor) {
+    val on = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        writeDescriptor(descriptor, on)
+    } else {
+        @Suppress("DEPRECATION")
+        descriptor.value = on
+        @Suppress("DEPRECATION")
+        writeDescriptor(descriptor)
     }
 }

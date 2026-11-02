@@ -73,6 +73,7 @@ def _cards(db: Session, uid: int, challenges: list[models.GroupChallenge], mine:
         fields = dict(
             id=ch.id, title=ch.title, activity_key=ch.activity_key, metric=ch.metric, target=ch.target,
             starts_at=ch.starts_at, ends_at=ch.ends_at, is_official=ch.is_official, creator_id=ch.creator_id,
+            created_by_me=ch.creator_id is not None and ch.creator_id == uid,
             status=_status(ch), my_status=mine.get(ch.id), my_progress=progress.get(ch.id, {}).get(uid, 0.0),
             members=len(members), top=members[:TOP],
         )
