@@ -12,10 +12,11 @@ import {
   TrendingUp,
   Users,
   Dumbbell,
+  Trophy,
 } from "lucide-react";
 import type { AdminUser } from "../api/types";
 
-export type PageKey = "dashboard" | "growth" | "community" | "trust" | "exercise" | "merchants" | "bounties";
+export type PageKey = "dashboard" | "growth" | "community" | "trust" | "exercise" | "challenges" | "merchants" | "bounties";
 
 interface SidebarProps {
   activePage: PageKey;
@@ -30,6 +31,7 @@ const navItems: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] 
   { key: "community", label: "Community", icon: Users },
   { key: "trust", label: "Trust & Safety", icon: ShieldCheck },
   { key: "exercise", label: "Exercise review", icon: Dumbbell },
+  { key: "challenges", label: "Official challenges", icon: Trophy },
   { key: "merchants", label: "Merchants", icon: Store },
   { key: "bounties", label: "Bounties", icon: MapPin },
 ];

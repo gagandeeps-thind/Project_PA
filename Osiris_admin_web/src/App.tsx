@@ -18,6 +18,7 @@ const TrustPage = lazy(() => import("./pages/TrustPage"));
 const GrowthPage = lazy(() => import("./pages/GrowthPage"));
 const CommunityPage = lazy(() => import("./pages/CommunityPage"));
 const ExerciseReviewPage = lazy(() => import("./pages/ExerciseReviewPage"));
+const OfficialChallengesPage = lazy(() => import("./pages/OfficialChallengesPage"));
 
 /** The saved session, read before the first render so a reload never flashes the login screen. */
 function restoreSession(): AdminUser | null {
@@ -77,6 +78,8 @@ function App() {
         return <TrustPage />;
       case "exercise":
         return <ExerciseReviewPage />;
+      case "challenges":
+        return <OfficialChallengesPage />;
       case "merchants":
         return <MerchantsPage />;
       case "bounties":

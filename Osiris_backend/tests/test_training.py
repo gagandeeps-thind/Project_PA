@@ -402,6 +402,8 @@ def test_official_admin() -> None:
     assert gid in [c["id"] for c in client.get("/api/v2/group-challenges", headers=player).json()["official"]]
     assert client.post(f"/api/v2/group-challenges/{gid}/join", headers=player).status_code == 200
     assert gid in [c["id"] for c in client.get("/api/v2/admin/group-challenges", headers=_admin()).json()]
+    # The admin console fills its activity picker from the same catalog.
+    assert client.get("/api/v2/training/activities", headers=_admin()).status_code == 200
     print("PASS test_official_admin")
 
 

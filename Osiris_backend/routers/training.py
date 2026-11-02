@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import growth_feed
 import models
-from core.security import get_active_player
+from core.security import get_active_player, get_active_player_or_admin
 from database import get_db
 from growth_social import _display_name
 from schemas import (
@@ -83,7 +83,7 @@ def _own(db: Session, uid: int, session_id: int) -> models.TrainingSession:
 
 
 @router.get("/api/v2/training/activities", response_model=List[TrainingActivity])
-def list_activities(token_data: dict = Depends(get_active_player)):
+def list_activities(token_data: dict = Depends(get_active_player_or_admin)):
     return training.ACTIVITIES
 
 
