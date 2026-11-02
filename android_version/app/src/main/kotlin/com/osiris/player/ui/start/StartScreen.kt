@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -74,7 +75,7 @@ fun StartScreen(onOpen: (StartCard) -> Unit, onWallet: (() -> Unit)?) {
     Box(Modifier.fillMaxSize()) {
         VerticalPager(
             state = pager,
-            contentPadding = PaddingValues(vertical = 150.dp),
+            contentPadding = PaddingValues(top = 96.dp, bottom = 160.dp),
             pageSpacing = 8.dp,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
@@ -96,7 +97,7 @@ private fun SpiralCard(card: StartCard, pager: PagerState, page: Int, onClick: (
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 32.dp)
-            .height(340.dp)
+            .fillMaxHeight()
             .graphicsLayer {
                 // 0 for the card in focus; ±1 a page away, signed by direction.
                 val offset = (pager.currentPage - page) + pager.currentPageOffsetFraction

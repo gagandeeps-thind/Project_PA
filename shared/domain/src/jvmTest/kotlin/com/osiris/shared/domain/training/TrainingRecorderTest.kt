@@ -80,6 +80,18 @@ class TrainingRecorderTest {
     }
 
     @Test
+    fun `a jump no athlete could make adds no distance and re-anchors`() {
+        val r = TrainingRecorder(t0)
+        // A stale cached fix far away, then the real position: ~3,500 km in 4 s.
+        r.addFix(LocationFix(19.0, -70.0, accuracyM = 5.0), at(0.0))
+        r.addFix(LocationFix(45.96, -66.64, accuracyM = 5.0), at(4.0))
+        assertEquals(0.0, r.distanceM)
+        // Movement from the new anchor still counts.
+        r.addFix(LocationFix(45.961, -66.64, accuracyM = 5.0), at(40.0))
+        assertEquals(111.2, r.distanceM, 0.5)
+    }
+
+    @Test
     fun `indoor distance comes from sensor speed when there is no gps`() {
         val r = TrainingRecorder(t0)
         r.add(Channel.SPEED, 5.0, at(0.0))

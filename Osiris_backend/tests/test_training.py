@@ -40,6 +40,9 @@ def _cleanup() -> None:
         ids = [u.id for u in db.query(models.User).filter(models.User.email.like(PREFIX + "%")).all()]
         if ids:
             db.query(models.SocialPost).filter(models.SocialPost.user_id.in_(ids)).delete(synchronize_session=False)
+            db.query(models.Challenge).filter(models.Challenge.creator_id.in_(ids)).delete(synchronize_session=False)
+            db.query(models.Course).filter(models.Course.owner_id.in_(ids)).delete(synchronize_session=False)
+            db.query(models.RunSession).filter(models.RunSession.user_id.in_(ids)).delete(synchronize_session=False)
             db.query(models.UserFollow).filter(
                 models.UserFollow.follower_id.in_(ids) | models.UserFollow.followed_id.in_(ids)
             ).delete(synchronize_session=False)
@@ -416,6 +419,45 @@ def test_official_admin() -> None:
     print("PASS test_official_admin")
 
 
+def _open_challenge(owner_id: int, title: str) -> int:
+    """A minimal open course challenge, as publishing one would leave it."""
+    db = database.SessionLocal()
+    try:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        run = models.RunSession(user_id=owner_id, status="finished")
+        db.add(run)
+        db.flush()
+        course = models.Course(
+            owner_id=owner_id, source_run_session_id=run.id, rules_version="test", name=title, distance_m=1500.0,
+            benchmark_seconds=480.0, start_lat=45.0, start_lng=-66.0, finish_lat=45.01, finish_lng=-66.0,
+            route_json="[]", route_hash=f"{PREFIX}{uuid.uuid4()}", public_lat=45.0, public_lng=-66.0,
+        )
+        db.add(course)
+        db.flush()
+        ch = models.Challenge(
+            course_id=course.id, creator_id=owner_id, title=title, rules_version="test", course_version=1,
+            target_seconds=480.0, win_xp=40, participation_xp=10, opens_at=now, closes_at=now + timedelta(days=2),
+            terms_hash="test",
+        )
+        db.add(ch)
+        db.commit()
+        return ch.id
+    finally:
+        db.close()
+
+
+def test_suggested_challenges_with_open_challenges() -> None:
+    """The Challenge page's suggested grid; it failed whenever any challenge was open."""
+    host, host_id = _player("s_host")
+    viewer, _ = _player("s_viewer")
+    cid = _open_challenge(host_id, PREFIX + "Riverside mile")
+    r = client.get("/api/v2/challenges/suggested", params={"limit": 30}, headers=viewer)
+    assert r.status_code == 200, r.text
+    card = next(c for c in r.json() if c["id"] == cid)
+    assert card["joined"] is False and card["course_distance_m"] == 1500.0
+    print("PASS test_suggested_challenges_with_open_challenges")
+
+
 TESTS = [
     test_catalog,
     test_upload_stats_server_side,
@@ -435,6 +477,7 @@ TESTS = [
     test_group_progress_challenge_mode_only,
     test_group_leaderboard_order,
     test_official_admin,
+    test_suggested_challenges_with_open_challenges,
 ]
 
 

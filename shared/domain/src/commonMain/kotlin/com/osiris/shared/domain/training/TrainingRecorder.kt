@@ -21,7 +21,7 @@ class TrainingRecorder(private val startedAt: Instant) {
     private val points = Channel.entries.associateWith { mutableListOf<List<Double>>() }
     private var pausedTotalMs = 0L
     private var pausedAt: Instant? = null
-    private var lastFix: LocationFix? = null
+    private var lastFix: Pair<LocationFix, Double>? = null   // (fix, elapsed s)
     private var gpsDistanceM = 0.0
     private var sensorDistanceM = 0.0
     private var hasGps = false
@@ -69,8 +69,12 @@ class TrainingRecorder(private val startedAt: Instant) {
         if ((fix.accuracyM ?: 0.0) > MAX_ACCURACY_M) return
         val t = elapsedS(at)
         hasGps = true
-        lastFix?.let { gpsDistanceM += Geo.distanceM(it.position, fix.position) }
-        lastFix = fix
+        lastFix?.let { (prev, prevT) ->
+            val step = Geo.distanceM(prev.position, fix.position)
+            // A stale cached fix or a GPS warm-up jump: re-anchor here instead of counting it.
+            if (step <= MAX_STEP_SPEED_MPS * (t - prevT).coerceAtLeast(MIN_GAP_S)) gpsDistanceM += step
+        }
+        lastFix = fix to t
         val sensorFresh = lastSensorSpeed?.let { t - it.first <= SENSOR_SPEED_FRESH_S } == true
         fix.speedMps?.takeIf { it >= 0 && !sensorFresh }?.let { record(Channel.SPEED, it, t) }
         fix.altitudeM?.let { record(Channel.ELEVATION, it, t) }
@@ -99,6 +103,9 @@ class TrainingRecorder(private val startedAt: Instant) {
         private const val MAX_ACCURACY_M = 50.0
         private const val SENSOR_SPEED_FRESH_S = 5.0
         private const val SENSOR_GAP_S = 10.0
+
+        /** Faster than any athlete (a 108 km/h descent on a bike); a longer step is a GPS jump. */
+        private const val MAX_STEP_SPEED_MPS = 30.0
 
         fun downsample(points: List<List<Double>>, maxPoints: Int): List<List<Double>> {
             val n = points.size

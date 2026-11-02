@@ -54,6 +54,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.design.KeyButton
@@ -71,7 +73,7 @@ import kotlin.math.sin
 private const val RIBBON_DEGREES_PER_SECOND = 6f
 private const val FULL_TURN = 360f
 private const val NANOS = 1_000_000_000f
-private const val CHIP_SLOT_DP = 92f
+private const val CHIP_SLOT_DP = 140f
 private const val MIN_FACING = 0.05f
 private const val CHIP_SHRINK = 0.3f
 private const val TO_RADIANS = PI.toFloat() / 180f
@@ -153,7 +155,11 @@ private fun RibbonChip(activity: TrainingActivity, selected: Boolean, modifier: 
         activity.name,
         style = MaterialTheme.typography.labelLarge,
         color = if (selected) Color.White else MaterialTheme.colorScheme.onBackground,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
         modifier = modifier
+            .width(128.dp)
             .clip(shape)
             .background(if (selected) tint else tint.copy(alpha = 0.16f))
             .border(1.dp, tint.copy(alpha = 0.6f), shape)
@@ -256,9 +262,12 @@ fun ResultsRow(summary: TrainingSummary, activity: TrainingActivity) {
         "This week" to "${summary.weekSessions}",
     )
     val captions = mapOf("Segments" to "workouts · challenges", "This week" to "sessions")
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         for ((label, value) in tiles) {
-            FrostCard(Modifier.width(128.dp)) {
+            FrostCard(Modifier.width(136.dp).height(116.dp)) {
                 Text(label, style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
                 Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 captions[label]?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = OsirisColors.Faint) }
