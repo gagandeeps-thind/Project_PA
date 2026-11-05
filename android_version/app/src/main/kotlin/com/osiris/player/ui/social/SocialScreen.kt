@@ -101,6 +101,13 @@ fun SocialScreen(graph: AppGraph, nav: SocialNav) {
                     }
                 }
                 LaunchedEffect(nearEnd, s.canLoadMore) { if (nearEnd && s.canLoadMore) vm.loadMore() }
+                // A new post at the top (yours, just shared, or a friend's) brings the feed back up to it.
+                val topId = posts.firstOrNull()?.id
+                var seenTopId by rememberSaveable { mutableStateOf(topId) }
+                LaunchedEffect(topId) {
+                    if (topId != null && topId != seenTopId) listState.animateScrollToItem(0)
+                    seenTopId = topId
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
