@@ -30,6 +30,51 @@
         "title": "AccelerometerSample",
         "type": "object"
       },
+      "ActiveFriendOut": {
+        "description": "A followed player who trained in the last 24 hours (the stories row).",
+        "properties": {
+          "activity_key": {
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "activity_name": {
+            "title": "Activity Name",
+            "type": "string"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "activity_key",
+          "activity_name",
+          "minutes"
+        ],
+        "title": "ActiveFriendOut",
+        "type": "object"
+      },
       "ActivityProof": {
         "properties": {
           "accelerometer": {
@@ -2304,6 +2349,27 @@
         "title": "Connection",
         "type": "object"
       },
+      "ConversationOut": {
+        "properties": {
+          "last_message": {
+            "$ref": "#/components/schemas/DirectMessageOut"
+          },
+          "unread_count": {
+            "title": "Unread Count",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SocialUserOut"
+          }
+        },
+        "required": [
+          "user",
+          "last_message",
+          "unread_count"
+        ],
+        "title": "ConversationOut",
+        "type": "object"
+      },
       "Coordinate": {
         "properties": {
           "lat": {
@@ -2654,6 +2720,89 @@
           "status"
         ],
         "title": "CrystalPurchaseIntentResponse",
+        "type": "object"
+      },
+      "DirectMessageIn": {
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "DirectMessageIn",
+        "type": "object"
+      },
+      "DirectMessageOut": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mine": {
+            "title": "Mine",
+            "type": "boolean"
+          },
+          "read": {
+            "title": "Read",
+            "type": "boolean"
+          },
+          "recipient_id": {
+            "title": "Recipient Id",
+            "type": "integer"
+          },
+          "sender_id": {
+            "title": "Sender Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "sender_id",
+          "recipient_id",
+          "body",
+          "created_at",
+          "read",
+          "mine"
+        ],
+        "title": "DirectMessageOut",
+        "type": "object"
+      },
+      "DiscoverOut": {
+        "properties": {
+          "interests": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Interests",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FeedPostOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "interests",
+          "items"
+        ],
+        "title": "DiscoverOut",
         "type": "object"
       },
       "DismissOut": {
@@ -3137,6 +3286,13 @@
       },
       "FeedPostOut": {
         "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/PostAttachmentOut"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
           "author_avatar_url": {
             "anyOf": [
               {
@@ -3167,6 +3323,16 @@
           "caption": {
             "title": "Caption",
             "type": "string"
+          },
+          "chart": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostChartOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "comment_count": {
             "title": "Comment Count",
@@ -3206,6 +3372,17 @@
               }
             ],
             "title": "My Reaction"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
           },
           "reactions": {
             "additionalProperties": {
@@ -4040,6 +4217,27 @@
           "items"
         ],
         "title": "HubSectionOut",
+        "type": "object"
+      },
+      "InboxOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "unread_total": {
+            "title": "Unread Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread_total",
+          "items"
+        ],
+        "title": "InboxOut",
         "type": "object"
       },
       "InviteOut": {
@@ -4935,6 +5133,128 @@
           "rep_count"
         ],
         "title": "PoseSummary",
+        "type": "object"
+      },
+      "PostAttachmentOut": {
+        "description": "Stats of one training session, copied from the server's own row when the post was made.",
+        "properties": {
+          "activity_key": {
+            "title": "Activity Key",
+            "type": "string"
+          },
+          "activity_kind": {
+            "title": "Activity Kind",
+            "type": "string"
+          },
+          "activity_name": {
+            "title": "Activity Name",
+            "type": "string"
+          },
+          "distance_m": {
+            "default": 0.0,
+            "title": "Distance M",
+            "type": "number"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "elevation_gain_m": {
+            "default": 0.0,
+            "title": "Elevation Gain M",
+            "type": "number"
+          },
+          "hr_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Avg"
+          },
+          "is_pr": {
+            "default": false,
+            "title": "Is Pr",
+            "type": "boolean"
+          },
+          "reps": {
+            "default": 0,
+            "title": "Reps",
+            "type": "integer"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "speed_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Avg"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "activity_key",
+          "activity_name",
+          "activity_kind",
+          "started_at",
+          "duration_s"
+        ],
+        "title": "PostAttachmentOut",
+        "type": "object"
+      },
+      "PostChartOut": {
+        "description": "A small chart frozen into the post: `weekly_progress` is training minutes per week.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "unit",
+          "labels",
+          "values"
+        ],
+        "title": "PostChartOut",
         "type": "object"
       },
       "PostCommentIn": {
@@ -6606,6 +6926,216 @@
         "title": "SiegeResolveResponse",
         "type": "object"
       },
+      "SocialFeedOut": {
+        "properties": {
+          "active_today": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveFriendOut"
+            },
+            "title": "Active Today",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FeedPostOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_before_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before Id"
+          }
+        },
+        "required": [
+          "active_today",
+          "items"
+        ],
+        "title": "SocialFeedOut",
+        "type": "object"
+      },
+      "SocialPostIn": {
+        "properties": {
+          "caption": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Caption",
+            "type": "string"
+          },
+          "chart": {
+            "default": "none",
+            "enum": [
+              "none",
+              "weekly_progress"
+            ],
+            "title": "Chart",
+            "type": "string"
+          },
+          "photo_jpeg_base64": {
+            "anyOf": [
+              {
+                "maxLength": 500000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Jpeg Base64"
+          },
+          "training_session_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "title": "Training Session Ids",
+            "type": "array"
+          },
+          "visibility": {
+            "default": "public",
+            "enum": [
+              "public",
+              "followers"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "title": "SocialPostIn",
+        "type": "object"
+      },
+      "SocialProfileOut": {
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "can_message": {
+            "title": "Can Message",
+            "type": "boolean"
+          },
+          "followers_count": {
+            "title": "Followers Count",
+            "type": "integer"
+          },
+          "following_count": {
+            "title": "Following Count",
+            "type": "integer"
+          },
+          "is_me": {
+            "title": "Is Me",
+            "type": "boolean"
+          },
+          "posts": {
+            "items": {
+              "$ref": "#/components/schemas/FeedPostOut"
+            },
+            "title": "Posts",
+            "type": "array"
+          },
+          "posts_count": {
+            "title": "Posts Count",
+            "type": "integer"
+          },
+          "streak_days": {
+            "title": "Streak Days",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SocialUserOut"
+          },
+          "week_minutes": {
+            "title": "Week Minutes",
+            "type": "integer"
+          },
+          "week_sessions": {
+            "title": "Week Sessions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user",
+          "title",
+          "posts_count",
+          "followers_count",
+          "following_count",
+          "streak_days",
+          "week_minutes",
+          "week_sessions",
+          "is_me",
+          "can_message",
+          "posts"
+        ],
+        "title": "SocialProfileOut",
+        "type": "object"
+      },
+      "SocialUserOut": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "following": {
+            "title": "Following",
+            "type": "boolean"
+          },
+          "follows_me": {
+            "title": "Follows Me",
+            "type": "boolean"
+          },
+          "handle": {
+            "title": "Handle",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "handle",
+          "rank",
+          "following",
+          "follows_me"
+        ],
+        "title": "SocialUserOut",
+        "type": "object"
+      },
       "SuggestedChallengeOut": {
         "properties": {
           "course_distance_m": {
@@ -6690,6 +7220,31 @@
           "active_members"
         ],
         "title": "TeamGoal",
+        "type": "object"
+      },
+      "ThreadOut": {
+        "properties": {
+          "can_message": {
+            "title": "Can Message",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DirectMessageOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SocialUserOut"
+          }
+        },
+        "required": [
+          "user",
+          "can_message",
+          "items"
+        ],
+        "title": "ThreadOut",
         "type": "object"
       },
       "TodayResponse": {
@@ -14557,6 +15112,567 @@
           }
         },
         "summary": "Get Share Card"
+      }
+    },
+    "/api/v2/social/conversations": {
+      "get": {
+        "operationId": "inbox_api_v2_social_conversations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Inbox"
+      }
+    },
+    "/api/v2/social/conversations/{user_id}/messages": {
+      "get": {
+        "description": "Oldest first within the page; page back with `before_id` (the first id you hold).",
+        "operationId": "thread_api_v2_social_conversations__user_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Thread"
+      },
+      "post": {
+        "operationId": "send_message_api_v2_social_conversations__user_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectMessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectMessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Send Message"
+      }
+    },
+    "/api/v2/social/conversations/{user_id}/read": {
+      "post": {
+        "operationId": "mark_thread_read_api_v2_social_conversations__user_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Mark Thread Read"
+      }
+    },
+    "/api/v2/social/discover": {
+      "get": {
+        "description": "Public posts from players the viewer does not follow, ranked by the viewer's interests (the\nactivities they train), engagement and recency. `activity` narrows to one activity.",
+        "operationId": "social_discover_api_v2_social_discover_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 500,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "activity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Activity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Social Discover"
+      }
+    },
+    "/api/v2/social/feed": {
+      "get": {
+        "description": "Posts by people the player follows, and their own, newest first. Page with `before_id`.",
+        "operationId": "social_feed_api_v2_social_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocialFeedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Social Feed"
+      }
+    },
+    "/api/v2/social/media/{token}": {
+      "get": {
+        "description": "Loaded by the app as a plain image URL, so it takes no token header. The 128-bit random token\nis the capability: it is only handed out with a post the viewer may see.",
+        "operationId": "post_photo_api_v2_social_media__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Photo"
+      }
+    },
+    "/api/v2/social/posts": {
+      "post": {
+        "description": "A photo, one or more past workouts, a progress chart, or all together. Workout stats come\nfrom the player's own saved sessions, never from the request.",
+        "operationId": "create_social_post_api_v2_social_posts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialPostIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Social Post"
+      }
+    },
+    "/api/v2/social/posts/{post_id}": {
+      "delete": {
+        "operationId": "delete_social_post_api_v2_social_posts__post_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Social Post"
+      }
+    },
+    "/api/v2/social/search": {
+      "get": {
+        "description": "Players whose display name or handle contains `q`, ignoring case. Handle prefix matches first.",
+        "operationId": "social_search_api_v2_social_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 2,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SocialUserOut"
+                  },
+                  "title": "Response Social Search Api V2 Social Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Social Search"
+      }
+    },
+    "/api/v2/social/users/{user_id}": {
+      "get": {
+        "operationId": "social_profile_api_v2_social_users__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocialProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Social Profile"
       }
     },
     "/api/v2/training/activities": {

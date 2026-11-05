@@ -338,6 +338,9 @@ def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get
             {"t_ms": p.t_ms, "lat": p.lat, "lng": p.lng, "accuracy_m": p.accuracy_m})
     decisions = {d.run_session_id: d for d in db.query(models.VerificationDecision).filter(
         models.VerificationDecision.run_session_id.in_(run_ids)).all()}
+    posts = db.query(models.SocialPost).filter(models.SocialPost.user_id == uid).order_by(models.SocialPost.id).all()
+    photo_post_ids = {pid for (pid,) in db.query(models.PostPhoto.post_id).filter(
+        models.PostPhoto.post_id.in_([p.id for p in posts] or [-1]))}
     data = {
         "exported_at": _now_naive_utc().isoformat(),
         "policy_version": POLICY_VERSION,
@@ -387,6 +390,18 @@ def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get
         "group_challenges": _rows(
             db.query(models.GroupChallengeMember).filter(models.GroupChallengeMember.user_id == uid),
             ("challenge_id", "status", "joined_at")),
+        "social_posts": [
+            {**{f: getattr(p, f) for f in ("id", "kind", "caption", "visibility", "created_at")},
+             "attachments": json.loads(p.attachments_json or "[]"),
+             "chart": json.loads(p.chart_json) if p.chart_json else None,
+             "has_photo": p.id in photo_post_ids}
+            for p in posts
+        ],
+        "direct_messages": _rows(
+            db.query(models.DirectMessage).filter(
+                (models.DirectMessage.sender_id == uid) | (models.DirectMessage.recipient_id == uid)
+            ).order_by(models.DirectMessage.id.asc()),
+            ("sender_id", "recipient_id", "body", "created_at", "read_at")),
     }
     return json.loads(json.dumps(data, default=str))
 

@@ -124,3 +124,5 @@ _rl_route = _rate_limit(120, 60, "route")
 _rl_challenge = _rate_limit(30, 60, "challenge")
 # Public analytics ingestion accepts unauthenticated writes; cap it per IP.
 _rl_events = _rate_limit(60, 60, "events")
+# Social tab writes: posts and direct messages.
+_rl_social = _rate_limit(60, 60, "social")

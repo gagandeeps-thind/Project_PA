@@ -225,6 +225,10 @@ def delete_growth_data(db: Session, user_ids: list[int]) -> None:
         pid for (pid,) in db.query(models.SocialPost.id)
         .filter(models.SocialPost.user_id.in_(user_ids)).all()
     ] or [-1]
+    db.query(models.PostPhoto).filter(models.PostPhoto.post_id.in_(post_ids)).delete(synchronize_session=False)
+    db.query(models.DirectMessage).filter(
+        models.DirectMessage.sender_id.in_(user_ids) | models.DirectMessage.recipient_id.in_(user_ids)
+    ).delete(synchronize_session=False)
     db.query(models.PostReaction).filter(
         models.PostReaction.post_id.in_(post_ids) | models.PostReaction.user_id.in_(user_ids)
     ).delete(synchronize_session=False)

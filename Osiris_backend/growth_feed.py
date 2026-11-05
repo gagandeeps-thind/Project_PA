@@ -147,6 +147,31 @@ class PostCommentOut(BaseModel):
     created_at: datetime
 
 
+class PostAttachmentOut(BaseModel):
+    """Stats of one training session, copied from the server's own row when the post was made."""
+    session_id: int
+    activity_key: str
+    activity_name: str
+    activity_kind: str               # camera | gps | sensor
+    started_at: datetime
+    duration_s: float
+    distance_m: float = 0.0
+    elevation_gain_m: float = 0.0
+    reps: int = 0
+    hr_avg: Optional[float] = None
+    speed_avg: Optional[float] = None
+    is_pr: bool = False
+
+
+class PostChartOut(BaseModel):
+    """A small chart frozen into the post: `weekly_progress` is training minutes per week."""
+    kind: str
+    title: str
+    unit: str
+    labels: List[str]
+    values: List[float]
+
+
 class FeedPostOut(BaseModel):
     id: int
     user_id: int
@@ -158,6 +183,9 @@ class FeedPostOut(BaseModel):
     kind: str
     caption: str
     media_url: Optional[str] = None
+    photo_url: Optional[str] = None
+    attachments: List[PostAttachmentOut] = Field(default_factory=list)
+    chart: Optional[PostChartOut] = None
     summary: PostWorkoutSummary
     reactions: Dict[str, int]
     total_reactions: int
@@ -675,6 +703,28 @@ def dismiss_osirian_suggestion(
 
 # --- 4. People's Posts (Workouts, Domains, Streaks, Crystals, React, Comment, Share) ---
 
+def follows(db: Session, follower_id: int, followed_id: int) -> bool:
+    return db.query(models.UserFollow.id).filter(
+        models.UserFollow.follower_id == follower_id, models.UserFollow.followed_id == followed_id
+    ).first() is not None
+
+
+def can_view_post(db: Session, viewer_id: int, post: models.SocialPost) -> bool:
+    """Blocks hide everything; a followers-only post is for its author and their followers."""
+    if post.user_id == viewer_id:
+        return True
+    if player_safety.is_blocked_between(db, viewer_id, post.user_id):
+        return False
+    return post.visibility == "public" or follows(db, viewer_id, post.user_id)
+
+
+def viewable_post(db: Session, viewer_id: int, post_id: int) -> models.SocialPost:
+    post = db.query(models.SocialPost).filter(models.SocialPost.id == post_id).first()
+    if post is None or not can_view_post(db, viewer_id, post):
+        raise _api_error(404, "POST_NOT_FOUND", "Post not found")
+    return post
+
+
 def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) -> List[FeedPostOut]:
     if not posts:
         return []
@@ -700,6 +750,12 @@ def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) 
     for uid, u in users.items():
         if uid not in profiles:
             profiles[uid] = get_or_create_profile(db, u)
+
+    photo_tokens = {
+        pid: token
+        for pid, token in db.query(models.PostPhoto.post_id, models.PostPhoto.token)
+        .filter(models.PostPhoto.post_id.in_(post_ids)).all()
+    }
 
     reactions_by_post: dict[int, dict[str, int]] = {pid: {} for pid in post_ids}
     my_reactions: dict[int, str] = {}
@@ -751,6 +807,9 @@ def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) 
                 kind=p.kind,
                 caption=p.caption,
                 media_url=p.media_url,
+                photo_url=f"/api/v2/social/media/{photo_tokens[p.id]}" if p.id in photo_tokens else None,
+                attachments=[PostAttachmentOut(**a) for a in json.loads(p.attachments_json or "[]")],
+                chart=PostChartOut(**json.loads(p.chart_json)) if p.chart_json else None,
                 summary=summary,
                 reactions=rx,
                 total_reactions=sum(rx.values()),
@@ -859,9 +918,7 @@ def react_to_post(
     token_data: dict = Depends(get_active_player),
 ):
     uid = token_data["id"]
-    post = db.query(models.SocialPost).filter(models.SocialPost.id == post_id).first()
-    if post is None or player_safety.is_blocked_between(db, uid, post.user_id):
-        raise _api_error(404, "POST_NOT_FOUND", "Post not found")
+    post = viewable_post(db, uid, post_id)
 
     existing = (
         db.query(models.PostReaction)
@@ -899,9 +956,7 @@ def list_post_comments(
     token_data: dict = Depends(get_active_player),
 ):
     uid = token_data["id"]
-    post = db.query(models.SocialPost).filter(models.SocialPost.id == post_id).first()
-    if post is None or player_safety.is_blocked_between(db, uid, post.user_id):
-        raise _api_error(404, "POST_NOT_FOUND", "Post not found")
+    viewable_post(db, uid, post_id)
     rows = (
         db.query(models.PostComment)
         .filter(models.PostComment.post_id == post_id)
@@ -944,9 +999,7 @@ def add_post_comment(
     token_data: dict = Depends(get_active_player),
 ):
     uid = token_data["id"]
-    post = db.query(models.SocialPost).filter(models.SocialPost.id == post_id).first()
-    if post is None or player_safety.is_blocked_between(db, uid, post.user_id):
-        raise _api_error(404, "POST_NOT_FOUND", "Post not found")
+    post = viewable_post(db, uid, post_id)
     body = req.body.strip()
     if not body:
         raise _api_error(422, "EMPTY_COMMENT", "Comment cannot be empty")
@@ -985,9 +1038,7 @@ def share_post(
     token_data: dict = Depends(get_active_player),
 ):
     uid = token_data["id"]
-    post = db.query(models.SocialPost).filter(models.SocialPost.id == post_id).first()
-    if post is None or player_safety.is_blocked_between(db, uid, post.user_id):
-        raise _api_error(404, "POST_NOT_FOUND", "Post not found")
+    post = viewable_post(db, uid, post_id)
     post.share_count = (post.share_count or 0) + 1
     author = db.query(models.User).filter(models.User.id == post.user_id).first()
     author_profile = get_or_create_profile(db, author)

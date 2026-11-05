@@ -36,6 +36,7 @@ import growth_feed  # noqa: E402
 import growth_hub  # noqa: E402
 import growth_safety  # noqa: E402
 import growth_social  # noqa: E402
+import growth_social_tab  # noqa: E402
 import growth_support  # noqa: E402
 from http_cache import ConditionalGetMiddleware  # noqa: E402
 import models  # noqa: E402
@@ -103,6 +104,7 @@ for _router in (
     accounts.router,
     runs.router,
     growth_feed.router,
+    growth_social_tab.router,
     challenges.router,
     admin_trust.router,
     legacy_game.router,

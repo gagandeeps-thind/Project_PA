@@ -3,12 +3,17 @@
 - Suggested Global Challenges (circular deck payload + join)
 - Suggested Osirians (swipe list, follow, unfollow, 'x' dismiss, 'See All' trending)
 - People's Posts (create workout/domain/streak/crystal post, feed list, react, comment, share)
+- Social tab (following feed, active today, compose with photo/workouts/chart, discover, search,
+  profile, delete, followers-only visibility, direct messages, GDPR export)
 
 Run directly from Osiris_backend:
     python tests/test_home_social_feed.py
 """
+import base64
 import os
 import sys
+import uuid
+from datetime import datetime, timedelta, timezone
 
 os.environ.setdefault("OSIRIS_ENV", "test")
 os.environ.setdefault("OSIRIS_JWT_SECRET", "home-feed-test-secret-aaaaaaaaaaaaaaaaaaaaaaaa")
@@ -171,12 +176,216 @@ def test_peoples_posts_create_react_comment_share() -> None:
     print("PASS peoples posts create, react, comment and share")
 
 
+# --- Social tab ------------------------------------------------------------------
+
+JPEG = b"\xff\xd8\xff\xe0" + b"0" * 64
+
+
+def _session(headers: dict, activity: str = "run", distance: float = 5000.0, duration: float = 1500.0) -> int:
+    started = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    r = client.post("/api/v2/training/sessions", headers=headers, json={
+        "client_session_id": str(uuid.uuid4()), "activity_key": activity, "mode": "train", "source": "sensor",
+        "started_at": started, "duration_s": duration, "distance_m": distance, "series": {}, "devices": [],
+    })
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def _block(headers: dict, target_id: int) -> None:
+    handle = client.get(f"/api/v2/social/users/{target_id}", headers=headers).json()["user"]["handle"]
+    r = client.post("/api/v2/blocks", headers=headers, json={"handle": handle})
+    assert r.status_code == 201, r.text
+
+
+def test_social_compose_feed_and_visibility() -> None:
+    u_me, h_me = _register("sm")
+    u_friend, h_friend = _register("sfriend")
+    u_stranger, h_stranger = _register("sstranger")
+    assert client.post(f"/api/v2/osirians/{u_friend}/follow", headers=h_me).status_code == 200
+
+    # Empty posts are refused; somebody else's session cannot be attached.
+    r = client.post("/api/v2/social/posts", headers=h_me, json={})
+    assert r.status_code == 422 and "EMPTY_POST" in r.text, r.text
+    foreign = _session(h_stranger)
+    r = client.post("/api/v2/social/posts", headers=h_me, json={"training_session_ids": [foreign]})
+    assert r.status_code == 404, r.text
+
+    # Bad photos are refused.
+    r = client.post("/api/v2/social/posts", headers=h_friend, json={"photo_jpeg_base64": "not base64!"})
+    assert r.status_code == 422, r.text
+    png = base64.b64encode(b"\x89PNG" + b"0" * 32).decode()
+    assert client.post("/api/v2/social/posts", headers=h_friend, json={"photo_jpeg_base64": png}).status_code == 422
+
+    # The friend posts a photo + two workouts + chart; stats come from the server rows.
+    s1 = _session(h_friend, "run", 5000.0, 1500.0)
+    s2 = _session(h_friend, "cycle", 12000.0, 2400.0)
+    r = client.post("/api/v2/social/posts", headers=h_friend, json={
+        "caption": "Brick day", "photo_jpeg_base64": base64.b64encode(JPEG).decode(),
+        "training_session_ids": [s1, s2, s1], "chart": "weekly_progress", "visibility": "followers",
+    })
+    assert r.status_code == 201, r.text
+    post = r.json()
+    assert [a["session_id"] for a in post["attachments"]] == [s1, s2]
+    assert post["attachments"][0]["distance_m"] == 5000.0 and post["attachments"][1]["activity_name"] == "Ride"
+    assert post["summary"]["distance_m"] == 17000.0
+    assert post["chart"]["kind"] == "weekly_progress" and len(post["chart"]["values"]) == 8
+    # Sessions started an hour ago land in this week or, just after Monday midnight, the last one.
+    assert sum(post["chart"]["values"][-2:]) >= 65.0
+    photo = client.get(post["photo_url"])
+    assert photo.status_code == 200 and photo.content == JPEG
+    assert client.get("/api/v2/social/media/" + "0" * 32).status_code == 404
+    # The attached sessions now read as posted.
+    sessions = client.get("/api/v2/me/training/sessions", headers=h_friend).json()["items"]
+    assert all(it["posted"] for it in sessions)
+
+    # My following feed has it, plus the friend in "active today"; the stranger's feed does not.
+    feed = client.get("/api/v2/social/feed", headers=h_me).json()
+    assert post["id"] in [p["id"] for p in feed["items"]]
+    active = {a["user_id"]: a for a in feed["active_today"]}
+    assert u_friend in active and active[u_friend]["minutes"] >= 25
+    stranger_feed = client.get("/api/v2/social/feed", headers=h_stranger).json()
+    assert post["id"] not in [p["id"] for p in stranger_feed["items"]]
+
+    # Followers-only: a non-follower cannot react, comment, read comments or share.
+    for method, path, body in (
+        ("post", f"/api/v2/feed/posts/{post['id']}/react", {"reaction": "fire"}),
+        ("post", f"/api/v2/feed/posts/{post['id']}/comments", {"body": "nice"}),
+        ("get", f"/api/v2/feed/posts/{post['id']}/comments", None),
+        ("post", f"/api/v2/feed/posts/{post['id']}/share", None),
+    ):
+        call = getattr(client, method)
+        r = call(path, headers=h_stranger, json=body) if body is not None else call(path, headers=h_stranger)
+        assert r.status_code == 404, (path, r.status_code, r.text)
+    assert client.post(f"/api/v2/feed/posts/{post['id']}/react", headers=h_me,
+                       json={"reaction": "fire"}).status_code == 200
+
+    # Profiles: the stranger sees no followers-only posts; I do.
+    mine = client.get(f"/api/v2/social/users/{u_friend}", headers=h_me).json()
+    assert mine["posts_count"] == 1 and mine["followers_count"] == 1 and mine["user"]["following"] is True
+    assert mine["week_sessions"] in (0, 2) and mine["can_message"] is True and mine["is_me"] is False
+    if datetime.now() - timedelta(hours=2) >= datetime.combine(
+            datetime.now().date() - timedelta(days=datetime.now().weekday()), datetime.min.time()):
+        assert mine["week_sessions"] == 2 and mine["week_minutes"] == 65
+    theirs = client.get(f"/api/v2/social/users/{u_friend}", headers=h_stranger).json()
+    assert theirs["posts_count"] == 0 and theirs["can_message"] is False
+
+    # Paging with before_id.
+    for n in range(3):
+        assert client.post("/api/v2/social/posts", headers=h_friend, json={"caption": f"p{n}"}).status_code == 201
+    page1 = client.get("/api/v2/social/feed?limit=2", headers=h_me).json()
+    assert len(page1["items"]) == 2 and page1["next_before_id"] is not None
+    page2 = client.get(f"/api/v2/social/feed?limit=2&before_id={page1['next_before_id']}", headers=h_me).json()
+    assert not {p["id"] for p in page1["items"]} & {p["id"] for p in page2["items"]}
+    assert page2["active_today"] == []
+
+    # Only the author can delete; deleting frees the attached sessions and removes the photo.
+    assert client.delete(f"/api/v2/social/posts/{post['id']}", headers=h_me).status_code == 404
+    assert client.delete(f"/api/v2/social/posts/{post['id']}", headers=h_friend).status_code == 204
+    assert client.get(post["photo_url"]).status_code == 404
+    sessions = client.get("/api/v2/me/training/sessions", headers=h_friend).json()["items"]
+    assert not any(it["posted"] for it in sessions)
+    assert u_me and u_stranger
+    print("PASS social tab compose, following feed, visibility, profile and delete")
+
+
+def test_social_discover_and_search() -> None:
+    _, h_viewer = _register("sdviewer")
+    u_runner, h_runner = _register("sdrunner")
+    u_lifter, h_lifter = _register("sdlifter")
+    _session(h_viewer, "run")  # the viewer's interest: running
+
+    run_post = client.post("/api/v2/social/posts", headers=h_runner,
+                           json={"training_session_ids": [_session(h_runner, "run")]}).json()
+    lift_post = client.post("/api/v2/social/posts", headers=h_lifter,
+                            json={"training_session_ids": [_session(h_lifter, "strength", 0.0, 1800.0)]}).json()
+    private = client.post("/api/v2/social/posts", headers=h_lifter,
+                          json={"caption": "secret", "visibility": "followers"}).json()
+
+    d = client.get("/api/v2/social/discover?limit=50", headers=h_viewer).json()
+    ids = [p["id"] for p in d["items"]]
+    assert "run" in d["interests"]
+    assert run_post["id"] in ids and lift_post["id"] in ids and private["id"] not in ids
+    assert ids.index(run_post["id"]) < ids.index(lift_post["id"])
+    only_strength = client.get("/api/v2/social/discover?activity=strength&limit=50", headers=h_viewer).json()
+    assert [p["id"] for p in only_strength["items"]] == [lift_post["id"]]
+
+    # Following someone moves them out of discover and into the feed.
+    client.post(f"/api/v2/osirians/{u_runner}/follow", headers=h_viewer)
+    d = client.get("/api/v2/social/discover?limit=50", headers=h_viewer).json()
+    assert run_post["id"] not in [p["id"] for p in d["items"]]
+
+    # Search by name, case-insensitive; wildcards are literal; blocked players are hidden.
+    hits = client.get("/api/v2/social/search?q=SDRUNNER", headers=h_viewer).json()
+    assert [h["user_id"] for h in hits] == [u_runner] and hits[0]["following"] is True
+    assert client.get("/api/v2/social/search?q=%25%25", headers=h_viewer).json() == []
+    assert client.get("/api/v2/social/search?q=a", headers=h_viewer).status_code == 422
+    _block(h_viewer, u_lifter)
+    assert client.get("/api/v2/social/search?q=sdlifter", headers=h_viewer).json() == []
+    assert client.get(f"/api/v2/social/users/{u_lifter}", headers=h_viewer).status_code == 404
+    print("PASS social tab discover ranking and people search")
+
+
+def test_direct_messages() -> None:
+    u_a, h_a = _register("dma")
+    u_b, h_b = _register("dmb")
+    u_c, h_c = _register("dmc")
+
+    # Not connected: refused. Self: refused.
+    r = client.post(f"/api/v2/social/conversations/{u_b}/messages", headers=h_a, json={"body": "hi"})
+    assert r.status_code == 403, r.text
+    assert client.post(f"/api/v2/social/conversations/{u_a}/messages", headers=h_a,
+                       json={"body": "me"}).status_code == 422
+
+    # B follows A: A may message B (a follower), and B may reply.
+    client.post(f"/api/v2/osirians/{u_a}/follow", headers=h_b)
+    for body in ("Run tomorrow?", "6am at the park"):
+        r = client.post(f"/api/v2/social/conversations/{u_b}/messages", headers=h_a, json={"body": body})
+        assert r.status_code == 201 and r.json()["mine"] is True, r.text
+    assert client.post(f"/api/v2/social/conversations/{u_b}/messages", headers=h_a,
+                       json={"body": "   "}).status_code == 422
+
+    inbox_b = client.get("/api/v2/social/conversations", headers=h_b).json()
+    assert inbox_b["unread_total"] == 2
+    assert inbox_b["items"][0]["user"]["user_id"] == u_a and inbox_b["items"][0]["last_message"]["body"] == "6am at the park"
+    # One notification for the unread burst, not one per message.
+    notes = client.get("/api/v2/me/notifications", headers=h_b).json()["items"]
+    assert sum(1 for n in notes if n["kind"] == "direct_message") == 1
+
+    thread = client.get(f"/api/v2/social/conversations/{u_a}/messages", headers=h_b).json()
+    assert [m["body"] for m in thread["items"]] == ["Run tomorrow?", "6am at the park"] and thread["can_message"]
+    older = client.get(f"/api/v2/social/conversations/{u_a}/messages?before_id={thread['items'][1]['id']}",
+                       headers=h_b).json()
+    assert [m["body"] for m in older["items"]] == ["Run tomorrow?"]
+    read = client.post(f"/api/v2/social/conversations/{u_a}/read", headers=h_b).json()
+    assert read["unread_total"] == 0
+    assert client.post(f"/api/v2/social/conversations/{u_a}/messages", headers=h_b,
+                       json={"body": "Deal"}).status_code == 201
+
+    # C cannot read A and B's thread as its own: C's thread with A is empty.
+    assert client.get(f"/api/v2/social/conversations/{u_a}/messages", headers=h_c).json()["items"] == []
+
+    # The export carries both directions.
+    export = client.get("/api/v2/me/export", headers=h_a).json()
+    assert len(export["direct_messages"]) == 3 and "social_posts" in export
+
+    # A block hides the conversation and stops sending both ways.
+    _block(h_b, u_a)
+    assert client.get("/api/v2/social/conversations", headers=h_a).json()["items"] == []
+    assert client.post(f"/api/v2/social/conversations/{u_a}/messages", headers=h_b,
+                       json={"body": "x"}).status_code == 404
+    assert client.get(f"/api/v2/social/conversations/{u_b}/messages", headers=h_a).status_code == 404
+    print("PASS social tab direct messages")
+
+
 def main() -> None:
     cleanup()
     try:
         test_notifications_flow()
         test_suggested_osirians_follow_dismiss_and_trending()
         test_peoples_posts_create_react_comment_share()
+        test_social_compose_feed_and_visibility()
+        test_social_discover_and_search()
+        test_direct_messages()
     finally:
         cleanup()
 

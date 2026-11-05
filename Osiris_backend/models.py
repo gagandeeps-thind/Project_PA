@@ -978,7 +978,40 @@ class SocialPost(Base):
     related_domain_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("domains.id"), nullable=True)
     visibility: Mapped[str] = mapped_column(String, nullable=False, default="public", index=True)
     share_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Social tab: server-copied stats of attached training sessions, and an optional frozen chart.
+    attachments_json: Mapped[str] = mapped_column(String, nullable=False, default="[]", server_default="[]")
+    chart_json: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+
+class PostPhoto(Base):
+    """The photo on a SocialPost. Served at /api/v2/social/media/{token}; the random token keeps
+    followers-only photos from being enumerated by post id. Shortcut: JPEG bytes in the database;
+    move to object storage (R2) if photos pass ~10k."""
+    __tablename__ = "post_photos"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=False, unique=True)
+    token: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    jpeg: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+
+
+class DirectMessage(Base):
+    """A direct message between two connected players. `pair_key` is "<low id>:<high id>", so a
+    conversation is every message sharing one key."""
+    __tablename__ = "direct_messages"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sender_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    recipient_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    pair_key: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+    read_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_direct_messages_pair_id", "pair_key", "id"),
+        Index("ix_direct_messages_recipient_read", "recipient_id", "read_at"),
+    )
 
 
 class PostReaction(Base):
