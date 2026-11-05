@@ -76,7 +76,7 @@ def dismiss_system_dialogs() -> None:
             time.sleep(1)
 
 
-def wait(label: str, timeout: float = 30, exact: bool = True) -> dict:
+def wait(label: str, timeout: float = 30, exact: bool = True, scroll: bool = False) -> dict:
     end = time.time() + timeout
     while time.time() < end:
         if crashed():
@@ -85,13 +85,15 @@ def wait(label: str, timeout: float = 30, exact: bool = True) -> dict:
         n = find(label, exact)
         if n is not None:
             return n
+        if scroll:
+            swipe_up()
         time.sleep(1)
     fail(f"'{label}' did not appear")
     raise AssertionError  # unreachable
 
 
-def tap(label: str, timeout: float = 30, exact: bool = True) -> None:
-    n = wait(label, timeout, exact)
+def tap(label: str, timeout: float = 30, exact: bool = True, scroll: bool = False) -> None:
+    n = wait(label, timeout, exact, scroll)
     adb("shell", "input", "tap", *map(str, center(n["bounds"])))
     time.sleep(1.5)
 
@@ -124,6 +126,11 @@ def shot(name: str) -> None:
     print(f"[{name}] {' | '.join(visible_texts())[:1500]}", flush=True)  # noqa: T201
 
 
+def swipe_up() -> None:
+    adb("shell", "input", "swipe", "540", "1700", "540", "500", "300")
+    time.sleep(1)
+
+
 def back() -> None:
     adb("shell", "input", "keyevent", "4")
     time.sleep(1.5)
@@ -147,6 +154,8 @@ def sign_in() -> None:
         dismiss_system_dialogs()
         if find("Continue") is not None:
             tap("Continue")
+        elif find("Before you start") is not None:
+            swipe_up()  # Continue sits below the permission list
         if find("Sign in") is not None:
             break
         time.sleep(1)
@@ -224,7 +233,7 @@ def main() -> None:
     adb("shell", "input", "keyevent", "111")
     time.sleep(1)
     tap("Add my progress chart")
-    tap("Run")
+    tap("Run", scroll=True)
     shot("11_compose")
     tap("Share")
     wait("Easy 3K shakeout", exact=False, timeout=40)
