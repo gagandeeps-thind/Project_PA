@@ -112,6 +112,13 @@ def tap_field(index: int = 0, timeout: float = 20) -> None:
     fail(f"text field {index} did not appear")
 
 
+def hide_keyboard() -> None:
+    """Back closes the soft keyboard; send it only while the keyboard shows, or it navigates."""
+    if "mInputShown=true" in adb("shell", "dumpsys", "input_method", check=False):
+        adb("shell", "input", "keyevent", "4")
+        time.sleep(1)
+
+
 def type_text(text: str) -> None:
     adb("shell", "input", "text", text.replace(" ", "%s"))
     time.sleep(0.5)
@@ -178,8 +185,7 @@ def sign_in() -> None:
     type_text("qa.me@example.com")
     tap_field(1)
     type_text("QaSocial1!")
-    adb("shell", "input", "keyevent", "111")  # hide the keyboard
-    time.sleep(1)
+    hide_keyboard()
     tap("Sign in")
     wait("Social", timeout=60)
 
@@ -244,8 +250,7 @@ def main() -> None:
     wait("Add my progress chart")
     tap_field(0)
     type_text("Easy 3K shakeout")
-    adb("shell", "input", "keyevent", "111")
-    time.sleep(1)
+    hide_keyboard()
     tap("Add my progress chart")
     tap("Run", scroll=True)
     shot("11_compose")
