@@ -150,6 +150,7 @@ def swipe_up() -> None:
 
 
 def back() -> None:
+    hide_keyboard()  # otherwise this Back only closes the keyboard
     adb("shell", "input", "keyevent", "4")
     time.sleep(1.5)
 
