@@ -204,7 +204,10 @@ def main() -> None:
     shot("01_home")
     tap("Social")
     wait("New post")
-    wait("Brick day done", exact=False, timeout=40, scroll=True)
+    wait("Rest day stretch", exact=False, timeout=40)  # the friend's newest post
+    # The photo post's server-copied workouts and chart (its caption sits below the fold).
+    wait("Training minutes, last 8 weeks", exact=False, timeout=60, scroll=True)
+    wait("5:00 /km", exact=False)
     shot("02_social_feed")
     for label in ("New post", "Discover", "Search people", "Messages"):
         wait(label)  # the four top-bar buttons, left to right
