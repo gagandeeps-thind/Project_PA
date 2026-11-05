@@ -6,6 +6,8 @@ challenges and community rankings in a Kotlin Multiplatform app (Android + iOS),
 (Alembic migrations) with a Mana Crystal ledger and Stripe top-ups. An admin web console (Vite +
 React + TS) handles trust/moderation and growth. Product and architecture docs: `Documentation/Enterprise/`.
 
+**Start every session with [`docs/agents/KNOWLEDGE_GRAPH.md`](docs/agents/KNOWLEDGE_GRAPH.md)**: where every feature lives, recipes, invariants, gotchas and the agent toolbox (MCP, plugins, permissions).
+
 ## Commands
 Python commands run from `Osiris_backend/` using the repo venv (`../.venv/Scripts/python.exe` on Windows).
 CI (`.github/workflows/ci.yml`) exports `OSIRIS_JWT_SECRET=ci-fixed-secret-not-for-production-use-only OSIRIS_ENV=test OSIRIS_LOG_JSON=1`.
