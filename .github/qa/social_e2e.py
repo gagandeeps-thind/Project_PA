@@ -211,7 +211,7 @@ def main() -> None:
     shot("02_social_feed")
     for label in ("New post", "Discover", "Search people", "Messages"):
         wait(label)  # the four top-bar buttons, left to right
-    tap("Give kudos")
+    tap("Give kudos", scroll=True)
     wait("Remove kudos")
     shot("03_kudos")
     tap("Comments")
@@ -267,7 +267,7 @@ def main() -> None:
     tap("Run", scroll=True)
     shot("11_compose")
     tap("Share")
-    wait("Easy 3K shakeout", exact=False, timeout=40)
+    wait("Easy 3K shakeout", exact=False, timeout=60, scroll=True)
     shot("12_feed_after_post")
 
     if crashed():
