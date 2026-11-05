@@ -121,6 +121,12 @@ class ChatViewModel(
         if (incomingUnread) social.markRead(userId)
     }
 
+    /** Tries the thread again after a failed first load. */
+    fun reload() {
+        _state.update { if (it.messages is Loadable.Failed) it.copy(messages = Loadable.Loading) else it }
+        scope.launch { load() }
+    }
+
     fun edit(text: String) = _state.update { it.copy(draft = text.take(ChatState.MAX_LENGTH)) }
 
     fun send() {

@@ -212,6 +212,7 @@ fun PostCard(
     onReact: (String) -> Unit,
     onOpenComments: () -> Unit,
     onShare: () -> Unit,
+    media: (@Composable () -> Unit)? = null,
 ) {
     FrostCard(radius = FrostMatte.Radius.MEDIUM, contentPadding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -250,7 +251,12 @@ fun PostCard(
             }
         }
 
-        post.summary.measureLabel?.takeIf { it.isNotBlank() }?.let { measure ->
+        if (media != null) {
+            Spacer(Modifier.height(12.dp))
+            media()
+        }
+
+        post.summary.measureLabel?.takeIf { it.isNotBlank() && media == null }?.let { measure ->
             Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier

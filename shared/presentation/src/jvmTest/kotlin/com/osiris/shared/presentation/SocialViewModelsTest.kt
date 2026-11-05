@@ -244,6 +244,17 @@ class SocialViewModelsTest {
     }
 
     @Test
+    fun `a failed first load of a chat can be retried`() = runTest {
+        val social = FakeSocial().apply { threadResult = fail(AppError.Offline()) }
+        val vm = ChatViewModel(2, social, main(), pollMs = 0)
+        assertIs<Loadable.Failed>(vm.state.value.messages)
+        social.threadResult = ok(MessageThread(user(2), true, listOf(message(1, false))))
+        vm.reload()
+        assertEquals(listOf(1), vm.state.value.messages.valueOrNull!!.map { it.id })
+        vm.clear()
+    }
+
+    @Test
     fun `a player who may not message sees the thread but cannot send`() = runTest {
         val social = FakeSocial().apply { threadResult = ok(MessageThread(user(2), false, emptyList())) }
         val vm = ChatViewModel(2, social, main(), pollMs = 0)

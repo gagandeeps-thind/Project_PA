@@ -85,6 +85,7 @@ import androidx.navigation.NavHostController
 import com.osiris.player.platform.location.LocationClient
 import com.osiris.player.platform.share.ShareEffect
 import com.osiris.player.ui.common.LoadableContent
+import com.osiris.player.ui.social.PostMedia
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.FrostCard
@@ -156,6 +157,7 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
                     t = t,
                     home = home,
                     vm = vm,
+                    baseUrl = graph.config.apiBaseUrl,
                     onStartRun = { challengeId ->
                         vm.onStartQuest()
                         nav.open(Routes.run(challengeId))
@@ -274,6 +276,7 @@ private fun TodayHomeContent(
     onStartWorkoutPlan: (WorkoutPlan) -> Unit,
     onChallenge: (Int) -> Unit,
     onOpen: (String) -> Unit,
+    baseUrl: String,
 ) {
     LazyColumn(
         contentPadding = PaddingValues(20.dp, 8.dp, 20.dp, 36.dp),
@@ -372,6 +375,11 @@ private fun TodayHomeContent(
                     onReact = { reaction -> vm.reactToPost(post.id, reaction) },
                     onOpenComments = { vm.openComments(post.id) },
                     onShare = { vm.sharePost(post.id) },
+                    media = if (post.hasMedia) {
+                        { PostMedia(post, baseUrl) }
+                    } else {
+                        null
+                    },
                 )
             }
         }

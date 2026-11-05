@@ -1,129 +1,212 @@
 package com.osiris.player.ui.social
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import com.osiris.player.ui.design.RaisedButton
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.AddBox
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.osiris.player.ui.common.OsirisScaffold
+import com.osiris.player.platform.share.ShareEffect
+import com.osiris.player.ui.common.ConfirmDialog
+import com.osiris.player.ui.common.EmptyState
+import com.osiris.player.ui.common.LoadableContent
+import com.osiris.player.ui.common.MessageEffect
+import com.osiris.player.ui.common.rememberNow
 import com.osiris.player.ui.common.rememberShared
-import com.osiris.player.ui.design.HeroMetric
-import com.osiris.player.ui.design.accentKey
-import com.osiris.shared.core.design.FrostMatte
-import com.osiris.player.ui.theme.color
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
-import com.osiris.player.ui.theme.OsirisColors
-import com.osiris.shared.domain.model.BoardExercise
-import com.osiris.shared.domain.model.BoardKind
-import com.osiris.shared.domain.model.BoardPeriod
-import com.osiris.shared.domain.model.BoardRow
-import com.osiris.shared.domain.model.GlobalBoard
+import com.osiris.player.ui.design.HudPill
+import com.osiris.player.ui.today.CommentsSheet
+import com.osiris.shared.domain.model.FeedPost
+import com.osiris.shared.domain.repository.AuthState
 import com.osiris.shared.presentation.AppGraph
-import com.osiris.shared.presentation.common.Loadable
+import com.osiris.shared.presentation.social.PostListViewModel
 
-/** Global boards, with ways into local rankings, seasons and communities. */
+/** Where the Social tab's top bar and posts lead. */
+class SocialNav(
+    val onCompose: () -> Unit,
+    val onDiscover: () -> Unit,
+    val onSearch: () -> Unit,
+    val onMessages: () -> Unit,
+    val onProfile: (Int) -> Unit,
+)
+
+/**
+ * The Social tab, after Instagram's home: posts by people you follow. The top bar runs, left to
+ * right, New post (+), Discover, Search and Messages.
+ */
 @Composable
-fun SocialScreen(graph: AppGraph, onLocal: () -> Unit, onCommunities: () -> Unit) {
-    val vm = rememberShared { graph.globalBoards() }
+fun SocialScreen(graph: AppGraph, nav: SocialNav) {
+    val vm = rememberShared { graph.socialFeed() }
     val s by vm.state.collectAsStateWithLifecycle()
-    OsirisScaffold("Social", vm) { padding ->
-        PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        RaisedButton(onClick = onLocal, modifier = Modifier.weight(1f)) { Text("Local & seasons") }
-                        RaisedButton(onClick = onCommunities, modifier = Modifier.weight(1f)) { Text("Communities") }
+    val snackbar = remember { SnackbarHostState() }
+    MessageEffect(vm, snackbar)
+    // Back from the composer, a profile or a chat: new posts, follows and read messages show up.
+    var resumedOnce by rememberSaveable { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        if (resumedOnce) vm.refresh() else resumedOnce = true
+        onPauseOrDispose {}
+    }
+    Scaffold(
+        topBar = { SocialTopBar(s.unreadMessages, nav) },
+        snackbarHost = { SnackbarHost(snackbar) { HudPill(it.visuals.message) } },
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+    ) { padding ->
+        PullToRefreshBox(isRefreshing = s.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
+            LoadableContent(s.posts, onRetry = vm::refresh) { posts ->
+                val listState = rememberLazyListState()
+                val nearEnd by remember {
+                    derivedStateOf {
+                        val info = listState.layoutInfo
+                        val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        info.totalItemsCount > 0 && last >= info.totalItemsCount - LOAD_AHEAD
                     }
                 }
-                item { Chips(BoardKind.entries, s.kind, { it.title }) { vm.select(it) } }
-                item { Chips(BoardPeriod.entries, s.period, { it.title }) { vm.select(it) } }
-                if (s.showsExercise) item { Chips(BoardExercise.entries, s.exercise, { it.title }) { vm.select(it) } }
-                when (val board = s.board) {
-                    Loadable.Loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp)) }
-                    is Loadable.Failed -> item { Text(board.message, color = OsirisColors.Error, modifier = Modifier.padding(top = 16.dp)) }
-                    is Loadable.Ready -> board(board.value)
+                LaunchedEffect(nearEnd, s.canLoadMore) { if (nearEnd && s.canLoadMore) vm.loadMore() }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    item { ActiveTodayRow(s.activeToday, onCompose = nav.onCompose, onOpen = nav.onProfile) }
+                    if (posts.isEmpty()) {
+                        item {
+                            EmptyState(
+                                Icons.Outlined.Groups,
+                                "Your feed is empty",
+                                "Follow athletes you train with and their verified workouts show up here.",
+                                actionLabel = "Discover athletes",
+                                onAction = nav.onDiscover,
+                            )
+                        }
+                    }
+                    postItems(posts, graph, vm, nav.onProfile)
+                    if (s.loadingMore) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        }
+                    }
                 }
             }
         }
     }
+    PostSheetsHost(vm)
 }
 
-private fun LazyListScope.board(b: GlobalBoard) {
-    // The screen's focal point: the player's own rank. Everything below recedes.
-    b.myRow?.let { me ->
-        item {
-            HeroMetric(
-                "#${me.rank}",
-                unit = "of ${b.rankedPlayers}",
-                label = "Your rank",
-                caption = b.format(me.value),
-                modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+@Composable
+private fun SocialTopBar(unread: Int, nav: SocialNav) {
+    Row(
+        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = nav.onCompose) { Icon(Icons.Outlined.AddBox, contentDescription = "New post") }
+        IconButton(onClick = nav.onDiscover) { Icon(Icons.Outlined.TravelExplore, contentDescription = "Discover") }
+        IconButton(onClick = nav.onSearch) { Icon(Icons.Outlined.Search, contentDescription = "Search people") }
+        IconButton(onClick = nav.onMessages) {
+            BadgedBox(badge = { if (unread > 0) Badge { Text(if (unread > MAX_BADGE) "$MAX_BADGE+" else "$unread") } }) {
+                Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "Messages")
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Text("Social", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+    }
+}
+
+/** The posts of any list, wired to its view model. */
+fun LazyListScope.postItems(
+    posts: List<FeedPost>,
+    graph: AppGraph,
+    vm: PostListViewModel,
+    onProfile: (Int) -> Unit,
+) {
+    items(posts, key = { it.id }) { post ->
+        val auth by graph.data.auth.state.collectAsStateWithLifecycle()
+        val me = (auth as? AuthState.SignedIn)?.user?.id
+        var confirmDelete by remember { mutableStateOf(false) }
+        SocialPostCard(
+            post,
+            baseUrl = graph.config.apiBaseUrl,
+            now = rememberNow(),
+            isMine = post.userId == me,
+            actions = PostCallbacks(
+                onKudos = vm::toggleKudos,
+                onDoubleTap = vm::kudosByDoubleTap,
+                onComments = { vm.openComments(it) },
+                onShare = vm::share,
+                onAuthor = onProfile,
+                onDelete = { confirmDelete = true },
+            ),
+        )
+        if (confirmDelete) {
+            ConfirmDialog(
+                title = "Delete this post?",
+                body = "Its kudos and comments go with it. Your workouts stay saved.",
+                confirm = "Delete",
+                onConfirm = {
+                    confirmDelete = false
+                    vm.delete(post.id)
+                },
+                dismiss = "Cancel",
+                onDismiss = { confirmDelete = false },
+                destructive = true,
             )
         }
     }
-    item { Text(b.explainer, color = OsirisColors.Faint, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp)) }
-    if (b.rows.isEmpty()) item { Text("Nobody is on this board yet. One verified session puts you on it.") }
-    // No keys: tied ranks and "Private runner" names repeat, and the list is replaced, not edited.
-    items(b.rows) { BoardRowItem(b, it) }
-    val me = b.myRow
-    if (me != null && b.rows.none { it.isMe }) {
-        item { HorizontalDivider() }
-        item { BoardRowItem(b, me) }
-    }
-    item {
-        Text("${b.rankedPlayers} ranked players", color = OsirisColors.Faint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+}
+
+/** The comments and share sheets every post list opens. */
+@Composable
+fun PostSheetsHost(vm: PostListViewModel) {
+    val sheets by vm.sheets.collectAsStateWithLifecycle()
+    ShareEffect(sheets.share, onShared = vm::shared)
+    val postId = sheets.commentsPostId
+    if (postId != null) {
+        CommentsSheet(
+            comments = sheets.comments,
+            onAddComment = { vm.addComment(postId, it) },
+            onDismiss = { vm.openComments(null) },
+        )
     }
 }
 
-/** Ranks and values in mono so they recede; the player's own row is the accent key. */
-@Composable
-private fun BoardRowItem(b: GlobalBoard, r: BoardRow) {
-    val ink = if (r.isMe) FrostMatte.dark.onAccent.color() else Color.Unspecified
-    ListItem(
-        leadingContent = {
-            Text(
-                "${r.rank}",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (r.isMe) ink else OsirisColors.Faint,
-                modifier = Modifier.width(36.dp),
-            )
-        },
-        headlineContent = { Text(if (r.isMe) "${r.name} (you)" else r.name, fontWeight = FontWeight.Bold, color = ink) },
-        trailingContent = {
-            Text(b.format(r.value), style = MaterialTheme.typography.labelMedium, color = if (r.isMe) ink else OsirisColors.Muted)
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = if (r.isMe) Modifier.padding(vertical = 4.dp).accentKey(RoundedCornerShape(18.dp)) else Modifier,
-    )
-}
-
-@Composable
-private fun <T> Chips(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (o in options) FilterChip(selected = o == selected, onClick = { onSelect(o) }, label = { Text(label(o)) })
-    }
-}
+private const val LOAD_AHEAD = 3
+private const val MAX_BADGE = 9

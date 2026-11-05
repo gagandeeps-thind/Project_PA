@@ -62,7 +62,6 @@ import com.osiris.player.ui.run.RunScreen
 import com.osiris.player.ui.session.LoginScreen
 import com.osiris.player.ui.session.OnboardingScreen
 import com.osiris.player.ui.settings.SettingsScreen
-import com.osiris.player.ui.social.SocialScreen
 import com.osiris.player.ui.start.StartIcon
 import com.osiris.player.ui.support.SupportChatScreen
 import com.osiris.player.ui.today.TodayScreen
@@ -285,9 +284,7 @@ private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
                 onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
             )
         }
-        composable(Routes.SOCIAL) {
-            SocialScreen(graph, onLocal = { nav.open(Routes.RANKINGS) }, onCommunities = { nav.open(Routes.COMMUNITIES) })
-        }
+        socialGraph(graph, nav)
         composable(Routes.RANKINGS) { RankingsScreen(graph, onBack = nav::popBackStack, onSettings = { nav.open(Routes.SETTINGS) }) }
         composable(Routes.WALLET) { WalletScreen(graph, onBack = nav::popBackStack) }
         startGraph(graph, nav)
