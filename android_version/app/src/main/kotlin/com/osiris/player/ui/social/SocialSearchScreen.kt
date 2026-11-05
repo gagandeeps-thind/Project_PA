@@ -1,5 +1,6 @@
 package com.osiris.player.ui.social
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -95,6 +96,7 @@ fun PersonRow(u: SocialUser, onOpen: () -> Unit, onFollow: (() -> Unit)?) {
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.padding(horizontal = 4.dp),
+        // The whole row opens the profile, as on Instagram; the follow button keeps its own tap.
+        modifier = Modifier.clickable(onClick = onOpen).padding(horizontal = 4.dp),
     )
 }
