@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 PKG = "com.osiris.player"
 OUT = "qa-out"
 SYSTEM_DIALOG = (
+    "Wait",  # "<app> isn't responding" on a slow emulator
     "Don’t allow",
     "Don't allow",
     "Deny",
@@ -155,7 +156,7 @@ def fail(why: str) -> None:
 def sign_in() -> None:
     adb("logcat", "-c", check=False)
     adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", check=False)
-    end = time.time() + 60
+    end = time.time() + 150
     while time.time() < end:
         dismiss_system_dialogs()
         if find("Continue") is not None:
@@ -165,6 +166,8 @@ def sign_in() -> None:
         if find("Sign in") is not None:
             break
         time.sleep(1)
+    else:
+        fail("the sign-in screen did not appear")
     shot("00_login")
     tap_field(0)
     type_text("qa.me@example.com")
