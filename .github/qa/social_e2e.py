@@ -141,7 +141,8 @@ def screen() -> tuple[int, int]:
 
 def swipe_up() -> None:
     w, h = screen()
-    adb("shell", "input", "swipe", str(w // 2), str(h * 3 // 4), str(w // 2), str(h // 4), "300")
+    # A third of the screen per swipe, so a line just below the fold is not scrolled past.
+    adb("shell", "input", "swipe", str(w // 2), str(h * 7 // 10), str(w // 2), str(h * 4 // 10), "400")
     time.sleep(1)
 
 
@@ -195,7 +196,7 @@ def main() -> None:
     shot("01_home")
     tap("Social")
     wait("New post")
-    wait("Brick day done", exact=False, timeout=40)
+    wait("Brick day done", exact=False, timeout=40, scroll=True)
     shot("02_social_feed")
     for label in ("New post", "Discover", "Search people", "Messages"):
         wait(label)  # the four top-bar buttons, left to right
