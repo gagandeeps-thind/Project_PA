@@ -164,6 +164,11 @@ def fail(why: str) -> None:
     sys.exit(1)
 
 
+def on_primer() -> bool:
+    """Any part of the first-launch permission screen, scrolled or not."""
+    return any(find(t, exact=False) is not None for t in ("Before you start", "Share crash reports", "Osiris works without"))
+
+
 def sign_in() -> None:
     adb("logcat", "-c", check=False)
     adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", check=False)
@@ -171,13 +176,13 @@ def sign_in() -> None:
     relaunch = time.time() + 20
     while time.time() < end:
         dismiss_system_dialogs()
-        if time.time() > relaunch and find("Before you start") is None and find("Sign in") is None:
+        if time.time() > relaunch and not on_primer() and find("Sign in") is None:
             # Another window (launcher, a system dialog) took the screen: bring the app back.
             adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", check=False)
             relaunch = time.time() + 20
         if find("Continue") is not None:
             tap("Continue")
-        elif find("Before you start") is not None:
+        elif on_primer():
             swipe_up()  # Continue sits below the permission list
         if find("Sign in") is not None:
             break
