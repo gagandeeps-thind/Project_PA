@@ -126,8 +126,14 @@ def shot(name: str) -> None:
     print(f"[{name}] {' | '.join(visible_texts())[:1500]}", flush=True)  # noqa: T201
 
 
+def screen() -> tuple[int, int]:
+    m = re.search(r"(\d+)x(\d+)", adb("shell", "wm", "size", check=False))
+    return (int(m[1]), int(m[2])) if m else (1080, 2400)
+
+
 def swipe_up() -> None:
-    adb("shell", "input", "swipe", "540", "1700", "540", "500", "300")
+    w, h = screen()
+    adb("shell", "input", "swipe", str(w // 2), str(h * 3 // 4), str(w // 2), str(h // 4), "300")
     time.sleep(1)
 
 
