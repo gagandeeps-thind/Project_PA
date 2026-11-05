@@ -1,0 +1,71 @@
+# TEMPORARY (feature branch only): builds the Android app and drives the Social tab on an emulator.
+# Removed before merging to master; CI changes there are a human decision.
+name: android-qa
+
+on:
+  push:
+    branches: [claude/practical-edison-6xdvlz]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK, detekt, shared tests
+        run: ./gradlew --no-daemon --continue :android_version:app:assembleDebug detekt :shared:presentation:jvmTest :shared:data:jvmTest :shared:domain:jvmTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: android_version/app/build/outputs/apk/debug/*.apk
+
+  emulator:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OSIRIS_JWT_SECRET: qa-emulator-secret-not-for-production-aaaaaaaa
+      OSIRIS_ENV: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Start the API with seeded players
+        working-directory: Osiris_backend
+        run: |
+          pip install -q -r requirements.lock.txt
+          python -m alembic upgrade head
+          nohup uvicorn main:app --host 0.0.0.0 --port 8000 > ../api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+          python ../.github/qa/seed_social.py
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Drive the Social tab
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 3072
+          script: adb install -r -g apk/*.apk && python3 .github/qa/social_e2e.py
+      - if: always()
+        run: tail -n 120 api.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: qa-out/
