@@ -149,6 +149,12 @@ def swipe_up() -> None:
     time.sleep(1)
 
 
+def swipe_down() -> None:
+    w, h = screen()
+    adb("shell", "input", "swipe", str(w // 2), str(h * 3 // 10), str(w // 2), str(h * 8 // 10), "300")
+    time.sleep(1)
+
+
 def back() -> None:
     hide_keyboard()  # otherwise this Back only closes the keyboard
     adb("shell", "input", "keyevent", "4")
@@ -268,6 +274,8 @@ def main() -> None:
     tap("Run", scroll=True)
     shot("11_compose")
     tap("Share")
+    for _ in range(3):
+        swipe_down()  # from the top of the feed, where a new post lands
     wait("Easy 3K shakeout", exact=False, timeout=60, scroll=True)
     shot("12_feed_after_post")
 
