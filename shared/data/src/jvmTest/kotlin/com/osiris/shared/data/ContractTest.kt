@@ -1,6 +1,16 @@
 package com.osiris.shared.data
 
 import com.osiris.shared.data.network.api.ChallengeApi
+import com.osiris.shared.domain.model.SocialUser
+import com.osiris.shared.domain.model.SocialProfile
+import com.osiris.shared.domain.model.SocialPostDraft
+import com.osiris.shared.domain.model.SocialFeedPage
+import com.osiris.shared.domain.model.MessageThread
+import com.osiris.shared.domain.model.Inbox
+import com.osiris.shared.domain.model.FeedPostsData
+import com.osiris.shared.domain.model.FeedPost
+import com.osiris.shared.domain.model.DiscoverPage
+import com.osiris.shared.domain.model.DirectMessage
 import com.osiris.shared.domain.model.AttemptSummary
 import com.osiris.shared.domain.model.BlockEntry
 import com.osiris.shared.domain.model.ChallengeSummary
@@ -122,6 +132,16 @@ class ContractTest {
         Triple("POST", "/api/v2/group-challenges", GroupChallenge.serializer()),
         Triple("POST", "/api/v2/group-challenges/{}/join", GroupChallenge.serializer()),
         Triple("POST", "/api/v2/group-challenges/{}/cancel", GroupChallenge.serializer()),
+        Triple("GET", "/api/v2/feed/posts", FeedPostsData.serializer()),
+        Triple("GET", "/api/v2/social/feed", SocialFeedPage.serializer()),
+        Triple("GET", "/api/v2/social/discover", DiscoverPage.serializer()),
+        Triple("GET", "/api/v2/social/search", ListSerializer(SocialUser.serializer())),
+        Triple("GET", "/api/v2/social/users/{}", SocialProfile.serializer()),
+        Triple("POST", "/api/v2/social/posts", FeedPost.serializer()),
+        Triple("GET", "/api/v2/social/conversations", Inbox.serializer()),
+        Triple("GET", "/api/v2/social/conversations/{}/messages", MessageThread.serializer()),
+        Triple("POST", "/api/v2/social/conversations/{}/messages", DirectMessage.serializer()),
+        Triple("POST", "/api/v2/social/conversations/{}/read", Inbox.serializer()),
     )
 
     private val requests: List<Triple<String, String, KSerializer<*>>> = listOf(
@@ -129,6 +149,7 @@ class ContractTest {
         Triple("POST", "/api/v2/runs/{}/points", RoutePointsBody.serializer()),
         Triple("POST", "/api/v2/training/sessions", NewTrainingSession.serializer()),
         Triple("POST", "/api/v2/group-challenges", NewGroupChallenge.serializer()),
+        Triple("POST", "/api/v2/social/posts", SocialPostDraft.serializer()),
     )
 
     @kotlinx.serialization.Serializable

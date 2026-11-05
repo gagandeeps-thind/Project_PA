@@ -25,6 +25,20 @@ object Format {
         return if (km >= 10) "${fixed(km, 0)} km" else "${fixed(km, 1)} km"
     }
 
+    /** Instagram-style age: `now`, `5m`, `3h`, `2d`, `4w`. Future times read as `now`. */
+    fun ago(seconds: Long): String = when {
+        seconds < MINUTE_S -> "now"
+        seconds < HOUR_S -> "${seconds / MINUTE_S}m"
+        seconds < DAY_S -> "${seconds / HOUR_S}h"
+        seconds < WEEK_S -> "${seconds / DAY_S}d"
+        else -> "${seconds / WEEK_S}w"
+    }
+
+    private const val MINUTE_S = 60L
+    private const val HOUR_S = 3_600L
+    private const val DAY_S = 86_400L
+    private const val WEEK_S = 604_800L
+
     /** Fixed decimals without platform locale formatting (no `String.format` in common code). */
     fun fixed(value: Double, decimals: Int): String {
         var factor = 1L

@@ -119,6 +119,11 @@ data class FeedPost(
     val kind: String = "workout",
     val caption: String = "",
     @SerialName("media_url") val mediaUrl: String? = null,
+    /** Path of the post's photo on the API host (`/api/v2/social/media/...`), or null. */
+    @SerialName("photo_url") val photoUrl: String? = null,
+    /** Server-copied stats of the workouts attached to the post. */
+    val attachments: List<PostAttachment> = emptyList(),
+    val chart: PostChart? = null,
     val summary: PostWorkoutSummary = PostWorkoutSummary(),
     val reactions: Map<String, Int> = emptyMap(),
     @SerialName("total_reactions") val totalReactions: Int = 0,
@@ -143,6 +148,13 @@ data class FeedPost(
         }
 
     fun reactionCount(type: String): Int = reactions[type] ?: 0
+
+    /** When the post was made, or null if the server sent no usable time. */
+    val createdInstant: kotlin.time.Instant?
+        get() = runCatching { ServerInstantSerializer.parse(createdAt) }.getOrNull()
+
+    /** True when the post carries something to look at besides its caption. */
+    val hasMedia: Boolean get() = photoUrl != null || attachments.isNotEmpty() || chart != null
 }
 
 @Serializable

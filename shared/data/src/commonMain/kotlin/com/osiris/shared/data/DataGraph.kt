@@ -12,6 +12,7 @@ import com.osiris.shared.data.network.api.CommunityApi
 import com.osiris.shared.data.network.api.ExerciseApi
 import com.osiris.shared.data.network.api.MeApi
 import com.osiris.shared.data.network.api.RunApi
+import com.osiris.shared.data.network.api.SocialApi
 import com.osiris.shared.data.repository.AriseRepositoryImpl
 import com.osiris.shared.data.repository.AuthRepositoryImpl
 import com.osiris.shared.data.repository.ChallengeRepositoryImpl
@@ -23,6 +24,7 @@ import com.osiris.shared.data.repository.PlayerRepositoryImpl
 import com.osiris.shared.data.repository.PrivacyRepositoryImpl
 import com.osiris.shared.data.repository.RunRepositoryImpl
 import com.osiris.shared.data.repository.SessionStore
+import com.osiris.shared.data.repository.SocialRepositoryImpl
 import com.osiris.shared.data.repository.TrainingRepositoryImpl
 import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.data.support.SupportChatRepositoryImpl
@@ -37,6 +39,7 @@ import com.osiris.shared.domain.repository.GroupChallengeRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.PrivacyRepository
 import com.osiris.shared.domain.repository.RunRepository
+import com.osiris.shared.domain.repository.SocialRepository
 import com.osiris.shared.domain.repository.SupportChatRepository
 import com.osiris.shared.domain.repository.TrainingRepository
 import com.osiris.shared.domain.repository.WalletRepository
@@ -109,6 +112,7 @@ class DataGraph(
     val arise: AriseRepository = AriseRepositoryImpl(AriseApi(api))
     val training: TrainingRepository = TrainingRepositoryImpl(TrainingApi(api), platform.settings)
     val groupChallenges: GroupChallengeRepository = GroupChallengeRepositoryImpl(GroupChallengeApi(api))
+    val social: SocialRepository = SocialRepositoryImpl(SocialApi(api))
 
     /** Null when the build has no wallet (production): the app then hides the Wallet tab. */
     val wallet: WalletRepository? = if (config.features.walletDemo) MockWalletRepository(clock) else null

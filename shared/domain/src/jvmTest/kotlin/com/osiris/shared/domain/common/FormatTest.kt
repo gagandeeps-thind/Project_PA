@@ -24,6 +24,16 @@ class FormatTest {
     }
 
     @Test
+    fun ages() {
+        assertEquals("now", Format.ago(-5))
+        assertEquals("now", Format.ago(59))
+        assertEquals("5m", Format.ago(5 * 60 + 10))
+        assertEquals("3h", Format.ago(3 * 3600))
+        assertEquals("2d", Format.ago(2 * 86_400 + 1))
+        assertEquals("4w", Format.ago(29 * 86_400))
+    }
+
+    @Test
     fun haversineDistance() {
         // One degree of latitude is ~111.2 km.
         assertEquals(111_195.0, Geo.distanceM(LatLng(0.0, 0.0), LatLng(1.0, 0.0)), 50.0)

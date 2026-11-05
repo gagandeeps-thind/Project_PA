@@ -29,7 +29,14 @@ import com.osiris.shared.presentation.run.RunViewModel
 import com.osiris.shared.presentation.session.LoginViewModel
 import com.osiris.shared.presentation.session.OnboardingViewModel
 import com.osiris.shared.presentation.settings.SettingsViewModel
+import com.osiris.shared.presentation.social.ChatViewModel
+import com.osiris.shared.presentation.social.ComposePostViewModel
 import com.osiris.shared.presentation.social.GlobalBoardsViewModel
+import com.osiris.shared.presentation.social.InboxViewModel
+import com.osiris.shared.presentation.social.SocialDiscoverViewModel
+import com.osiris.shared.presentation.social.SocialFeedViewModel
+import com.osiris.shared.presentation.social.SocialProfileViewModel
+import com.osiris.shared.presentation.social.SocialSearchViewModel
 import com.osiris.shared.presentation.start.GroupChallengeDetailViewModel
 import com.osiris.shared.presentation.start.GroupChallengesViewModel
 import com.osiris.shared.presentation.start.LiveSessionViewModel
@@ -76,6 +83,13 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun discover() = DiscoverViewModel(data.challenges)
     fun arise() = AriseViewModel(data.arise)
     fun globalBoards() = GlobalBoardsViewModel(data.communities)
+    fun socialFeed() = SocialFeedViewModel(data.player, data.social)
+    fun socialDiscover() = SocialDiscoverViewModel(data.player, data.social)
+    fun socialSearch() = SocialSearchViewModel(data.social, data.player)
+    fun socialProfile(userId: Int) = SocialProfileViewModel(userId, data.player, data.social)
+    fun composePost(sessionId: Int? = null) = ComposePostViewModel(data.social, data.training, sessionId)
+    fun inbox() = InboxViewModel(data.social, data.training)
+    fun chat(userId: Int) = ChatViewModel(userId, data.social)
     fun supportChat() = SupportChatViewModel(data.support)
     fun start(mode: StartMode) = StartViewModel(data.training, data.groupChallenges, data.player, mode)
     fun liveSession(activity: TrainingActivity, mode: StartMode) = LiveSessionViewModel(data.training, activity, mode)
