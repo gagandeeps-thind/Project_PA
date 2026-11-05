@@ -97,6 +97,7 @@ Dependencies only point down. `shared/` never imports Android, iOS or UI code. P
 | `growth_api.py` | APIRouter for G1 core loop: daily quest, weekly goal, streaks (`services/quests.py`); `delete_growth_data` |
 | `growth_feed.py` | Home feed, posts, reactions, comments, notifications, suggested challenges and Osirians |
 | `growth_social.py` | sharing, invite-a-friend, referrals, public pages |
+| `growth_social_tab.py` | Social tab: following feed, Discover ("for you"), people search, profiles, photo/workout/chart posts, direct messages |
 | `growth_communities.py` | communities, team goals, local rankings, city seasons (`leaderboards.py`) |
 | `growth_hub.py` | Discover and Social hubs, global leaderboards |
 | `growth_safety.py` | consent, blocking, reporting, data export |
@@ -113,8 +114,9 @@ Dependencies only point down. `shared/` never imports Android, iOS or UI code. P
 ### Player app, Android (`android_version/app/src/main/kotlin/com/osiris/player/`)
 | Path | What |
 |---|---|
-| `ui/navigation/OsirisRoot.kt` | tabs (**Home · Arise · Start · Social · Profile**), routes, deep links. Wallet is a pushed route |
+| `ui/navigation/OsirisRoot.kt` | tabs (**Home · Arise · Start · Social · Profile**), routes, deep links. Wallet is a pushed route. Social opens on the following feed; leaderboards moved under Discover |
 | `ui/navigation/StartGraph.kt` | Start tab routes: `start`, `training/{mode}`, `live/{mode}/{activity}`, `groups`, `group/{id}` |
+| `ui/navigation/SocialGraph.kt` | Social tab routes: `social`, `social/compose`, `social/discover`, `social/search`, `social/inbox`, `social/chat/{id}`, `social/user/{id}`, `social/boards` |
 | `ui/<feature>/` | one folder per screen, matching the presentation packages (`start/`, `training/`, `arise/`, `today/`, ...) |
 | `ui/design/Frost.kt`, `ui/common/` | design system: FrostCard, KeyButton, RaisedButton, HeroMetric, OsirisScaffold, LoadableContent, EmptyState, ConfirmDialog |
 | `platform/` | `location/` (fused GPS + run foreground service), `pose/` (CameraX + ML Kit), `ble/` (BLE sensors), `health/` (Health Connect), `billing/` (Play), `share/`, `speech/`, `permission/` |
@@ -149,7 +151,8 @@ Follow a row left to right to change a feature end-to-end.
 | Progress (history) | `routers/training.py` `/me/training/progress` | `ProgressViewModel` | `ui/profile/ProgressSection.kt` | `StartViewModelTest` | same spec |
 | Quests, streaks, XP, rank | `growth_api.py`, `services/quests.py`, `progression.py` | `PlayerRepository` → `MeApi` → `today/`, `profile/` | `ui/today/`, `ui/profile/` | `test_growth_core_loop`, `test_party_stats` | Enterprise/11 |
 | Home feed, notifications | `growth_feed.py` | `CommunityRepository` → `today/` | `ui/today/TodayFeedComponents.kt` | `test_home_social_feed` | PLAN.md §1-2 |
-| Social, sharing, referrals | `growth_social.py`, `growth_hub.py` | `CommunityApi` → `social/`, `discover/` | `ui/social/`, `ui/discover/` | `test_growth_sharing`, `test_growth_hub` | Enterprise/11 |
+| Social tab (feed, Discover, search, DMs) | `growth_social_tab.py` (+ `growth_feed.py` post actions, `PostPhoto`, `DirectMessage`) | `model/Social.kt`, `SocialRepository` → `SocialApi`, `SocialRepositoryImpl` → `social/` | `ui/social/`, `ui/navigation/SocialGraph.kt` | `test_home_social_feed`, `SocialViewModelsTest`, `SocialModelsTest` | specs/2026-11-05-social-tab-design.md |
+| Sharing, referrals, global boards | `growth_social.py`, `growth_hub.py` | `CommunityApi` → `social/GlobalBoardsViewModel`, `discover/` | `ui/social/GlobalBoardsScreen.kt` (from Discover), `ui/discover/` | `test_growth_sharing`, `test_growth_hub` | Enterprise/11 |
 | Communities, rankings, seasons | `growth_communities.py`, `services/leaderboards.py` | `community/` | `ui/community/` | `test_growth_communities` | Enterprise/11 |
 | Safety, privacy, GDPR | `growth_safety.py`, `services/player_safety.py`, `audit.py` | `PrivacyRepository` → `settings/` | `ui/settings/` | `test_growth_safety` | Enterprise/05 |
 | Crystals, payments | `services/ledger.py` (**sole writer** of `User.mana_crystals`), `routers/payments.py`, `stripe_gateway.py`, `google_play.py` | `wallet/` (MockWalletRepository in dev/staging) | `ui/wallet/` | `test_phase2_ledger`, `test_phase3_stripe`, `test_google_play_billing` | docs/architecture/google-play-billing.md |
