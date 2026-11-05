@@ -33,6 +33,8 @@ def adb(*args: str, check: bool = True) -> str:
 
 def nodes() -> list[dict]:
     for _ in range(5):
+        # A failed dump leaves the previous file behind; never read a stale screen.
+        adb("shell", "rm", "-f", "/sdcard/ui.xml", check=False)
         adb("shell", "uiautomator", "dump", "/sdcard/ui.xml", check=False)
         raw = adb("shell", "cat", "/sdcard/ui.xml", check=False)
         if raw.strip().startswith("<?xml"):
@@ -88,6 +90,7 @@ def wait(label: str, timeout: float = 30, exact: bool = True, scroll: bool = Fal
             return n
         if scroll:
             swipe_up()
+            time.sleep(1.5)  # let the list settle so the next dump sees it
         time.sleep(1)
     fail(f"'{label}' did not appear")
     raise AssertionError  # unreachable
