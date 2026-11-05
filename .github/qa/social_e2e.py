@@ -157,8 +157,13 @@ def sign_in() -> None:
     adb("logcat", "-c", check=False)
     adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", check=False)
     end = time.time() + 150
+    relaunch = time.time() + 20
     while time.time() < end:
         dismiss_system_dialogs()
+        if time.time() > relaunch and find("Before you start") is None and find("Sign in") is None:
+            # Another window (launcher, a system dialog) took the screen: bring the app back.
+            adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", check=False)
+            relaunch = time.time() + 20
         if find("Continue") is not None:
             tap("Continue")
         elif find("Before you start") is not None:

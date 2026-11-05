@@ -59,10 +59,12 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
-          profile: pixel_6
+          profile: Nexus 4
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 3072
-          script: adb install -r -g apk/*.apk && python3 .github/qa/social_e2e.py
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: adb shell settings put global hide_error_dialogs 1 && adb install -r -g apk/*.apk && python3 .github/qa/social_e2e.py
       - if: always()
         run: tail -n 120 api.log
       - if: always()
