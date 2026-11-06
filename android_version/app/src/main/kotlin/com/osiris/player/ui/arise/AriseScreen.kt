@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.R
 import com.osiris.player.ui.common.rememberShared
+import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.discover.DiscoverActions
 import com.osiris.player.ui.discover.discoverSections
 import com.osiris.player.ui.theme.OsirisColors
@@ -91,16 +92,17 @@ fun AriseScreen(
         if (picker != null && at != null) vm.onTrailCheck(trailAllowed(token, at.lat, at.lng))
     }
 
+    val barInset = LocalTabBarInset.current
     BottomSheetScaffold(
         scaffoldState = rememberBottomSheetScaffoldState(),
-        sheetPeekHeight = PEEK,
+        sheetPeekHeight = PEEK + barInset,
         sheetDragHandle = {
             Box(Modifier.padding(vertical = 8.dp).size(36.dp, 4.dp).background(OsirisColors.Faint, RoundedCornerShape(2.dp)))
         },
         sheetContainerColor = OsirisColors.Surface,
         containerColor = Color.Transparent,
         sheetContent = {
-            LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = 24.dp + barInset)) {
                 item(key = "title") {
                     Text(
                         if (state.attackMode) "Domains to attack" else "Around you",

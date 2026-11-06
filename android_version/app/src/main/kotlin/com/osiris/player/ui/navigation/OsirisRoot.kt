@@ -10,8 +10,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Explore
@@ -24,14 +26,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
@@ -54,6 +60,8 @@ import com.osiris.player.ui.community.RankingsScreen
 import com.osiris.player.ui.design.FrostBackground
 import com.osiris.player.ui.design.FrostBar
 import com.osiris.player.ui.design.FrostBarItem
+import com.osiris.player.ui.design.LocalTabBarInset
+import com.osiris.player.ui.design.TabBarHeight
 import com.osiris.player.ui.exercise.ExerciseCameraScreen
 import com.osiris.player.ui.exercise.ExerciseHubScreen
 import com.osiris.player.ui.permission.PermissionPrimerScreen
@@ -193,13 +201,23 @@ private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened:
         }
         onPendingOpened()
     }
-    Column(Modifier.fillMaxSize()) {
-        // Clipped so a screen's pull-up panel never draws under the tab bar.
-        Box(Modifier.weight(1f).clipToBounds()) { SignedInGraph(graph, nav) }
-        if (sections.any { it.route == route }) {
+    val onTab = sections.any { it.route == route }
+    val inset = if (onTab) TabBarHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() else 0.dp
+    val backdrop = rememberGraphicsLayer()
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxSize().drawWithContent {
+                backdrop.record { this@drawWithContent.drawContent() }
+                drawLayer(backdrop)
+            },
+        ) {
+            CompositionLocalProvider(LocalTabBarInset provides inset) { SignedInGraph(graph, nav) }
+        }
+        if (onTab) {
             FrostBar(
                 sections.map { s -> FrostBarItem(s.label, s.icon, selected = s.route == route, onClick = { nav.selectTab(s.route) }) },
-                Modifier.navigationBarsPadding(),
+                backdrop,
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
             )
         }
     }

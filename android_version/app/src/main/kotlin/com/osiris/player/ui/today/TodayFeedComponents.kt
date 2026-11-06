@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.osiris.player.ui.common.headerText
 import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.design.bleed
 import com.osiris.player.ui.design.KeyButton
@@ -82,7 +83,7 @@ fun SuggestedOsiriansSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Suggested Osirians", style = MaterialTheme.typography.titleMedium)
+                Text(headerText("Suggested Osirians"), style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Athletes trending for verified workouts & claimed domains",
                     style = MaterialTheme.typography.bodySmall,
@@ -150,8 +151,7 @@ private fun OsirianCard(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(OsirisColors.Primary.copy(alpha = 0.18f))
-                        .border(1.5.dp, OsirisColors.Secondary, CircleShape),
+                        .background(OsirisColors.Primary.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -222,8 +222,7 @@ fun PostCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(OsirisColors.Primary.copy(alpha = 0.2f))
-                    .border(1.dp, OsirisColors.Secondary.copy(alpha = 0.7f), CircleShape),
+                    .background(OsirisColors.Primary.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -264,7 +263,6 @@ fun PostCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(OsirisColors.Primary.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                    .border(1.dp, OsirisColors.Primary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -474,8 +472,7 @@ fun TrendingOsiriansSheet(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(OsirisColors.Primary.copy(alpha = 0.2f))
-                                .border(1.dp, OsirisColors.Secondary, CircleShape),
+                                .background(OsirisColors.Primary.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(person.initials, fontWeight = FontWeight.Bold, color = OsirisColors.Secondary)

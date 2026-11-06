@@ -37,7 +37,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,15 +47,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.osiris.player.ui.common.Chip
 import com.osiris.player.ui.design.FrostCard
+import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.theme.OsirisColors
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlinx.coroutines.launch
-
-private val Ember = Color(0xFFFF6A1A)
-private val Gold = Color(0xFFFFC107)
-private val Sky = Color(0xFF29B6F6)
-private val Violet = Color(0xFFAB47BC)
 
 /** The big entry cards on the Start tab, top to bottom. */
 enum class StartCard(
@@ -71,28 +66,28 @@ enum class StartCard(
         "PERSONAL WORKOUT",
         "Your own session. Live heart rate, power, speed and elevation from your watch or phone.",
         Icons.Outlined.FitnessCenter,
-        Ember,
+        OsirisColors.Primary,
     ),
     CHALLENGE(
         "Challenge",
         "COMPETE & CONQUER",
         "Race your connections, official Osiris challenges, and open course targets.",
         Icons.Outlined.EmojiEvents,
-        Gold,
+        OsirisColors.Secondary,
     ),
     CAMERA(
         "Camera coach",
         "AI POSE TRACKING",
         "Push-ups, squats, planks and more, counted and verified live on camera.",
         Icons.Outlined.CameraAlt,
-        Sky,
+        OsirisColors.Primary,
     ),
     COURSES(
         "Courses",
         "GPS BENCHMARKS",
         "Run a verified course and set the benchmark time others must beat.",
         Icons.Outlined.Route,
-        Violet,
+        OsirisColors.Secondary,
     ),
 }
 
@@ -102,8 +97,6 @@ private const val SPIRAL_SWING_DP = 116f
 private const val SHRINK = 0.16f
 private const val FADE = 0.38f
 private const val CAMERA_DISTANCE = 12f
-private const val GLOW_ALPHA = 0.45f
-private const val BORDER_ALPHA = 0.45f
 private const val WALLET_BG_ALPHA = 0.72f
 private const val WALLET_BORDER_ALPHA = 0.25f
 
@@ -115,10 +108,11 @@ private const val WALLET_BORDER_ALPHA = 0.25f
 fun StartScreen(onOpen: (StartCard) -> Unit, onWallet: (() -> Unit)?) {
     val pager = rememberPagerState { StartCard.entries.size }
     val scope = rememberCoroutineScope()
+    val barInset = LocalTabBarInset.current
     Box(Modifier.fillMaxSize()) {
         VerticalPager(
             state = pager,
-            contentPadding = PaddingValues(top = 112.dp, bottom = 148.dp),
+            contentPadding = PaddingValues(top = 112.dp, bottom = 148.dp + barInset),
             pageSpacing = 12.dp,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
@@ -127,7 +121,7 @@ fun StartScreen(onOpen: (StartCard) -> Unit, onWallet: (() -> Unit)?) {
         Dots(
             pager = pager,
             onSelect = { page -> scope.launch { pager.animateScrollToPage(page) } },
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp, bottom = barInset),
         )
         if (onWallet != null) {
             IconButton(
@@ -153,7 +147,6 @@ fun StartScreen(onOpen: (StartCard) -> Unit, onWallet: (() -> Unit)?) {
 
 @Composable
 private fun SpiralCard(card: StartCard, pager: PagerState, page: Int, onClick: () -> Unit) {
-    val cardShape = RoundedCornerShape(28.dp)
     FrostCard(
         onClick = onClick,
         modifier = Modifier
@@ -173,7 +166,6 @@ private fun SpiralCard(card: StartCard, pager: PagerState, page: Int, onClick: (
                 alpha = 1f - FADE * distance
                 cameraDistance = CAMERA_DISTANCE * density
             }
-            .border(1.dp, card.glow.copy(alpha = BORDER_ALPHA), cardShape)
             .semantics { role = Role.Button },
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
@@ -184,10 +176,7 @@ private fun SpiralCard(card: StartCard, pager: PagerState, page: Int, onClick: (
             ) {
                 Box(
                     Modifier
-                        .size(88.dp)
-                        .clip(CircleShape)
-                        .background(Brush.radialGradient(listOf(card.glow.copy(alpha = GLOW_ALPHA), Color.Transparent)))
-                        .border(1.dp, card.glow.copy(alpha = BORDER_ALPHA), CircleShape),
+                        .size(88.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(card.icon, contentDescription = null, tint = card.glow, modifier = Modifier.size(44.dp))

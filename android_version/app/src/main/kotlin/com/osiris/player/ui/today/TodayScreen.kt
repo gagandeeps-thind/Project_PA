@@ -51,7 +51,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -87,6 +86,8 @@ import androidx.navigation.NavHostController
 import com.osiris.player.platform.location.LocationClient
 import com.osiris.player.platform.share.ShareEffect
 import com.osiris.player.ui.common.LoadableContent
+import com.osiris.player.ui.common.headerText
+import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.social.PostMedia
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
@@ -94,7 +95,6 @@ import com.osiris.player.ui.design.FrostCard
 import com.osiris.player.ui.design.EnergyRing
 import com.osiris.player.ui.design.IconOrb
 import com.osiris.player.ui.design.KeyButton
-import com.osiris.player.ui.design.LocalLight
 import com.osiris.player.ui.design.RaisedButton
 import com.osiris.player.ui.design.accentKey
 import com.osiris.player.ui.design.bleed
@@ -288,7 +288,7 @@ private fun TodayHomeContent(
 ) {
     LazyColumn(
         modifier = Modifier.softEdges(),
-        contentPadding = PaddingValues(20.dp, 24.dp, 20.dp, 36.dp),
+        contentPadding = PaddingValues(20.dp, 24.dp, 20.dp, 36.dp + LocalTabBarInset.current),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item { HomeHeader(t) }
@@ -342,7 +342,7 @@ private fun TodayHomeContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("People's Posts", style = MaterialTheme.typography.titleMedium)
+                    Text(headerText("People's Posts"), style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Workouts, claimed domains, streaks & Mana Crystal rewards",
                         style = MaterialTheme.typography.bodySmall,
@@ -419,7 +419,7 @@ private fun HomeHeader(t: TodayData) {
             Row(
                 Modifier
                     .padding(start = 12.dp)
-                    .well(RoundedCornerShape(FrostMatte.Radius.PILL.dp), LocalLight.current)
+                    .well(RoundedCornerShape(FrostMatte.Radius.PILL.dp))
                     .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)
                     .semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.CenterVertically,
@@ -588,7 +588,7 @@ private fun StreakStartWorkoutCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .well(RoundedCornerShape(FrostMatte.Radius.MEDIUM.dp), LocalLight.current)
+                .well(RoundedCornerShape(FrostMatte.Radius.MEDIUM.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -790,7 +790,7 @@ private fun QuestCard(quest: Quest, onStart: () -> Unit) {
                 TextButton(onClick = onStart) { Text("Go again") }
             }
         } else {
-            KeyButton(onClick = onStart, energy = true, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            KeyButton(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                 Icon(Icons.Filled.PlayArrow, null)
                 Spacer(Modifier.width(6.dp))
                 Text(if (quest.optional) "Start (optional)" else "Start")
@@ -810,7 +810,7 @@ private fun WeekStrip(week: WeeklyGoal) {
     Row(
         Modifier
             .fillMaxWidth()
-            .well(RoundedCornerShape(FrostMatte.Radius.PILL.dp), LocalLight.current)
+            .well(RoundedCornerShape(FrostMatte.Radius.PILL.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp)
             .semantics(mergeDescendants = true) { contentDescription = summary },
         horizontalArrangement = Arrangement.spacedBy(6.dp),

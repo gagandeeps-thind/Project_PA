@@ -70,11 +70,11 @@ private fun scheme(mode: FrostMatte.Mode) = FrostMatte.palette(mode).let { p ->
         outlineVariant = p.textMuted.color().copy(alpha = 0.25f),
         error = p.danger.color(),
         onError = p.onAccent.color(),
-        // Material's defaults for these are purple. Selected chips and indicators are controls, so they
-        // stay a raised teal; the accent is kept for each screen's focal item and main action.
+        // Material's defaults for these are purple. Selected chips and indicators stay slate; the
+        // accent is kept for each screen's focal item and main action.
         primaryContainer = p.accent.color(),
         onPrimaryContainer = p.onAccent.color(),
-        secondaryContainer = Color(0xFF123333),
+        secondaryContainer = p.glassBorder.color(),
         onSecondaryContainer = p.textPrimary.color(),
         tertiary = p.accentAlt.color(),
         onTertiary = p.onAccent.color(),
@@ -129,7 +129,7 @@ private val type = Typography(
     labelSmall = style(FrostMatte.TextStyle.CAPTION, letterSpacing = 0.2f).copy(fontWeight = FontWeight.Medium),
 )
 
-/** Rounder than Material's defaults, so stock dialogs, sheets and fields match the inflated glass. */
+/** Rounder than Material's defaults, so stock dialogs, sheets and fields match the cards. */
 private val shapes = Shapes(
     extraSmall = RoundedCornerShape(12.dp),
     small = RoundedCornerShape(14.dp),

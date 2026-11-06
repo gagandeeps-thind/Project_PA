@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -53,6 +54,7 @@ import com.osiris.player.ui.common.MessageEffect
 import com.osiris.player.ui.common.rememberNow
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.HudPill
+import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.today.CommentsSheet
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.repository.AuthState
@@ -84,9 +86,11 @@ fun SocialScreen(graph: AppGraph, nav: SocialNav) {
         if (resumedOnce) vm.refresh() else resumedOnce = true
         onPauseOrDispose {}
     }
+    val barInset = LocalTabBarInset.current
     Scaffold(
         topBar = { SocialTopBar(s.unreadMessages, nav) },
-        snackbarHost = { SnackbarHost(snackbar) { HudPill(it.visuals.message) } },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.padding(bottom = barInset)) { HudPill(it.visuals.message) } },
+        contentWindowInsets = WindowInsets(0.dp),
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
     ) { padding ->
@@ -111,7 +115,7 @@ fun SocialScreen(graph: AppGraph, nav: SocialNav) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 4.dp + barInset),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     item { ActiveTodayRow(s.activeToday, onCompose = nav.onCompose, onOpen = nav.onProfile) }

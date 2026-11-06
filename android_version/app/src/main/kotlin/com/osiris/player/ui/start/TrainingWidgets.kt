@@ -1,11 +1,5 @@
 package com.osiris.player.ui.start
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,9 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import com.osiris.shared.core.design.FrostMatte
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -85,20 +77,14 @@ private const val CHIP_SLOT_DP = 132f
 private const val MIN_FACING = 0.05f
 private const val CHIP_SHRINK = 0.3f
 private const val TO_RADIANS = PI.toFloat() / 180f
-private const val PULSE_DURATION_MS = 1600
-private const val PULSE_MAX_SCALE = 1.16f
-private const val PULSE_ALPHA = 0.28f
 
 /** Accent per kind of activity, for the ribbon chips and the picker. */
 fun ActivityKind.tint(): Color = when (this) {
-    ActivityKind.CAMERA -> CameraBlue
-    ActivityKind.GPS -> GpsEmber
-    ActivityKind.SENSOR -> SensorGreen
+    ActivityKind.CAMERA -> OsirisColors.Secondary
+    ActivityKind.GPS -> OsirisColors.Primary
+    ActivityKind.SENSOR -> OsirisColors.Secondary
 }
 
-private val CameraBlue = Color(0xFF29B6F6)
-private val GpsEmber = Color(0xFFFF6A1A)
-private val SensorGreen = Color(0xFF66BB6A)
 
 /**
  * A thin ribbon of every activity, wrapped round a cylinder that turns slowly about its vertical
@@ -173,7 +159,7 @@ private fun RibbonChip(activity: TrainingActivity, selected: Boolean, modifier: 
         activity.name,
         style = MaterialTheme.typography.labelLarge,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        color = if (selected) Color.White else MaterialTheme.colorScheme.onBackground,
+        color = if (selected) OsirisColors.OnPrimary else MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
@@ -205,32 +191,13 @@ fun QuoteBoard(quote: Quote?, modifier: Modifier = Modifier) {
 /** The small round start key in the middle of the page. */
 @Composable
 fun StartButton(activity: TrainingActivity?, onClick: () -> Unit) {
-    val pulse = rememberInfiniteTransition(label = "startPulse")
-    val ringScale by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = PULSE_MAX_SCALE,
-        animationSpec = infiniteRepeatable(tween(PULSE_DURATION_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "ringScale",
-    )
-    val accent = activity?.kind?.tint() ?: OsirisColors.Energy
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
             Box(
                 Modifier
-                    .size(104.dp)
-                    .graphicsLayer {
-                        scaleX = ringScale
-                        scaleY = ringScale
-                    }
-                    .clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(accent.copy(alpha = PULSE_ALPHA), Color.Transparent))),
-            )
-            Box(
-                Modifier
                     .size(92.dp)
                     .clip(CircleShape)
-                    .background(Brush.verticalGradient(listOf(Color(FrostMatte.ENERGY_TOP), OsirisColors.Energy)))
-                    .border(2.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                    .background(OsirisColors.Energy)
                     .clickable(role = Role.Button, onClick = onClick)
                     .semantics { contentDescription = "Start ${activity?.name ?: "a workout"}" },
                 contentAlignment = Alignment.Center,

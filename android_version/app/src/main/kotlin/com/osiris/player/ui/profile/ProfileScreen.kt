@@ -38,6 +38,7 @@ import com.osiris.player.ui.common.LoadableContent
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.FrostCard
+import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.profile.ProfileSummary
@@ -51,7 +52,7 @@ fun ProfileScreen(graph: AppGraph, actions: @Composable RowScope.() -> Unit = {}
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LoadableContent(state, onRetry = vm::refresh) { p ->
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalTabBarInset.current).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Header(p)

@@ -1,12 +1,8 @@
 package com.osiris.shared.core.design
 
 /**
- * FrostMatte design tokens, "Liquid aqua" edition: inflated panes of aqua glass floating over a
- * pitch-black floor, each with an icy rim that catches one light fixed in the world. Tilting the phone
- * moves each pane's glow and the bright edge of its rim ([Depth.fall]). On black a dark shadow vanishes,
- * so a pane casts teal light instead, like tinted glass throwing colour onto the floor.
- * Aqua and white carry the interface. [Palette.energy] is the hint of orange: a screen's one big action,
- * a streak and the leading edge of live progress, never a fill or a body-text colour.
+ * FrostMatte design tokens: flat slate cards on a matte charcoal floor. Gulf orange carries primary
+ * actions and key words, powder blue the secondary accents, and nothing glows.
  * One dominant number per screen ([TextStyle.HERO]).
  *
  * The single source for both apps. Colors are ARGB (`0xAARRGGBB`) so Compose reads them with
@@ -16,12 +12,12 @@ object FrostMatte {
     enum class Mode { DARK, LIGHT }
 
     /**
-     * @property glassFill a pane's fill at its bottom edge, over the blurred backdrop
-     * @property glassSheen the same fill at its top edge, where the pane catches more light
-     * @property glassFallback opaque fill where the platform cannot blur (Android < 12)
-     * @property glassBorder the specular rim, brightest on the edge that faces the light
-     * @property shadow the colour every pane casts onto the floor
-     * @property energy the hint of orange; see the type's notes for where it is allowed
+     * @property glassFill a card's fill at its bottom edge
+     * @property glassSheen the same fill at its top edge
+     * @property glassFallback the card surface
+     * @property glassBorder a card's subtle border
+     * @property shadow the colour iOS panes cast onto the floor
+     * @property energy the orange of live effort: streaks and the leading edge of progress
      */
     data class Palette(
         val background: Long,
@@ -47,36 +43,36 @@ object FrostMatte {
     )
 
     val dark = Palette(
-        background = 0xFF000000, // pitch black: the panes float on nothing
-        backgroundAccent = 0xFF000000,
-        backgroundAccentAlt = 0xFF000000,
-        glassFill = 0x14A1F7F5, // aqua glass at its bottom edge
-        glassSheen = 0x2EA1F7F5, // and at its top, where it catches more light
-        glassFallback = 0xFF0C1A1A,
-        glassBorder = 0xE6DFFFFE, // icy rim
-        shadow = 0xFF1B7F7D, // teal light thrown onto the floor
+        background = 0xFF161719, // matte charcoal, top of the floor
+        backgroundAccent = 0xFF161719,
+        backgroundAccentAlt = 0xFF1E2024, // and its bottom
+        glassFill = 0xFF23262B, // elevated slate
+        glassSheen = 0xFF23262B,
+        glassFallback = 0xFF23262B,
+        glassBorder = 0xFF2F343B,
+        shadow = 0xFF000000,
         textPrimary = 0xFFFFFFFF,
-        textSecondary = 0xFFC7D6D5,
-        textMuted = 0xFFA3B8B7,
-        accent = 0xFFA1F7F5, // liquid aqua
-        onAccent = 0xFF03211F, // deep teal ink: white on aqua is unreadable
-        accentAlt = 0xFF6FE3E0, // aqua with more body, for icons and labels beside the accent
-        energy = 0xFFF45B0D, // the burst of orange
-        onEnergy = 0xFF1A0D06, // ink on orange: dark, because white on this orange fails AA
+        textSecondary = 0xFF8E95A2,
+        textMuted = 0xFF8E95A2,
+        accent = 0xFFFF5500, // gulf orange
+        onAccent = 0xFF161719, // charcoal ink: white on this orange fails AA
+        accentAlt = 0xFF95B8C0, // powder blue
+        energy = 0xFFFF5500,
+        onEnergy = 0xFF161719,
         success = 0xFF6CC3A0, // verdigris
         warning = 0xFFF2A33A, // amber
         danger = 0xFFFF4A4A, // boiler red
         gold = 0xFFD9A54A, // brass, for crystals and podiums
     )
 
-    /** The lit top and shaded underside of an inflated aqua key, and of an inflated orange key. */
-    const val ACCENT_TOP = 0xFFE6FFFE
-    const val ACCENT_BASE = 0xFF4FC2BF
-    const val ENERGY_TOP = 0xFFFF9257
-    const val ENERGY_BASE = 0xFFD14B08
+    /** Primary buttons are solid, so both ends of each face are the same orange. */
+    const val ACCENT_TOP = 0xFFFF5500
+    const val ACCENT_BASE = 0xFFFF5500
+    const val ENERGY_TOP = 0xFFFF5500
+    const val ENERGY_BASE = 0xFFFF5500
 
-    /** The floor of a neumorphic recess pressed into the glass. */
-    const val WELL = 0xFF030909
+    /** The floor of a recess in a card. */
+    const val WELL = 0xFF161719
 
     val light = Palette(
         background = 0xFFE9EAEE,

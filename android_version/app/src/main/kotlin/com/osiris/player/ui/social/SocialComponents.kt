@@ -263,7 +263,7 @@ private fun PostPhoto(url: String) {
 fun WorkoutTiles(a: PostAttachment) {
     Column(
         Modifier.fillMaxWidth().background(OsirisColors.Background.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
-            .border(1.dp, OsirisColors.Primary.copy(alpha = 0.3f), RoundedCornerShape(14.dp)).padding(12.dp),
+            .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Verified, null, tint = OsirisColors.Secondary, modifier = Modifier.size(16.dp))

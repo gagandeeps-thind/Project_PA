@@ -2,6 +2,7 @@ package com.osiris.player.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -12,7 +13,16 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import com.osiris.player.ui.design.HudPill
+import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.design.RaisedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -22,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
@@ -50,10 +59,19 @@ fun OsirisScaffold(
 ) {
     val snackbar = remember { SnackbarHostState() }
     if (vm != null) MessageEffect(vm, snackbar)
+    val barInset = LocalTabBarInset.current
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Text(
+                        headerText(title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
@@ -63,7 +81,9 @@ fun OsirisScaffold(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
-        snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding()) { HudPill(it.visuals.message) } },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding().padding(bottom = barInset)) { HudPill(it.visuals.message) } },
+        // Under the tab bar the content runs to the bottom of the screen and scrolls behind it.
+        contentWindowInsets = if (barInset > 0.dp) WindowInsets(0.dp) else ScaffoldDefaults.contentWindowInsets,
         // Transparent over the app-wide FrostBackground, so every screen sits on the matte backdrop.
         // Transparent alone would make the default content colour black on the dark backdrop.
         containerColor = Color.Transparent,
@@ -102,12 +122,20 @@ fun <T> LoadableContent(state: Loadable<T>, onRetry: () -> Unit, modifier: Modif
     }
 }
 
+/** A header's text: all capitals, with the last word (the key word by convention) in orange. */
+fun headerText(text: String): AnnotatedString = buildAnnotatedString {
+    val upper = text.uppercase()
+    val key = upper.lastIndexOf(' ') + 1
+    append(upper.take(key))
+    withStyle(SpanStyle(color = OsirisColors.Primary)) { append(upper.drop(key)) }
+}
+
 @Composable
 fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = OsirisColors.Muted,
+        headerText(text),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.ExtraBold,
         modifier = modifier.fillMaxWidth().padding(start = 16.dp, top = 20.dp, bottom = 6.dp),
     )
 }

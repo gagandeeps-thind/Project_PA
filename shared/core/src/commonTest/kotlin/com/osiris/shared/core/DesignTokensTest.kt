@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The Liquid aqua palette keeps every text pairing readable: WCAG 2.1 AA, 4.5:1 for body text. */
+/** The palette keeps every text pairing readable: WCAG 2.1 AA, 4.5:1 for body text. */
 class DesignTokensTest {
     private fun luminance(argb: Long): Double {
         fun channel(shift: Int): Double {
@@ -38,25 +38,30 @@ class DesignTokensTest {
                 assertTrue(ratio >= 4.5, "text ${text.toString(16)} on ${surface.toString(16)} is only $ratio:1")
             }
         }
-        assertTrue(contrast(p.onAccent, p.accent) >= 4.5, "ink on the aqua accent must stay AA")
-        assertTrue(contrast(p.onEnergy, p.energy) >= 4.5, "ink on the orange hint must stay AA")
-        assertTrue(contrast(p.accent, p.background) >= 4.5, "aqua used as text on black must stay AA")
-        assertTrue(contrast(p.energy, p.background) >= 4.5, "orange used as an icon on black must stay AA")
-        assertTrue(contrast(p.danger, p.glassFallback) >= 4.5, "boiler red used as text on glass must stay AA")
+        assertTrue(contrast(p.onAccent, p.accent) >= 4.5, "ink on the orange accent must stay AA")
+        assertTrue(contrast(p.onEnergy, p.energy) >= 4.5, "ink on orange must stay AA")
+        assertTrue(contrast(p.accent, p.background) >= 4.5, "orange used as text on the floor must stay AA")
+        assertTrue(contrast(p.energy, p.background) >= 4.5, "orange used as an icon on the floor must stay AA")
+        assertTrue(contrast(p.danger, p.glassFallback) >= 4.5, "boiler red used as text on a card must stay AA")
+        assertTrue(contrast(p.accent, p.glassFallback) >= 4.5, "orange used as text on a card must stay AA")
     }
 
     @Test
     fun theBrandColoursAreExactlyTheOnesChosen() {
         val p = FrostMatte.dark
-        assertEquals(0xFFA1F7F5, p.accent)
+        assertEquals(0xFFFF5500, p.accent)
+        assertEquals(0xFF95B8C0, p.accentAlt)
         assertEquals(0xFFFFFFFF, p.textPrimary)
-        assertEquals(0xFFF45B0D, p.energy)
+        assertEquals(0xFF8E95A2, p.textSecondary)
+        assertEquals(0xFF23262B, p.glassFallback)
+        assertEquals(0xFF2F343B, p.glassBorder)
     }
 
     @Test
-    fun theFloorIsPitchBlack() {
+    fun theFloorIsMatteCharcoal() {
         val p = FrostMatte.dark
-        assertEquals(listOf(0xFF000000, 0xFF000000, 0xFF000000), listOf(p.background, p.backgroundAccent, p.backgroundAccentAlt))
+        assertEquals(0xFF161719, p.background)
+        assertEquals(0xFF1E2024, p.backgroundAccentAlt)
     }
 
     @Test
