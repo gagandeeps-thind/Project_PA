@@ -118,7 +118,7 @@ Dependencies only point down. `shared/` never imports Android, iOS or UI code. P
 | `ui/navigation/StartGraph.kt` | Start tab routes: `start`, `training/{mode}`, `live/{mode}/{activity}`, `groups`, `group/{id}` |
 | `ui/navigation/SocialGraph.kt` | Social tab routes: `social`, `social/compose`, `social/discover`, `social/search`, `social/inbox`, `social/chat/{id}`, `social/user/{id}`, `social/boards` |
 | `ui/<feature>/` | one folder per screen, matching the presentation packages (`start/`, `training/`, `arise/`, `today/`, ...) |
-| `ui/design/Frost.kt`, `ui/common/` | design system: FrostCard, KeyButton, RaisedButton, HeroMetric, OsirisScaffold, LoadableContent, EmptyState, ConfirmDialog |
+| `ui/design/Frost.kt`, `ui/common/` | design system (rules: specs/2026-11-05-liquid-aqua-ui-design.md): FrostCard, KeyButton, RaisedButton, IconOrb, EnergyRing, `well`, HeroMetric, OsirisScaffold, LoadableContent, EmptyState, ConfirmDialog |
 | `platform/` | `location/` (fused GPS + run foreground service), `pose/` (CameraX + ML Kit), `ble/` (BLE sensors), `health/` (Health Connect), `billing/` (Play), `share/`, `speech/`, `permission/` |
 
 ### Other nodes

@@ -24,6 +24,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -89,9 +91,15 @@ import com.osiris.player.ui.social.PostMedia
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.FrostCard
-import com.osiris.player.ui.design.HeroMetric
+import com.osiris.player.ui.design.EnergyRing
+import com.osiris.player.ui.design.IconOrb
 import com.osiris.player.ui.design.KeyButton
+import com.osiris.player.ui.design.LocalLight
 import com.osiris.player.ui.design.RaisedButton
+import com.osiris.player.ui.design.accentKey
+import com.osiris.player.ui.design.bleed
+import com.osiris.player.ui.design.softEdges
+import com.osiris.player.ui.design.well
 import com.osiris.player.ui.exercise.exerciseIcon
 import com.osiris.player.ui.navigation.Routes
 import com.osiris.player.ui.navigation.open
@@ -279,20 +287,29 @@ private fun TodayHomeContent(
     baseUrl: String,
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(20.dp, 8.dp, 20.dp, 36.dp),
+        modifier = Modifier.softEdges(),
+        contentPadding = PaddingValues(20.dp, 24.dp, 20.dp, 36.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        item {
-            Text("Hi ${t.displayName}", style = MaterialTheme.typography.titleMedium, color = OsirisColors.Muted)
-            Text(
-                "${t.performanceRank} ${t.identity}  ·  ${t.xp} XP",
-                style = MaterialTheme.typography.bodySmall,
-                color = OsirisColors.Faint,
-            )
-        }
+        item { HomeHeader(t) }
         if (t.needsLocationConsent) item { ConsentBanner(vm::grantLocationConsent) }
 
-        // 1. Suggested Global Challenges: Circular-Floating Card Deck
+        // 1. The one focal thing on the screen, and the only orange action.
+        item { QuestCard(t.today, onStart = { onStartRun(null) }) }
+        item { WeekStrip(t.week) }
+
+        // 2. Streak Start & Camera-Verified Workout Customizer (e.g. Push-ups — 10 × 3)
+        item {
+            StreakStartWorkoutCard(
+                streakWeeks = t.streakWeeks,
+                plan = home.workoutPlan,
+                onCustomize = { vm.openWorkoutCustomizer(true) },
+                onStartWorkout = { onStartWorkoutPlan(home.workoutPlan) },
+            )
+        }
+        item { Shortcuts(t.tomorrow.title, onOpen) }
+
+        // 3. Suggested Global Challenges: Circular-Floating Card Deck
         if (home.suggestedChallenges.isNotEmpty()) {
             item {
                 SuggestedChallengesCircularDeck(
@@ -304,21 +321,6 @@ private fun TodayHomeContent(
                 )
             }
         }
-
-        // 2. Streak Start & Camera-Verified Workout Customizer (e.g. Push-ups — 10 × 3)
-        item {
-            StreakStartWorkoutCard(
-                streakWeeks = t.streakWeeks,
-                plan = home.workoutPlan,
-                onCustomize = { vm.openWorkoutCustomizer(true) },
-                onStartWorkout = { onStartWorkoutPlan(home.workoutPlan) },
-            )
-        }
-
-        // 3. Existing Today Sections (Quest Card, Week Strip, Shortcuts, Starter Challenge)
-        item { QuestCard(t.today, onStart = { onStartRun(null) }) }
-        item { WeekStrip(t.week, t.streakWeeks) }
-        item { Shortcuts(t.tomorrow.title, onOpen) }
         t.starterChallenge?.let { c -> item { StarterChallengeCard(c, onChallenge) } }
 
         // 4. Suggested Osirians Carousel (Follow, 'x' dismiss, "See All" trending)
@@ -401,6 +403,35 @@ private fun TodayHomeContent(
     }
 }
 
+/** Who you are and how far you have come: the name large, the streak as the one spark of orange beside it. */
+@Composable
+private fun HomeHeader(t: TodayData) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Hi ${t.displayName}", style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${t.performanceRank} ${t.identity}  ·  ${t.xp} XP",
+                style = MaterialTheme.typography.bodySmall,
+                color = OsirisColors.Muted,
+            )
+        }
+        if (t.streakWeeks > 0) {
+            Row(
+                Modifier
+                    .padding(start = 12.dp)
+                    .well(RoundedCornerShape(FrostMatte.Radius.PILL.dp), LocalLight.current)
+                    .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.LocalFireDepartment, null, tint = OsirisColors.Energy, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("${t.streakWeeks}-week streak", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
 /**
  * Circular-Floating Card Deck for Global Challenges joinable from anywhere.
  * Each card displays the challenge name, a 1-line description, and the Join Challenge button.
@@ -431,7 +462,8 @@ private fun SuggestedChallengesCircularDeck(
         }
         HorizontalPager(
             state = pagerState,
-            contentPadding = PaddingValues(horizontal = 18.dp),
+            modifier = Modifier.bleed(20.dp),
+            contentPadding = PaddingValues(horizontal = 38.dp, vertical = 16.dp),
             pageSpacing = 12.dp,
         ) { page ->
             val challenge = challenges[page % count]
@@ -527,21 +559,9 @@ private fun StreakStartWorkoutCard(
     onCustomize: () -> Unit,
     onStartWorkout: () -> Unit,
 ) {
-    FrostCard(
-        radius = FrostMatte.Radius.LARGE,
-        contentPadding = 18.dp,
-        fill = OsirisColors.Secondary.copy(alpha = 0.11f),
-    ) {
+    FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(OsirisColors.Primary.copy(alpha = 0.22f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.LocalFireDepartment, null, tint = OsirisColors.Secondary)
-            }
+            IconOrb(Icons.Filled.LocalFireDepartment, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -568,9 +588,7 @@ private fun StreakStartWorkoutCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(OsirisColors.Background.copy(alpha = 0.6f))
-                .border(1.dp, OsirisColors.Faint.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                .well(RoundedCornerShape(FrostMatte.Radius.MEDIUM.dp), LocalLight.current)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -724,10 +742,10 @@ private fun WorkoutCustomizerSheet(
     }
 }
 
-/** The screen's focal point: today's quest distance, at hero size; everything else in it recedes. */
+/** The screen's focal point: today's quest distance inside its progress ring, over the one orange action. */
 @Composable
 private fun QuestCard(quest: Quest, onStart: () -> Unit) {
-    FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 22.dp) {
+    FrostCard(radius = FrostMatte.Radius.LARGE, contentPadding = 20.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 quest.heading,
@@ -735,19 +753,33 @@ private fun QuestCard(quest: Quest, onStart: () -> Unit) {
                 color = OsirisColors.Muted,
                 modifier = Modifier.weight(1f),
             )
-            Text("+${quest.xp} XP", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
+            Text("+${quest.xp} XP", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Primary)
         }
-        Spacer(Modifier.height(12.dp))
-        HeroMetric(Format.fixed(quest.progressM / 1000, 2), unit = "/ ${Format.km(quest.targetM.toDouble())}")
-        Spacer(Modifier.height(6.dp))
-        Text("${quest.title}. ${quest.description}", style = MaterialTheme.typography.bodyMedium, color = OsirisColors.Muted)
-        Spacer(Modifier.height(14.dp))
-        LinearProgressIndicator(
-            progress = { quest.fraction.toFloat() },
-            modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)),
-            trackColor = OsirisColors.Background,
-            gapSize = 0.dp,
-            drawStopIndicator = {},
+        EnergyRing(quest.fraction.toFloat(), Modifier.fillMaxWidth(0.74f).align(Alignment.CenterHorizontally)) {
+            Column(Modifier.padding(horizontal = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                // Shrinks to fit the ring, for long distances and large system text.
+                BasicText(
+                    Format.fixed(quest.progressM / 1000, 2),
+                    style = MaterialTheme.typography.displayLarge.copy(color = OsirisColors.White),
+                    maxLines = 1,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp),
+                )
+                Text("/ ${Format.km(quest.targetM.toDouble())}", style = MaterialTheme.typography.titleSmall, color = OsirisColors.Muted)
+            }
+        }
+        Text(
+            quest.title,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            quest.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = OsirisColors.Muted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(16.dp))
         if (quest.completed) {
@@ -758,7 +790,7 @@ private fun QuestCard(quest: Quest, onStart: () -> Unit) {
                 TextButton(onClick = onStart) { Text("Go again") }
             }
         } else {
-            KeyButton(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            KeyButton(onClick = onStart, energy = true, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                 Icon(Icons.Filled.PlayArrow, null)
                 Spacer(Modifier.width(6.dp))
                 Text(if (quest.optional) "Start (optional)" else "Start")
@@ -767,36 +799,39 @@ private fun QuestCard(quest: Quest, onStart: () -> Unit) {
     }
 }
 
-/** The week, kept quiet: day keys, a count and the streak. No card, so it never competes with the quest. */
+/** The week as beads in a groove: one inflated bead per active day, an empty socket for the rest. */
 @Composable
-private fun WeekStrip(week: WeeklyGoal, streakWeeks: Int) {
+private fun WeekStrip(week: WeeklyGoal) {
     val summary = if (week.completed) {
         "Weekly goal met. Rest days never break your streak."
     } else {
         "${week.activeDays} of ${week.activeDaysTarget} active days this week, ${Format.km(week.distanceM)}"
     }
     Row(
-        Modifier.padding(horizontal = 4.dp).semantics(mergeDescendants = true) { contentDescription = summary },
+        Modifier
+            .fillMaxWidth()
+            .well(RoundedCornerShape(FrostMatte.Radius.PILL.dp), LocalLight.current)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .semantics(mergeDescendants = true) { contentDescription = summary },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         repeat(week.activeDaysTarget) { i ->
-            val shape = RoundedCornerShape(9.dp)
-            val day = Modifier.padding(end = 8.dp).size(26.dp)
+            val day = Modifier.size(22.dp)
             if (i < week.activeDays) {
-                Spacer(day.background(OsirisColors.Muted, shape))
+                Spacer(day.accentKey(CircleShape))
             } else {
-                Spacer(day.border(2.dp, OsirisColors.Faint.copy(alpha = 0.5f), shape))
+                Spacer(day.border(1.5.dp, OsirisColors.Faint.copy(alpha = 0.5f), CircleShape))
             }
         }
         Text(
             "${week.activeDays} of ${week.activeDaysTarget} days",
             style = MaterialTheme.typography.titleSmall,
             color = OsirisColors.Muted,
+            textAlign = TextAlign.End,
+            maxLines = 1,
             modifier = Modifier.weight(1f),
         )
-        if (streakWeeks > 0) {
-            Text("$streakWeeks-week streak", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Primary)
-        }
     }
 }
 
@@ -808,8 +843,8 @@ private fun Shortcuts(tomorrow: String, onOpen: (String) -> Unit) {
             FrostCard(Modifier.weight(1.15f).fillMaxHeight(), radius = FrostMatte.Radius.LARGE) {
                 Text("Tomorrow", style = MaterialTheme.typography.labelMedium, color = OsirisColors.Muted)
                 Spacer(Modifier.weight(1f))
-                Icon(Icons.Outlined.WbTwilight, null, tint = OsirisColors.Faint)
-                Spacer(Modifier.height(8.dp))
+                IconOrb(Icons.Outlined.WbTwilight, size = 40.dp)
+                Spacer(Modifier.height(10.dp))
                 Text(tomorrow, style = MaterialTheme.typography.headlineSmall)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -830,7 +865,7 @@ private fun Shortcut(icon: ImageVector, label: String, modifier: Modifier, onCli
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Icon(icon, null, Modifier.size(20.dp), tint = OsirisColors.Faint)
+            IconOrb(icon, size = 36.dp)
         }
     }
 }

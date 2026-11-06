@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,7 +39,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -61,17 +64,22 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.innerShadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
@@ -91,9 +99,12 @@ import com.osiris.player.ui.theme.color
 import com.osiris.shared.core.design.FrostMatte
 import com.osiris.shared.core.design.FrostMatte.Depth
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.random.Random
 
 private val lightAtRest: State<FrostMatte.Fall> = mutableStateOf(Depth.REST)
@@ -174,10 +185,19 @@ fun FrostBackground(modifier: Modifier = Modifier, content: @Composable BoxScope
 
 /**
  * The shadow a pane [height] points above the floor casts: a soft ambient shadow that falls with the
- * light, a tight contact shadow at its edge and, for floating chrome, a crisp [ring] around it.
+ * light, a faint highlight on the opposite side so it reads as raised (neumorphism on black), a tight
+ * contact shadow at its edge and, for floating chrome, a crisp [ring] around it.
  */
 fun Modifier.depth(shape: Shape, height: Float, shadow: Color, light: State<FrostMatte.Fall>, ring: Boolean = false): Modifier =
     this
+        .dropShadow(shape) {
+            val fall = light.value
+            val reach = height.dp.toPx() * 0.6f
+            radius = reach * Depth.AMBIENT_BLUR_PER_HEIGHT
+            offset = -Offset(fall.x * reach, fall.y * reach)
+            color = Color.White
+            alpha = 0.07f
+        }
         .dropShadow(shape) {
             val fall = light.value
             val reach = height.dp.toPx()
@@ -205,12 +225,12 @@ fun Modifier.depth(shape: Shape, height: Float, shadow: Color, light: State<Fros
             },
         )
 
-/** The dull bronze of a bezel all the way round; the polished edge facing the light is drawn over it. */
-private val BEZEL = Color(0x8C5C3A1E)
+/** The faint aqua of a rim all the way round; the bright edge facing the light is drawn over it. */
+private val BEZEL = Color(0x38A1F7F5)
 
 /**
- * Brass bezel: a dull bronze ring all round, polished bright on the edge facing the light and fading
- * on the far edge. Drawn inside the clip, so each stroke is twice its visible width.
+ * Icy rim: a faint aqua ring all round, bright on the edge facing the light and fading on the far
+ * edge. Drawn inside the clip, so each stroke is twice its visible width.
  */
 private fun Modifier.rim(shape: Shape, rim: Color, light: State<FrostMatte.Fall>): Modifier = drawWithContent {
     drawContent()
@@ -218,7 +238,7 @@ private fun Modifier.rim(shape: Shape, rim: Color, light: State<FrostMatte.Fall>
     val half = Offset(fall.x * size.width, fall.y * size.height) / 2f
     val center = Offset(size.width / 2, size.height / 2)
     val outline = shape.createOutline(size, layoutDirection, this)
-    drawOutline(outline, BEZEL, style = Stroke(FrostMatte.BORDER_WIDTH.dp.toPx() * 3))
+    drawOutline(outline, BEZEL, style = Stroke(FrostMatte.BORDER_WIDTH.dp.toPx() * 2))
     drawOutline(
         outline,
         Brush.linearGradient(
@@ -241,7 +261,7 @@ private fun Modifier.inflate(shape: Shape, light: State<FrostMatte.Fall>): Modif
         val fall = light.value
         drawRect(
             Brush.radialGradient(
-                0f to Color.White.copy(alpha = 0.10f),
+                0f to Color.White.copy(alpha = 0.13f),
                 1f to Color.Transparent,
                 center = Offset(size.width * (0.5f - fall.x * 0.3f), size.height * (0.5f - fall.y * 0.45f)),
                 radius = min(size.width, size.height).coerceAtLeast(1f) * 0.9f,
@@ -258,12 +278,12 @@ private fun Modifier.inflate(shape: Shape, light: State<FrostMatte.Fall>): Modif
     .innerShadow(shape) {
         val fall = light.value
         color = Color.Black
-        alpha = 0.6f
+        alpha = 0.5f
         radius = 14.dp.toPx()
         offset = -Offset(fall.x, fall.y) * 7.dp.toPx()
     }
 
-/** A glass pane: a navy glow on the floor, translucent navy glass (or opaque [fill]), inflation, grain, bezel. */
+/** A glass pane: a teal glow on the floor, translucent aqua glass (or a tinted [fill]), inflation, grain, rim. */
 fun Modifier.frost(
     palette: FrostMatte.Palette,
     shape: Shape,
@@ -275,6 +295,8 @@ fun Modifier.frost(
     this
         .depth(shape, height, palette.shadow.color(), light, ring)
         .clip(shape)
+        // Opaque under the glass: otherwise the glow shows through, floods the pane and text loses contrast.
+        .background(palette.glassFallback.color())
         .then(if (fill != null) Modifier.background(fill) else Modifier)
         .background(Brush.verticalGradient(0f to palette.glassSheen.color(), 1f to palette.glassFill.color()))
         .inflate(shape, light)
@@ -283,6 +305,102 @@ fun Modifier.frost(
             drawRect(grain, alpha = FrostMatte.GRAIN_ALPHA / 2)
         }
         .rim(shape, palette.glassBorder.color(), light)
+
+/** Lets a carousel run [by] past its parent's padding to the screen edges, so glows are not cut off at the margin. */
+fun Modifier.bleed(by: Dp): Modifier = layout { measurable, constraints ->
+    val extra = by.roundToPx()
+    val width = constraints.maxWidth + extra * 2
+    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout(constraints.maxWidth, placeable.height) { placeable.place(-extra, 0) }
+}
+
+/** Fades a scrolling list out at its top and bottom instead of cutting it off against the bars. */
+fun Modifier.softEdges(fade: Dp = 24.dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val share = (fade.toPx() / size.height.coerceAtLeast(1f)).coerceAtMost(0.5f)
+        drawRect(
+            Brush.verticalGradient(0f to Color.Transparent, share to Color.Black, 1 - share to Color.Black, 1f to Color.Transparent),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+/** A neumorphic recess pressed into the glass: shaded on the lip facing the light, lit on the far one. */
+fun Modifier.well(shape: Shape, light: State<FrostMatte.Fall>): Modifier = this
+    .clip(shape)
+    .background(Color(FrostMatte.WELL))
+    .innerShadow(shape) {
+        val fall = light.value
+        color = Color.Black
+        alpha = 0.9f
+        radius = 5.dp.toPx()
+        offset = Offset(fall.x, fall.y) * 3.dp.toPx()
+    }
+    .innerShadow(shape) {
+        val fall = light.value
+        color = BEZEL.copy(alpha = 1f)
+        alpha = 0.2f
+        radius = 3.dp.toPx()
+        offset = -Offset(fall.x, fall.y) * 1.5.dp.toPx()
+    }
+
+/** A face that bulges like a balloon: a bright top edge, a shaded underside and a gloss across its upper half. */
+private fun Modifier.inflated(shape: Shape, top: Color, middle: Color, bottom: Color, shine: Float = 1f): Modifier = this
+    .clip(shape)
+    .background(Brush.verticalGradient(0f to top, 0.45f to middle, 1f to bottom))
+    .drawBehind {
+        val inset = size.height * 0.05f
+        val height = size.height * 0.46f
+        drawRoundRect(
+            Brush.verticalGradient(
+                0f to Color.White.copy(alpha = 0.3f * shine),
+                1f to Color.Transparent,
+                startY = inset,
+                endY = inset + height,
+            ),
+            topLeft = Offset(size.height * 0.2f, inset),
+            size = Size(size.width - size.height * 0.4f, height),
+            cornerRadius = CornerRadius(height / 2),
+        )
+    }
+    .innerShadow(shape) {
+        color = Color.White
+        alpha = 0.55f * shine
+        radius = 3.dp.toPx()
+        offset = Offset(0f, 1.5.dp.toPx())
+    }
+    .innerShadow(shape) {
+        color = Color.Black
+        alpha = 0.3f
+        radius = 7.dp.toPx()
+        offset = Offset(0f, -3.dp.toPx())
+    }
+
+/** The raised glass of a secondary control, from its lit top to its shaded underside. */
+private val GLASS_TOP = Color(0xFF2E5352)
+private val GLASS_MIDDLE = Color(0xFF1A3433)
+private val GLASS_BOTTOM = Color(0xFF0E2120)
+
+/** An icon on a small inflated glass bead. Decorative: name the thing in the text beside it. */
+@Composable
+fun IconOrb(icon: ImageVector, modifier: Modifier = Modifier, tint: Color = FrostTheme.palette.accent.color(), size: Dp = 44.dp) {
+    val glow = FrostTheme.palette.shadow.color()
+    Box(
+        modifier
+            .size(size)
+            .dropShadow(CircleShape) {
+                radius = 10.dp.toPx()
+                offset = Offset(0f, 3.dp.toPx())
+                color = glow
+                alpha = 0.5f
+            }
+            .inflated(CircleShape, GLASS_TOP, GLASS_MIDDLE, GLASS_BOTTOM, shine = 0.35f),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size / 2))
+    }
+}
 
 /** Scale for a pressed control: a spring, so it gives under the finger and settles back. */
 @Composable
@@ -359,20 +477,70 @@ fun HeroMetric(value: String, modifier: Modifier = Modifier, unit: String? = nul
     }
 }
 
+/** Width of the [EnergyRing] groove, in dp. */
+private const val RING_WIDTH = 16f
+
+/**
+ * Live progress as a groove pressed into the glass, filled with aqua, with an orange spark on its
+ * leading edge. With no progress yet the spark waits at the top, ready to go.
+ */
+@Composable
+fun EnergyRing(progress: Float, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val palette = FrostTheme.palette
+    val aqua = palette.accent.color()
+    val spark = palette.energy.color()
+    val clamped = progress.coerceIn(0f, 1f)
+    val swept by animateFloatAsState(clamped, spring(stiffness = Spring.StiffnessVeryLow), label = "ring")
+    Box(
+        modifier
+            .aspectRatio(1f)
+            .progressSemantics(clamped)
+            .drawBehind {
+                val width = RING_WIDTH.dp.toPx()
+                val radius = (size.minDimension - width) / 2 - width
+                drawCircle(Color(FrostMatte.WELL), radius, style = Stroke(width))
+                drawCircle(aqua.copy(alpha = 0.28f), radius + width / 2, style = Stroke(1.dp.toPx()))
+                drawCircle(Color.Black, radius - width / 2, style = Stroke(1.dp.toPx()))
+                if (swept > 0f) {
+                    rotate(-90f) {
+                        drawArc(
+                            Brush.sweepGradient(0f to aqua.copy(alpha = 0.55f), swept to aqua),
+                            startAngle = 0f,
+                            sweepAngle = 360f * swept,
+                            useCenter = false,
+                            topLeft = center - Offset(radius, radius),
+                            size = Size(radius * 2, radius * 2),
+                            style = Stroke(width * 0.72f, cap = StrokeCap.Round),
+                        )
+                    }
+                }
+                val angle = 2 * PI * (swept - 0.25f)
+                val tip = center + Offset(cos(angle).toFloat(), sin(angle).toFloat()) * radius
+                val burst = width * 1.9f
+                val halo = Brush.radialGradient(0f to spark.copy(alpha = 0.7f), 1f to Color.Transparent, center = tip, radius = burst)
+                drawCircle(halo, burst, tip)
+                drawCircle(spark, width * 0.6f, tip)
+                drawCircle(Color.White.copy(alpha = 0.75f), width * 0.18f, tip - Offset(width * 0.18f, width * 0.2f))
+            },
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
+}
+
 class FrostBarItem(val label: String, val icon: ImageVector, val selected: Boolean, val onClick: () -> Unit)
 
-/** How the firebox key travels between tabs: quick, with a little overshoot, like a sprung lever. */
+/** How the active key travels between tabs: quick, with a little overshoot, like a sprung lever. */
 private val leverSpring = spring<Float>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
 
 /**
- * Floating tab bar: a glass slab hovering highest above the floor, ringed so it stays crisp over
- * any content. The current tab sits on a firebox key that slides from tab to tab; the others are
+ * Floating tab bar: a glass capsule hovering highest above the floor, ringed so it stays crisp over
+ * any content. The current tab sits on an inflated aqua key that slides from tab to tab; the others are
  * icons only, named for screen readers.
  */
 @Composable
 fun FrostBar(items: List<FrostBarItem>, modifier: Modifier = Modifier) {
     val palette = FrostTheme.palette
-    val key = RoundedCornerShape(18.dp)
+    val key = RoundedCornerShape(FrostMatte.Radius.PILL.dp)
     // Each tab's x and width in px as laid out, so the key can travel between them.
     val slots = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
     val target = slots[items.indexOfFirst { it.selected }]
@@ -394,7 +562,7 @@ fun FrostBar(items: List<FrostBarItem>, modifier: Modifier = Modifier) {
             .padding(horizontal = FrostMatte.Spacing.L.dp, vertical = FrostMatte.Spacing.S.dp)
             .frost(
                 palette,
-                RoundedCornerShape(FrostMatte.Radius.LARGE.dp),
+                RoundedCornerShape(FrostMatte.Radius.PILL.dp),
                 LocalLight.current,
                 height = Depth.FLOAT,
                 ring = true,
@@ -446,83 +614,84 @@ fun FrostBar(items: List<FrostBarItem>, modifier: Modifier = Modifier) {
     }
 }
 
-/** A deep-orange face standing on its red-hot base, like a key: the active tab and the player's own row. */
-fun Modifier.accentKey(shape: Shape): Modifier = this
-    .drawBehind {
-        val outline = shape.createOutline(size, layoutDirection, this)
-        translate(0f, Depth.KEY.dp.toPx() * 0.75f) { drawOutline(outline, Color(FrostMatte.ACCENT_BASE)) }
-    }
-    .clip(shape)
-    .background(Brush.verticalGradient(0f to Color(FrostMatte.ACCENT_TOP), 1f to Color(FrostMatte.dark.accent)))
+/** An inflated aqua face: the active tab and the player's own row. */
+fun Modifier.accentKey(shape: Shape): Modifier =
+    inflated(shape, Color(FrostMatte.ACCENT_TOP), Color(FrostMatte.dark.accent), Color(FrostMatte.ACCENT_BASE))
+
+private enum class KeyTone { ENERGY, ACCENT, GLASS }
+
+private class KeyLook(val glow: Color, val glowAlpha: Float, val ink: Color, val face: Modifier)
+
+private fun keyLook(tone: KeyTone, palette: FrostMatte.Palette, shape: Shape) = when (tone) {
+    KeyTone.ENERGY -> KeyLook(
+        palette.energy.color(),
+        0.6f,
+        palette.onEnergy.color(),
+        Modifier.inflated(shape, Color(FrostMatte.ENERGY_TOP), palette.energy.color(), Color(FrostMatte.ENERGY_BASE)),
+    )
+    KeyTone.ACCENT -> KeyLook(palette.accent.color(), 0.35f, palette.onAccent.color(), Modifier.accentKey(shape))
+    KeyTone.GLASS -> KeyLook(
+        palette.shadow.color(),
+        0.35f,
+        palette.textPrimary.color(),
+        Modifier.inflated(shape, GLASS_TOP, GLASS_MIDDLE, GLASS_BOTTOM, shine = 0.35f),
+    )
+}
 
 /**
- * A chunky physical key. The face is lit from the top and stands [Depth.KEY] on its base; pressing
- * shrinks it and sinks it onto the base. [primary] keys are deep orange, the rest raised navy.
+ * A chunky inflated key that glows in its own colour. Pressing gives under the finger: it shrinks, sinks
+ * and its glow pulls in, then it springs back.
  */
 @Composable
-private fun Key(
-    onClick: () -> Unit,
-    modifier: Modifier,
-    enabled: Boolean,
-    primary: Boolean,
-    content: @Composable RowScope.() -> Unit,
-) {
+private fun Key(onClick: () -> Unit, modifier: Modifier, enabled: Boolean, tone: KeyTone, content: @Composable RowScope.() -> Unit) {
     val palette = FrostTheme.palette
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by pressScale(pressed && enabled, Depth.PRESS_SCALE)
     val sink by animateFloatAsState(if (pressed && enabled) 1f else 0f, spring(stiffness = Spring.StiffnessHigh), label = "sink")
-    val light = LocalLight.current
-    val shape = RoundedCornerShape(FrostMatte.Radius.SMALL.dp + 4.dp)
-    val face = if (primary) {
-        Brush.verticalGradient(0f to Color(FrostMatte.ACCENT_TOP), 1f to palette.accent.color())
-    } else {
-        Brush.verticalGradient(0f to Color(0xFF2A4384), 1f to Color(0xFF172757))
-    }
-    val base = if (primary) Color(FrostMatte.ACCENT_BASE) else Color(0xFF0A1330)
-    val ink = if (primary) palette.onAccent.color() else palette.textPrimary.color()
+    val shape = RoundedCornerShape(FrostMatte.Radius.PILL.dp)
+    val look = keyLook(tone, palette, shape)
     Row(
         modifier
             .defaultMinSize(minHeight = FrostMatte.MIN_TOUCH_TARGET.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                translationY = sink * Depth.KEY.dp.toPx()
+                translationY = sink * 2.dp.toPx()
                 alpha = if (enabled) 1f else 0.4f
             }
-            .depth(shape, Depth.KEY * 2 * (1 - sink), palette.shadow.color(), light)
-            .drawBehind {
-                // The base stays put while the face travels down onto it.
-                translate(0f, (1 - sink) * Depth.KEY.dp.toPx()) { drawOutline(shape.createOutline(size, layoutDirection, this), base) }
+            .dropShadow(shape) {
+                radius = (18 - 10 * sink).dp.toPx()
+                offset = Offset(0f, (6 * (1 - sink)).dp.toPx())
+                color = look.glow
+                alpha = look.glowAlpha
             }
-            .clip(shape)
-            .background(face)
-            .innerShadow(shape) {
-                color = Color.White
-                alpha = if (primary) 0.35f else 0.12f
-                radius = 2.dp.toPx()
-                offset = Offset(0f, 1.5.dp.toPx())
-            }
+            .then(look.face)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 12.dp),
+            .padding(horizontal = 22.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CompositionLocalProvider(LocalContentColor provides ink, LocalTextStyle provides MaterialTheme.typography.labelLarge) {
+        CompositionLocalProvider(LocalContentColor provides look.ink, LocalTextStyle provides MaterialTheme.typography.labelLarge) {
             content()
         }
     }
 }
 
-/** The screen's main action, as a firebox key. */
+/** A screen's main action, in aqua. Set [energy] on the one action that starts effort, and only that one. */
 @Composable
-fun KeyButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
-    Key(onClick, modifier, enabled, primary = true, content)
+fun KeyButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    energy: Boolean = false,
+    content: @Composable RowScope.() -> Unit,
+) = Key(onClick, modifier, enabled, if (energy) KeyTone.ENERGY else KeyTone.ACCENT, content)
 
-/** A secondary action, as a raised navy key. */
+/** A secondary action, as raised glass. */
 @Composable
 fun RaisedButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
-    Key(onClick, modifier, enabled, primary = false, content)
+    Key(onClick, modifier, enabled, KeyTone.GLASS, content)
 
 /** A floating, pill-shaped HUD readout, used for messages instead of a flat snackbar. */
 @Composable
@@ -535,7 +704,7 @@ fun HudPill(text: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.titleSmall,
             color = palette.textPrimary.color(),
             modifier = Modifier
-                .frost(palette, pill, LocalLight.current, Color(0xF2142347), Depth.FLOAT, ring = true)
+                .frost(palette, pill, LocalLight.current, Color(0xF2102424), Depth.FLOAT, ring = true)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         )
     }

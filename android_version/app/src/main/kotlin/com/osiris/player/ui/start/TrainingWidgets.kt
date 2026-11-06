@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.osiris.shared.core.design.FrostMatte
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -211,7 +212,7 @@ fun StartButton(activity: TrainingActivity?, onClick: () -> Unit) {
         animationSpec = infiniteRepeatable(tween(PULSE_DURATION_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "ringScale",
     )
-    val accent = activity?.kind?.tint() ?: OsirisColors.Primary
+    val accent = activity?.kind?.tint() ?: OsirisColors.Energy
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
             Box(
@@ -228,13 +229,13 @@ fun StartButton(activity: TrainingActivity?, onClick: () -> Unit) {
                 Modifier
                     .size(92.dp)
                     .clip(CircleShape)
-                    .background(Brush.verticalGradient(listOf(Color(0xFFFF8A3D), OsirisColors.Primary)))
+                    .background(Brush.verticalGradient(listOf(Color(FrostMatte.ENERGY_TOP), OsirisColors.Energy)))
                     .border(2.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                     .clickable(role = Role.Button, onClick = onClick)
                     .semantics { contentDescription = "Start ${activity?.name ?: "a workout"}" },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(StartIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
+                Icon(StartIcon, contentDescription = null, tint = OsirisColors.OnEnergy, modifier = Modifier.size(42.dp))
             }
         }
         Text(

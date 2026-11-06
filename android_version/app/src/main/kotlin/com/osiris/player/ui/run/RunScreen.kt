@@ -60,7 +60,6 @@ import com.osiris.player.ui.map.OsmMap
 import com.osiris.player.ui.design.FrostCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LocalContentColor
-import com.osiris.player.ui.theme.color
 import com.osiris.shared.core.design.FrostMatte
 import com.osiris.player.ui.design.HeroMetric
 import com.osiris.player.ui.theme.OsirisColors
@@ -253,9 +252,9 @@ private fun RunButton(s: RunState, onClick: () -> Unit, modifier: Modifier) {
         containerColor = when {
             s.recording -> OsirisColors.Error
             s.position == null -> OsirisColors.Surface
-            else -> OsirisColors.Primary
+            else -> OsirisColors.Energy
         },
-        contentColor = if (s.recording || s.position == null) Color.White else FrostMatte.dark.onAccent.color(),
+        contentColor = if (s.recording || s.position == null) Color.White else OsirisColors.OnEnergy,
         icon = {
             if (waiting) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = LocalContentColor.current)

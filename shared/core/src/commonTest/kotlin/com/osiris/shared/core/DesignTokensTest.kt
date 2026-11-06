@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The Boiler glass palette keeps every text pairing readable: WCAG 2.1 AA, 4.5:1 for body text. */
+/** The Liquid aqua palette keeps every text pairing readable: WCAG 2.1 AA, 4.5:1 for body text. */
 class DesignTokensTest {
     private fun luminance(argb: Long): Double {
         fun channel(shift: Int): Double {
@@ -14,6 +14,13 @@ class DesignTokensTest {
             return if (c <= 0.03928) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
         }
         return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    }
+
+    /** [over] seen through the translucent [glass], as a pane draws it. */
+    private fun through(glass: Long, over: Long): Long {
+        val a = (glass ushr 24) / 255.0
+        fun channel(shift: Int) = (((glass shr shift) and 0xFF) * a + ((over shr shift) and 0xFF) * (1 - a)).toLong() shl shift
+        return 0xFF000000 or channel(16) or channel(8) or channel(0)
     }
 
     private fun contrast(a: Long, b: Long): Double {
@@ -24,16 +31,26 @@ class DesignTokensTest {
     @Test
     fun darkPaletteTextMeetsAaOnTheBackdropAndOnGlass() {
         val p = FrostMatte.dark
-        for (surface in listOf(p.background, p.glassFallback)) {
+        val brightestGlass = through(p.glassSheen, p.glassFallback)
+        for (surface in listOf(p.background, p.glassFallback, brightestGlass)) {
             for (text in listOf(p.textPrimary, p.textSecondary, p.textMuted, p.accentAlt)) {
                 val ratio = contrast(text, surface)
                 assertTrue(ratio >= 4.5, "text ${text.toString(16)} on ${surface.toString(16)} is only $ratio:1")
             }
         }
-        // No ink reaches AAA on safety orange (black tops out near 5.7:1), so key labels hold AA.
-        assertTrue(contrast(p.onAccent, p.accent) >= 4.5, "ink on the ember accent must stay AA")
-        assertTrue(contrast(p.accent, p.background) >= 4.5, "deep orange used as text on black must stay AA")
+        assertTrue(contrast(p.onAccent, p.accent) >= 4.5, "ink on the aqua accent must stay AA")
+        assertTrue(contrast(p.onEnergy, p.energy) >= 4.5, "ink on the orange hint must stay AA")
+        assertTrue(contrast(p.accent, p.background) >= 4.5, "aqua used as text on black must stay AA")
+        assertTrue(contrast(p.energy, p.background) >= 4.5, "orange used as an icon on black must stay AA")
         assertTrue(contrast(p.danger, p.glassFallback) >= 4.5, "boiler red used as text on glass must stay AA")
+    }
+
+    @Test
+    fun theBrandColoursAreExactlyTheOnesChosen() {
+        val p = FrostMatte.dark
+        assertEquals(0xFFA1F7F5, p.accent)
+        assertEquals(0xFFFFFFFF, p.textPrimary)
+        assertEquals(0xFFF45B0D, p.energy)
     }
 
     @Test

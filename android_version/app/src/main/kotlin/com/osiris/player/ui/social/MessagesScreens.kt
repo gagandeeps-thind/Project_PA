@@ -227,7 +227,7 @@ private fun Bubble(m: DirectMessage) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (m.mine) Arrangement.End else Arrangement.Start) {
         Text(
             m.body,
-            color = if (m.mine) Color.White else MaterialTheme.colorScheme.onBackground,
+            color = if (m.mine) OsirisColors.OnPrimary else MaterialTheme.colorScheme.onBackground,
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .background(
@@ -277,7 +277,11 @@ private fun ChatComposer(s: ChatState, onEdit: (String) -> Unit, onSend: () -> U
             if (s.sending) {
                 CircularProgressIndicator(Modifier.size(20.dp))
             } else {
-                Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "Send")
+                Icon(
+                    Icons.AutoMirrored.Outlined.Send,
+                    contentDescription = "Send",
+                    tint = if (s.canSend) OsirisColors.OnPrimary else MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }

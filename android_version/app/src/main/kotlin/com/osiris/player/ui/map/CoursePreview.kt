@@ -45,7 +45,7 @@ fun CoursePreview(route: List<LatLng>, modifier: Modifier = Modifier) {
         view.overlays.removeAll { it is Polyline || it is Polygon }
         view.overlays += Polyline(view).apply {
             setPoints(points)
-            outlinePaint.color = OsirisColors.Secondary.toArgb()
+            outlinePaint.color = OsirisColors.Energy.toArgb()
             outlinePaint.strokeWidth = 12f
         }
         for ((point, color) in listOf(points.first() to OsirisColors.Success, points.last() to OsirisColors.Error)) {

@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.osiris.player.ui.design.FrostCard
+import com.osiris.player.ui.design.bleed
 import com.osiris.player.ui.design.KeyButton
 import com.osiris.player.ui.design.RaisedButton
 import com.osiris.player.ui.theme.OsirisColors
@@ -102,8 +103,9 @@ fun SuggestedOsiriansSection(
             }
         } else {
             LazyRow(
+                modifier = Modifier.bleed(20.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 2.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             ) {
                 items(osirians, key = { it.userId }) { person ->
                     OsirianCard(
