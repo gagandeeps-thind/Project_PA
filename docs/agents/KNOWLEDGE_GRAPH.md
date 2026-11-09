@@ -102,6 +102,7 @@ Dependencies only point down. `shared/` never imports Android, iOS or UI code. P
 | `growth_hub.py` | Discover and Social hubs, global leaderboards |
 | `growth_safety.py` | consent, blocking, reporting, data export |
 | `growth_support.py` | support chat WebSocket (stub) |
+| `legal_pages.py` | public `/privacy`, `/terms`, `/account-deletion`, `/.well-known/assetlinks.json` (Google Play needs them) |
 
 ### Player app, shared (`shared/<module>/src/commonMain/kotlin/com/osiris/shared/<module>/`)
 | Module | Key packages / files |

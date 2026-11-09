@@ -3,11 +3,14 @@ package com.osiris.shared.presentation
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.error.Outcome
 import com.osiris.shared.domain.model.ActiveFriend
+import com.osiris.shared.domain.model.ContentReportReason
 import com.osiris.shared.domain.model.DirectMessage
 import com.osiris.shared.domain.model.DiscoverPage
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.model.Inbox
 import com.osiris.shared.domain.model.MessageThread
+import com.osiris.shared.domain.model.ReportKind
+import com.osiris.shared.domain.model.ReportTarget
 import com.osiris.shared.domain.model.SocialFeedPage
 import com.osiris.shared.domain.model.SocialPostDraft
 import com.osiris.shared.domain.model.SocialProfile
@@ -18,6 +21,7 @@ import com.osiris.shared.presentation.common.Loadable
 import com.osiris.shared.presentation.common.UiMessage
 import com.osiris.shared.presentation.social.ChatViewModel
 import com.osiris.shared.presentation.social.ComposePostViewModel
+import com.osiris.shared.presentation.social.ContentSafetyViewModel
 import com.osiris.shared.presentation.social.InboxViewModel
 import com.osiris.shared.presentation.social.SocialDiscoverViewModel
 import com.osiris.shared.presentation.social.SocialFeedViewModel
@@ -61,6 +65,9 @@ class FakeSocial : SocialRepository {
     var threadResult: Outcome<MessageThread> = ok(MessageThread(user(2), true, listOf(message(1, false, read = false))))
     var olderResult: Outcome<MessageThread> = ok(MessageThread(user(2), true, emptyList()))
     var unread = 4
+    val reports = mutableListOf<Pair<ReportTarget, ContentReportReason>>()
+    val blocks = mutableListOf<Int>()
+    var blockResult: Outcome<Unit> = ok(Unit)
 
     override suspend fun feed(beforeId: Int?) = pages.getValue(beforeId).also { feedCalls += beforeId }
     override suspend fun discover(activity: String?, offset: Int) = discoverResult.also { discoverCalls += activity to offset }
@@ -82,6 +89,9 @@ class FakeSocial : SocialRepository {
         return ok(message(99, mine = true))
     }
     override suspend fun markRead(userId: Int) = ok(Inbox()).also { readMarks += userId }
+    override suspend fun report(target: ReportTarget, reason: ContentReportReason) =
+        ok("Thanks. Our team will review this report.").also { reports += target to reason }
+    override suspend fun block(userId: Int) = blockResult.also { blocks += userId }
 }
 
 /** A player whose reactions fail, to check optimistic kudos roll back. */
@@ -92,6 +102,35 @@ private class FailingReactions(private val base: FakePlayer = FakePlayer()) : Pl
 
 class SocialViewModelsTest {
     private fun TestScope.main() = UnconfinedTestDispatcher(testScheduler)
+
+    @Test
+    fun `a report sends the chosen target and reason and confirms`() = runTest {
+        val social = FakeSocial()
+        val vm = ContentSafetyViewModel(social, main())
+        vm.askReport(ReportKind.COMMENT, 7)
+        vm.report(ContentReportReason.SPAM)
+        assertEquals(listOf(ReportTarget(ReportKind.COMMENT, 7) to ContentReportReason.SPAM), social.reports)
+        assertNull(vm.state.value.prompt)
+        assertEquals(UiMessage.Kind.SUCCESS, vm.message.value!!.kind)
+        vm.clear()
+    }
+
+    @Test
+    fun `a block tells the screen once it lands and stays quiet when it fails`() = runTest {
+        val social = FakeSocial()
+        val vm = ContentSafetyViewModel(social, main())
+        vm.askBlock(5, "Player 5")
+        vm.confirmBlock()
+        assertEquals(listOf(5), social.blocks)
+        assertEquals(5, vm.state.value.blockedUserId)
+        vm.blockHandled()
+        social.blockResult = fail(AppError.Offline())
+        vm.askBlock(6, "Player 6")
+        vm.confirmBlock()
+        assertNull(vm.state.value.blockedUserId)
+        assertEquals(UiMessage.Kind.ERROR, vm.message.value!!.kind)
+        vm.clear()
+    }
 
     @Test
     fun `the feed loads the first page, the stories row and the unread count, then pages without repeats`() = runTest {

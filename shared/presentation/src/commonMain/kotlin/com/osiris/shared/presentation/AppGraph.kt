@@ -31,6 +31,7 @@ import com.osiris.shared.presentation.session.OnboardingViewModel
 import com.osiris.shared.presentation.settings.SettingsViewModel
 import com.osiris.shared.presentation.social.ChatViewModel
 import com.osiris.shared.presentation.social.ComposePostViewModel
+import com.osiris.shared.presentation.social.ContentSafetyViewModel
 import com.osiris.shared.presentation.social.GlobalBoardsViewModel
 import com.osiris.shared.presentation.social.InboxViewModel
 import com.osiris.shared.presentation.social.SocialDiscoverViewModel
@@ -90,6 +91,7 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     fun composePost(sessionId: Int? = null) = ComposePostViewModel(data.social, data.training, sessionId)
     fun inbox() = InboxViewModel(data.social, data.training)
     fun chat(userId: Int) = ChatViewModel(userId, data.social)
+    fun contentSafety() = ContentSafetyViewModel(data.social)
     fun supportChat() = SupportChatViewModel(data.support)
     fun start(mode: StartMode) = StartViewModel(data.training, data.groupChallenges, data.player, mode)
     fun liveSession(activity: TrainingActivity, mode: StartMode) = LiveSessionViewModel(data.training, activity, mode)

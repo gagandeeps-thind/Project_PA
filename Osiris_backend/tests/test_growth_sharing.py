@@ -263,8 +263,28 @@ def test_display_name_is_escaped_on_public_pages() -> None:
     assert "<script>x</script>" not in page.text and "&lt;script&gt;" in page.text
 
 
+def test_legal_pages_are_public() -> None:
+    for path, text in (("/privacy", "Health Connect"), ("/terms", "zero tolerance"), ("/account-deletion", "Erase my account")):
+        r = client.get(path)
+        assert r.status_code == 200 and text in r.text and "text/html" in r.headers["content-type"], path
+
+
+def test_asset_links_need_the_signing_fingerprint() -> None:
+    os.environ.pop("OSIRIS_ANDROID_CERT_SHA256", None)
+    assert client.get("/.well-known/assetlinks.json").json() == []
+    os.environ["OSIRIS_ANDROID_CERT_SHA256"] = "ab:cd, EF:01"
+    try:
+        target = client.get("/.well-known/assetlinks.json").json()[0]["target"]
+    finally:
+        del os.environ["OSIRIS_ANDROID_CERT_SHA256"]
+    assert target["package_name"] == "com.osiris.player"
+    assert target["sha256_cert_fingerprints"] == ["AB:CD", "EF:01"]
+
+
 if __name__ == "__main__":
     for test in (
+        test_legal_pages_are_public,
+        test_asset_links_need_the_signing_fingerprint,
         test_share_card_hides_location_and_can_be_revoked,
         test_invite_signup_join_and_referral_reward,
         test_self_referral_from_same_device_earns_nothing,

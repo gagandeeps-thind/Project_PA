@@ -176,6 +176,7 @@ private fun NewMessageSheet(vm: InboxViewModel, onDismiss: () -> Unit, onPick: (
 fun ChatScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onProfile: (Int) -> Unit) {
     val vm = rememberShared(key = "chat-$userId") { graph.chat(userId) }
     val s by vm.state.collectAsStateWithLifecycle()
+    val safety = rememberFeedSafety(graph)
     OsirisScaffold(
         s.user?.displayName ?: "Message",
         vm,
@@ -183,6 +184,7 @@ fun ChatScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onProfile: (Int
         actions = {
             s.user?.let { u ->
                 Box(Modifier.padding(end = 8.dp)) { Avatar(u.initials, size = 32.dp, onClick = { onProfile(u.userId) }) }
+                UserSafetyMenu(u.userId, u.displayName, safety.vm)
             }
         },
     ) { padding ->
@@ -193,6 +195,7 @@ fun ChatScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onProfile: (Int
             ChatComposer(s, onEdit = vm::edit, onSend = vm::send)
         }
     }
+    ModerationHost(safety.vm, onBlocked = onBack)
 }
 
 @Composable

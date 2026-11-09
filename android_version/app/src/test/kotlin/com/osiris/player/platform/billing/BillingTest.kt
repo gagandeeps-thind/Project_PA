@@ -1,6 +1,10 @@
 package com.osiris.player.platform.billing
 
 import com.android.billingclient.api.BillingClient.BillingResponseCode
+import com.osiris.shared.core.error.AppError
+import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.domain.repository.PaymentsRepository
+import com.osiris.shared.domain.wallet.GooglePlayVerification
 import java.security.KeyPairGenerator
 import java.security.Signature
 import java.util.Base64
@@ -11,6 +15,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BillingTest {
+
+    private fun server(vararg answers: Pair<String, Outcome<GooglePlayVerification>>) = ServerPurchaseVerifier(
+        object : PaymentsRepository {
+            override suspend fun verifyGooglePlay(productId: String, purchaseToken: String) = answers.toMap().getValue(productId)
+        },
+    )
+
+    private suspend fun ServerPurchaseVerifier.check(vararg products: String) = verify("p", "{}", "s", "token", products.toList())
+
+    @Test
+    fun serverVerifierGrantsOnlyWhenEveryProductIsEntitled() = runTest {
+        val yes = Outcome.Success(GooglePlayVerification(entitled = true))
+        val no = Outcome.Success(GooglePlayVerification(entitled = false))
+        assertTrue(server("a" to yes).check("a"))
+        assertFalse(server("a" to yes, "b" to no).check("a", "b"))
+    }
+
+    @Test
+    fun serverVerifierKeepsThePurchaseWhenTheServerCannotAnswer() = runTest {
+        assertFalse(server("a" to Outcome.Failure(AppError.Offline())).check("a"))
+    }
 
     @Test
     fun catalogClassifiesConsumablesNonConsumablesAndSubscriptions() {

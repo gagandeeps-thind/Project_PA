@@ -28,9 +28,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.osiris.player.ui.common.OsirisScaffold
@@ -56,7 +61,7 @@ fun OnboardingScreen(graph: AppGraph, onBack: () -> Unit, inviteToken: String? =
             when (s.step) {
                 OnboardingState.Step.GOAL -> GoalStep(s, vm)
                 OnboardingState.Step.CONSENT -> ConsentStep(s, vm)
-                OnboardingState.Step.ACCOUNT -> AccountStep(s, vm)
+                OnboardingState.Step.ACCOUNT -> AccountStep(s, vm, graph.config.apiBaseUrl)
             }
         }
     }
@@ -102,14 +107,27 @@ private fun ConsentStep(s: OnboardingState, vm: OnboardingViewModel) {
 }
 
 @Composable
-private fun AccountStep(s: OnboardingState, vm: OnboardingViewModel) {
+private fun AccountStep(s: OnboardingState, vm: OnboardingViewModel, baseUrl: String) {
     Text("Create your account", style = MaterialTheme.typography.headlineSmall)
     Spacer(Modifier.height(16.dp))
     Field("Name others see", s.displayName, vm::onName, s.fieldErrors[Registration.FIELD_NAME])
     Field("Email", s.email, vm::onEmail, s.fieldErrors[Registration.FIELD_EMAIL], KeyboardType.Email)
     Field("Password", s.password, vm::onPassword, s.fieldErrors[Registration.FIELD_PASSWORD], KeyboardType.Password, secret = true)
     Field("Invite code (optional)", s.referralCode, vm::onReferralCode, null)
-    Spacer(Modifier.height(24.dp))
+    Spacer(Modifier.height(12.dp))
+    val link = TextLinkStyles(SpanStyle(color = OsirisColors.Secondary))
+    Text(
+        buildAnnotatedString {
+            append("By continuing you confirm you are 18 or older and agree to the ")
+            withLink(LinkAnnotation.Url("$baseUrl/terms", link)) { append("Terms of Service") }
+            append(", including zero tolerance for abusive content, and the ")
+            withLink(LinkAnnotation.Url("$baseUrl/privacy", link)) { append("Privacy Policy") }
+            append(".")
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = OsirisColors.Muted,
+    )
+    Spacer(Modifier.height(16.dp))
     KeyButton(onClick = vm::create, enabled = !s.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
         Text(if (s.busy) "CREATING…" else "Start my first quest")
     }

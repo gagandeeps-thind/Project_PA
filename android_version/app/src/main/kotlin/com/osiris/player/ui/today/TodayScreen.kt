@@ -88,7 +88,11 @@ import com.osiris.player.platform.share.ShareEffect
 import com.osiris.player.ui.common.LoadableContent
 import com.osiris.player.ui.common.headerText
 import com.osiris.player.ui.design.LocalTabBarInset
+import com.osiris.player.ui.social.FeedSafety
+import com.osiris.player.ui.social.ModerationHost
 import com.osiris.player.ui.social.PostMedia
+import com.osiris.player.ui.social.PostSafetyMenu
+import com.osiris.player.ui.social.rememberFeedSafety
 import com.osiris.player.ui.common.OsirisScaffold
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.FrostCard
@@ -123,6 +127,7 @@ import kotlinx.coroutines.flow.firstOrNull
 fun TodayScreen(graph: AppGraph, nav: NavHostController) {
     val vm = rememberShared { graph.today() }
     val home by vm.home.collectAsStateWithLifecycle()
+    val safety = rememberFeedSafety(graph)
     val context = LocalContext.current
     val location = remember { LocationClient(context) }
 
@@ -166,6 +171,7 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
                     home = home,
                     vm = vm,
                     baseUrl = graph.config.apiBaseUrl,
+                    safety = safety,
                     onStartRun = { challengeId ->
                         vm.onStartQuest()
                         nav.open(Routes.run(challengeId))
@@ -265,8 +271,10 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
             comments = home.activePostComments,
             onAddComment = { body -> vm.addComment(activePostId, body) },
             onDismiss = { vm.openComments(null) },
+            safety = safety,
         )
     }
+    ModerationHost(safety.vm, onBlocked = vm::refresh)
 
     var resumedOnce by rememberSaveable { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
@@ -285,6 +293,7 @@ private fun TodayHomeContent(
     onChallenge: (Int) -> Unit,
     onOpen: (String) -> Unit,
     baseUrl: String,
+    safety: FeedSafety,
 ) {
     LazyColumn(
         modifier = Modifier.softEdges(),
@@ -379,6 +388,11 @@ private fun TodayHomeContent(
                     onShare = { vm.sharePost(post.id) },
                     media = if (post.hasMedia) {
                         { PostMedia(post, baseUrl) }
+                    } else {
+                        null
+                    },
+                    menu = if (post.userId != safety.viewerId) {
+                        { PostSafetyMenu(post, safety.vm) }
                     } else {
                         null
                     },

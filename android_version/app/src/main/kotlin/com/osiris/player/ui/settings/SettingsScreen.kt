@@ -21,8 +21,10 @@ import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FlagCircle
+import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.LocationCity
 import androidx.compose.material.icons.outlined.PersonAddAlt
+import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,7 +76,7 @@ fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
 
     OsirisScaffold("Settings", vm, onBack = onBack) { padding ->
         LoadableContent(s.profile, onRetry = vm::refresh, modifier = Modifier.padding(padding)) { p ->
-            Settings(p, s, vm, Modifier.padding(padding)) { open = it }
+            Settings(p, s, vm, graph.config.apiBaseUrl, Modifier.padding(padding)) { open = it }
         }
     }
 
@@ -115,7 +118,8 @@ fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
 }
 
 @Composable
-private fun Settings(p: PlayerProfile, s: SettingsState, vm: SettingsViewModel, modifier: Modifier, open: (Open) -> Unit) {
+private fun Settings(p: PlayerProfile, s: SettingsState, vm: SettingsViewModel, baseUrl: String, modifier: Modifier, open: (Open) -> Unit) {
+    val links = LocalUriHandler.current
     LazyColumn(modifier.fillMaxSize()) {
         item { Header("Profile") }
         item { Row(Icons.Outlined.Badge, p.displayName, "Name others see") { open(Open.NAME) } }
@@ -155,6 +159,10 @@ private fun Settings(p: PlayerProfile, s: SettingsState, vm: SettingsViewModel, 
         item { Header("Safety") }
         item { Row(Icons.Filled.Block, "Blocked players") { vm.loadBlocks(); open(Open.BLOCKS) } }
         item { Row(Icons.AutoMirrored.Filled.Rule, "Rules, rewards, and verification") { vm.loadRules(); open(Open.RULES) } }
+
+        item { Header("Legal") }
+        item { Row(Icons.Outlined.Policy, "Privacy policy") { links.openUri("$baseUrl/privacy") } }
+        item { Row(Icons.Outlined.Gavel, "Terms of service") { links.openUri("$baseUrl/terms") } }
 
         item { Header("Account") }
         item { Row(Icons.Filled.DevicesOther, "Sign out of all other devices", onClick = vm::signOutEverywhere) }

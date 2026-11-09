@@ -4,11 +4,13 @@ import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.error.Outcome
 import com.osiris.shared.core.error.outcomeOf
 import com.osiris.shared.data.network.api.SocialApi
+import com.osiris.shared.domain.model.ContentReportReason
 import com.osiris.shared.domain.model.DirectMessage
 import com.osiris.shared.domain.model.DiscoverPage
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.model.Inbox
 import com.osiris.shared.domain.model.MessageThread
+import com.osiris.shared.domain.model.ReportTarget
 import com.osiris.shared.domain.model.SocialFeedPage
 import com.osiris.shared.domain.model.SocialPostDraft
 import com.osiris.shared.domain.model.SocialProfile
@@ -51,6 +53,11 @@ class SocialRepositoryImpl(private val api: SocialApi) : SocialRepository {
     }
 
     override suspend fun markRead(userId: Int): Outcome<Inbox> = outcomeOf { api.markRead(userId) }
+
+    override suspend fun report(target: ReportTarget, reason: ContentReportReason): Outcome<String> =
+        outcomeOf { api.report(target.kind.wire, target.id, reason.wire).message }
+
+    override suspend fun block(userId: Int): Outcome<Unit> = outcomeOf { api.block(userId) }
 
     private companion object {
         const val MIN_QUERY = 2

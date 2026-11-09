@@ -5,6 +5,7 @@ import com.osiris.shared.domain.model.DirectMessage
 import com.osiris.shared.domain.model.DiscoverPage
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.model.Inbox
+import com.osiris.shared.domain.model.MessageResponse
 import com.osiris.shared.domain.model.MessageThread
 import com.osiris.shared.domain.model.SocialFeedPage
 import com.osiris.shared.domain.model.SocialPostDraft
@@ -37,6 +38,11 @@ class SocialApi(private val api: ApiClient) {
         api.post("/api/v2/social/conversations/$userId/messages", ApiClient.body("body" to body))
 
     suspend fun markRead(userId: Int): Inbox = api.post("/api/v2/social/conversations/$userId/read")
+
+    suspend fun report(targetType: String, targetId: Int, reason: String): MessageResponse =
+        api.post("/api/v2/reports", ApiClient.body("target_type" to targetType, "target_id" to targetId, "reason" to reason))
+
+    suspend fun block(userId: Int) = api.execute(HttpMethod.Post, "/api/v2/blocks", ApiClient.body("user_id" to userId))
 
     private companion object {
         const val PAGE = 20

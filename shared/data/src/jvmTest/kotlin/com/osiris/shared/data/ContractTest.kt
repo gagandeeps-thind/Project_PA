@@ -51,6 +51,7 @@ import com.osiris.shared.domain.model.TrainingProgress
 import com.osiris.shared.domain.model.TrainingSession
 import com.osiris.shared.domain.model.TrainingSessions
 import com.osiris.shared.domain.model.TrainingSummary
+import com.osiris.shared.domain.wallet.GooglePlayVerification
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -97,6 +98,7 @@ class ContractTest {
         Triple("POST", "/api/v2/challenges/{}/invites", InviteLink.serializer()),
         Triple("GET", "/api/v2/courses", ListSerializer(CourseSummary.serializer())),
         Triple("POST", "/api/v2/reports", MessageResponse.serializer()),
+        Triple("POST", "/api/v2/payments/google-play/verify", GooglePlayVerification.serializer()),
         Triple("GET", "/api/v2/me/today", TodayData.serializer()),
         Triple("GET", "/api/v2/me/profile", PlayerProfile.serializer()),
         Triple("PUT", "/api/v2/me/profile", PlayerProfile.serializer()),

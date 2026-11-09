@@ -24,6 +24,16 @@ def latest_consent(db: Session, user_id: int, kind: str) -> "models.ConsentRecor
     ).order_by(models.ConsentRecord.id.desc()).first()
 
 
+def remove_post(db: Session, post: models.SocialPost) -> None:
+    """Delete a post with its reactions, comments and photo; the workouts it showed stay. The caller commits."""
+    db.query(models.TrainingSession).filter(models.TrainingSession.social_post_id == post.id).update(
+        {models.TrainingSession.social_post_id: None}, synchronize_session=False
+    )
+    for table in (models.PostReaction, models.PostComment, models.PostPhoto):
+        db.query(table).filter(table.post_id == post.id).delete(synchronize_session=False)
+    db.delete(post)
+
+
 def blocked_user_ids(db: Session, user_id: int) -> set[int]:
     """Everyone this player blocked or was blocked by."""
     rows = db.query(models.UserBlock.blocker_id, models.UserBlock.blocked_id).filter(

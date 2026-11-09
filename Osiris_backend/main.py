@@ -38,6 +38,7 @@ import growth_safety  # noqa: E402
 import growth_social  # noqa: E402
 import growth_social_tab  # noqa: E402
 import growth_support  # noqa: E402
+import legal_pages  # noqa: E402
 from http_cache import ConditionalGetMiddleware  # noqa: E402
 import models  # noqa: E402
 from routers import (  # noqa: E402
@@ -118,6 +119,7 @@ for _router in (
     exercise_api.router,
     growth_hub.router,
     growth_support.router,
+    legal_pages.router,
     arise_routes.router,
     training_routes.router,
     group_challenge_routes.router,

@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,8 @@ private fun PlayStoreWalletScreen(graph: AppGraph, onBack: (() -> Unit)?) {
     val activity = context as? Activity
     val billingService = remember(context) { (context.applicationContext as OsirisApplication).billing }
     val billingState by billingService.state.collectAsStateWithLifecycle()
+    // Retries any purchase the server could not confirm before the player signed in.
+    LaunchedEffect(Unit) { billingService.refreshCatalogAndPurchases() }
     OsirisScaffold("Wallet", vm, onBack = onBack) { padding ->
         PullToRefreshBox(
             isRefreshing = billingState.isLoading,

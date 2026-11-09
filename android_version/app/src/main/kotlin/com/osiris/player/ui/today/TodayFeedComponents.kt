@@ -65,6 +65,8 @@ import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.core.design.FrostMatte
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.model.NotificationItem
+import com.osiris.player.ui.social.CommentSafetyMenu
+import com.osiris.player.ui.social.FeedSafety
 import com.osiris.shared.domain.model.PostCommentItem
 import com.osiris.shared.domain.model.PostCreateDraft
 import com.osiris.shared.domain.model.SuggestedOsirian
@@ -215,6 +217,7 @@ fun PostCard(
     onOpenComments: () -> Unit,
     onShare: () -> Unit,
     media: (@Composable () -> Unit)? = null,
+    menu: (@Composable () -> Unit)? = null,
 ) {
     FrostCard(radius = FrostMatte.Radius.MEDIUM, contentPadding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -250,6 +253,7 @@ fun PostCard(
                     fontSize = 11.sp,
                 )
             }
+            menu?.invoke()
         }
 
         if (media != null) {
@@ -668,6 +672,7 @@ fun CommentsSheet(
     comments: List<PostCommentItem>,
     onAddComment: (String) -> Unit,
     onDismiss: () -> Unit,
+    safety: FeedSafety,
 ) {
     var text by remember { mutableStateOf("") }
     ModalBottomSheet(
@@ -693,6 +698,10 @@ fun CommentsSheet(
                             Text(c.authorName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.width(6.dp))
                             Text(c.authorRank, style = MaterialTheme.typography.labelSmall, color = OsirisColors.Secondary)
+                            if (c.userId != safety.viewerId) {
+                                Spacer(Modifier.weight(1f))
+                                CommentSafetyMenu(c, safety.vm)
+                            }
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(c.body, style = MaterialTheme.typography.bodyMedium)

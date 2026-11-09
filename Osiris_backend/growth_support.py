@@ -25,7 +25,10 @@ router = APIRouter()
 MAX_TEXT = 1000
 MAX_MESSAGES = 30
 GREETING = "Hi, this is Osiris support. Tell us what happened and we'll get back to you."
-RECEIVED = "Thanks. Live chat isn't staffed yet, so this message was not saved or read by a person."
+RECEIVED = (
+    "Thanks. Live chat isn't staffed yet, so this message was not saved or read by a person. "
+    "Please email support@osiris.fit and we'll reply there."
+)
 
 
 def _player_id(websocket: WebSocket, db: Session) -> int | None:

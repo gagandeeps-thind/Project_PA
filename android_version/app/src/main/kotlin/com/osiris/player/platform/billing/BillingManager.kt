@@ -376,7 +376,7 @@ class BillingManager(
                 it.copy(
                     feedback = BillingFeedback(
                         code = BillingErrorCode.VERIFICATION_FAILED,
-                        userMessage = "Purchase signature verification failed. Entitlement was not granted.",
+                        userMessage = "We couldn't confirm this purchase yet, and you won't be charged again. Pull down to retry.",
                         isError = true,
                     ),
                 )

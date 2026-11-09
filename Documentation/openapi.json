@@ -1464,6 +1464,17 @@
               }
             ],
             "title": "Handle"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
         "title": "BlockCreate",
@@ -10328,7 +10339,7 @@
     },
     "/api/v2/admin/reports/{report_id}/resolve": {
       "post": {
-        "description": "Record the outcome. Enforcement (suspend a player, challenge, or community) uses the\nexisting admin controls; this closes the reports and tells reporters it was reviewed.",
+        "description": "Record the outcome and tell reporters it was reviewed. Actioning a post or comment removes it;\nother enforcement (suspend a player, challenge, or community) uses the existing admin controls.",
         "operationId": "admin_resolve_report_api_v2_admin_reports__report_id__resolve_post",
         "parameters": [
           {

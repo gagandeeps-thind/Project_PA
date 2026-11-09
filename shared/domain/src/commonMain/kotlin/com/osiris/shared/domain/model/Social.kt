@@ -167,6 +167,19 @@ data class MessageThread(
     val items: List<DirectMessage> = emptyList(),
 )
 
+/** Why a player reports a post, comment or player. */
+enum class ContentReportReason(val wire: String, val label: String) {
+    HARASSMENT("harassment", "Harassment or hate"),
+    SPAM("spam", "Spam or scam"),
+    PRIVACY("privacy", "Shares private information"),
+    OTHER("other", "Sexual, violent or otherwise harmful"),
+}
+
+enum class ReportKind(val wire: String) { POST("post"), COMMENT("comment"), USER("user") }
+
+/** What a report is about: a post, comment or player id. */
+data class ReportTarget(val kind: ReportKind, val id: Int)
+
 internal fun initialsOf(name: String): String =
     name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
         .joinToString("") { it.first().uppercaseChar().toString() }.ifEmpty { "OS" }

@@ -163,6 +163,8 @@ class PostCallbacks(
     val onShare: (Int) -> Unit,
     val onAuthor: (Int) -> Unit,
     val onDelete: ((Int) -> Unit)?,
+    val onReport: (Int) -> Unit,
+    val onBlock: (FeedPost) -> Unit,
 )
 
 /** An Instagram-style post: header, media (photo, workouts, chart), actions, kudos, caption, comments. */
@@ -209,6 +211,16 @@ private fun PostHeader(post: FeedPost, now: Instant, isMine: Boolean, actions: P
                 menu = false
                 actions.onShare(post.id)
             })
+            if (!isMine) {
+                DropdownMenuItem(text = { Text("Report post") }, onClick = {
+                    menu = false
+                    actions.onReport(post.id)
+                })
+                DropdownMenuItem(text = { Text("Block ${post.authorName}", color = OsirisColors.Error) }, onClick = {
+                    menu = false
+                    actions.onBlock(post)
+                })
+            }
             val delete = actions.onDelete
             if (isMine && delete != null) {
                 DropdownMenuItem(text = { Text("Delete post", color = OsirisColors.Error) }, onClick = {

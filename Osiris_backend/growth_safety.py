@@ -49,7 +49,7 @@ router = APIRouter()
 
 POLICY_VERSION = "privacy-2026-09"
 CONSENT_KINDS = ("location", "public_profile", "leaderboard", "exercise_camera")
-REPORT_TARGETS = ("user", "challenge", "community", "share_card")
+REPORT_TARGETS = ("user", "challenge", "community", "share_card", "post", "comment")
 REPORT_REASONS = (
     "unsafe_route", "harassment", "cheating", "spam", "inappropriate_name", "privacy", "other",
 )
@@ -85,7 +85,7 @@ def revoke_sessions(user: models.User) -> None:
 
 class ReportCreate(BaseModel):
     target_type: str
-    target_id: Optional[int] = None          # challenge id
+    target_id: Optional[int] = None          # challenge, post, comment or user id
     target_ref: Optional[str] = Field(default=None, max_length=64)  # user handle, community slug, share token
     reason: str
     details: Optional[str] = Field(default=None, max_length=500)
@@ -103,6 +103,7 @@ class ReportOut(BaseModel):
 class BlockCreate(BaseModel):
     handle: Optional[str] = Field(default=None, max_length=16)
     challenge_id: Optional[int] = None
+    user_id: Optional[int] = None
 
 
 class BlockOut(BaseModel):
@@ -150,15 +151,24 @@ class AdminReason(BaseModel):
 
 # --- reports ---------------------------------------------------------------------
 
-def _resolve_target(db: Session, req: ReportCreate) -> int:
+def _resolve_target(db: Session, req: ReportCreate, reporter_id: int) -> int:
     if req.target_type == "challenge":
         ch = db.query(models.Challenge).filter(models.Challenge.id == (req.target_id or -1)).first()
         if ch is None:
             raise _api_error(404, "TARGET_NOT_FOUND", "Challenge not found")
         return ch.id
+    if req.target_type in ("post", "comment"):
+        table = models.SocialPost if req.target_type == "post" else models.PostComment
+        row = db.query(table).filter(table.id == (req.target_id or -1)).first()
+        if row is None:
+            raise _api_error(404, "TARGET_NOT_FOUND", "This content no longer exists")
+        if row.user_id == reporter_id:
+            raise _api_error(422, "SELF_REPORT", "You cannot report your own content")
+        return row.id
     ref = (req.target_ref or "").strip()
     if req.target_type == "user":
-        p = db.query(models.PlayerProfile).filter(models.PlayerProfile.referral_code == ref.upper()).first()
+        match = models.PlayerProfile.user_id == req.target_id if req.target_id else models.PlayerProfile.referral_code == ref.upper()
+        p = db.query(models.PlayerProfile).filter(match).first()
         if p is None:
             raise _api_error(404, "TARGET_NOT_FOUND", "Player not found")
         return p.user_id
@@ -181,7 +191,7 @@ def create_report(req: ReportCreate, db: Session = Depends(get_db),
         raise _api_error(422, "INVALID_TARGET", f"target_type must be one of {', '.join(REPORT_TARGETS)}")
     if req.reason not in REPORT_REASONS:
         raise _api_error(422, "INVALID_REASON", f"reason must be one of {', '.join(REPORT_REASONS)}")
-    target_id = _resolve_target(db, req)
+    target_id = _resolve_target(db, req, uid)
     if req.target_type == "user" and target_id == uid:
         raise _api_error(422, "SELF_REPORT", "You cannot report yourself")
     existing = db.query(models.Report).filter(
@@ -238,7 +248,9 @@ def block_player(req: BlockCreate, db: Session = Depends(get_db),
     they are."""
     uid = token_data["id"]
     target: Optional[int] = None
-    if req.handle:
+    if req.user_id is not None:
+        target = db.query(models.User.id).filter(models.User.id == req.user_id).scalar()
+    elif req.handle:
         p = db.query(models.PlayerProfile).filter(models.PlayerProfile.referral_code == req.handle.upper()).first()
         target = p.user_id if p else None
     elif req.challenge_id is not None:
@@ -497,11 +509,12 @@ def rules():
 
 # --- admin abuse review ----------------------------------------------------------------
 
-_TARGET_LABELS = {"challenge": "Challenge", "user": "Player", "community": "Community", "share_card": "Share card"}
+_TARGET_LABELS = {"challenge": "Challenge", "user": "Player", "community": "Community", "share_card": "Share card",
+                  "post": "Post", "comment": "Comment"}
 
 
 def _target_kind(target_type: str) -> str:
-    return target_type if target_type in ("challenge", "user", "community") else "share_card"
+    return target_type if target_type in _TARGET_LABELS else "share_card"
 
 
 def _target_summaries(db: Session, reports: list[models.Report]) -> dict[tuple[str, int], str]:
@@ -518,6 +531,11 @@ def _target_summaries(db: Session, reports: list[models.Report]) -> dict[tuple[s
         found["community", c.id] = f"Community #{c.id}: {c.name} ({c.status})"
     for card in db.query(models.ShareCard).filter(models.ShareCard.id.in_(ids["share_card"] or {-1})):
         found["share_card", card.id] = f"Share card #{card.id}: {card.headline}"
+    with_photo = {pid for (pid,) in db.query(models.PostPhoto.post_id).filter(models.PostPhoto.post_id.in_(ids["post"] or {-1}))}
+    for p in db.query(models.SocialPost).filter(models.SocialPost.id.in_(ids["post"] or {-1})):
+        found["post", p.id] = f"Post #{p.id} by player #{p.user_id}{' (photo)' if p.id in with_photo else ''}: {p.caption or ''}"
+    for c in db.query(models.PostComment).filter(models.PostComment.id.in_(ids["comment"] or {-1})):
+        found["comment", c.id] = f"Comment #{c.id} by player #{c.user_id}: {c.body}"
     out = {}
     for r in reports:
         kind = _target_kind(r.target_type)
@@ -545,18 +563,30 @@ def admin_reports(status: str = "open", limit: int = Query(200, ge=1, le=500), o
     return out
 
 
+def _remove_reported_content(db: Session, report: models.Report, admin_id: int) -> None:
+    if report.target_type == "post":
+        post = db.query(models.SocialPost).filter(models.SocialPost.id == report.target_id).first()
+        if post is not None:
+            player_safety.remove_post(db, post)
+    else:
+        db.query(models.PostComment).filter(models.PostComment.id == report.target_id).delete(synchronize_session=False)
+    _audit(db, actor_type="admin", actor_id=admin_id, action="content.removed", entity_type=report.target_type,
+           entity_id=report.target_id, details={"report_id": report.id})
+
+
 @router.post("/api/v2/admin/reports/{report_id}/resolve")
 def admin_resolve_report(report_id: int, req: AdminReportResolve, db: Session = Depends(get_db),
                                admin: dict = Depends(get_current_admin)):
-    """Record the outcome. Enforcement (suspend a player, challenge, or community) uses the
-    existing admin controls; this closes the reports and tells reporters it was reviewed."""
+    """Record the outcome and tell reporters it was reviewed. Actioning a post or comment removes it;
+    other enforcement (suspend a player, challenge, or community) uses the existing admin controls."""
     if req.status not in ("actioned", "dismissed"):
         raise _api_error(422, "INVALID_STATUS", "status must be actioned or dismissed")
     report = db.query(models.Report).filter(models.Report.id == report_id).first()
     if report is None:
         raise _api_error(404, "REPORT_NOT_FOUND", "Report not found")
+    removing = req.status == "actioned" and report.target_type in ("post", "comment")
     q = db.query(models.Report).filter(models.Report.id == report.id)
-    if req.all_for_target:
+    if req.all_for_target or removing:
         q = db.query(models.Report).filter(models.Report.target_type == report.target_type,
                                            models.Report.target_id == report.target_id,
                                            models.Report.status == "open")
@@ -570,6 +600,8 @@ def admin_resolve_report(report_id: int, req: AdminReportResolve, db: Session = 
         resolved += 1
     _audit(db, actor_type="admin", actor_id=admin["id"], action="report.resolved", entity_type="report",
            entity_id=report.id, details={"status": req.status, "resolved": resolved, "note": req.note})
+    if removing:
+        _remove_reported_content(db, report, admin["id"])
     db.commit()
     return {"resolved": resolved, "status": req.status}
 

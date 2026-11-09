@@ -23,6 +23,9 @@ type Pending =
   | { kind: "community"; item: AdminCommunity; change: { verified?: boolean; status?: "active" | "suspended" }; label: string }
   | { kind: "name"; userId: number };
 
+/** Actioning a reported post or comment deletes it on the server. */
+const removesContent = (r: AdminReport) => r.target_type === "post" || r.target_type === "comment";
+
 const REASON_LABELS: Record<string, string> = {
   unsafe_route: "Unsafe route",
   harassment: "Harassment",
@@ -114,7 +117,7 @@ export default function CommunityPage() {
   const dialogTitle = !pending
     ? ""
     : pending.kind === "report"
-    ? `${pending.status === "actioned" ? "Mark actioned" : "Dismiss"}: report #${pending.item.id}`
+    ? `${pending.status === "actioned" ? (removesContent(pending.item) ? "Remove content" : "Mark actioned") : "Dismiss"}: report #${pending.item.id}`
     : pending.kind === "community"
     ? `${pending.label}: ${pending.item.name}`
     : `Reset display name of player #${pending.userId}`;
@@ -194,7 +197,7 @@ export default function CommunityPage() {
                         {r.status === "open" && (
                           <div className="btn-actions">
                             <button className="btn-sm btn-activate" onClick={() => setPending({ kind: "report", item: r, status: "actioned" })}>
-                              Actioned
+                              {removesContent(r) ? "Remove content" : "Actioned"}
                             </button>
                             <button className="btn-sm btn-deactivate" onClick={() => setPending({ kind: "report", item: r, status: "dismissed" })}>
                               Dismiss

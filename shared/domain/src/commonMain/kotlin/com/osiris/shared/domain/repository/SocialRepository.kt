@@ -1,11 +1,13 @@
 package com.osiris.shared.domain.repository
 
 import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.domain.model.ContentReportReason
 import com.osiris.shared.domain.model.DirectMessage
 import com.osiris.shared.domain.model.DiscoverPage
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.model.Inbox
 import com.osiris.shared.domain.model.MessageThread
+import com.osiris.shared.domain.model.ReportTarget
 import com.osiris.shared.domain.model.SocialFeedPage
 import com.osiris.shared.domain.model.SocialPostDraft
 import com.osiris.shared.domain.model.SocialProfile
@@ -23,4 +25,8 @@ interface SocialRepository {
     suspend fun thread(userId: Int, beforeId: Int? = null): Outcome<MessageThread>
     suspend fun send(userId: Int, body: String): Outcome<DirectMessage>
     suspend fun markRead(userId: Int): Outcome<Inbox>
+
+    /** Returns the confirmation to show. */
+    suspend fun report(target: ReportTarget, reason: ContentReportReason): Outcome<String>
+    suspend fun block(userId: Int): Outcome<Unit>
 }

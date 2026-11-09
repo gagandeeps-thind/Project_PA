@@ -732,9 +732,10 @@ def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) 
     author_ids = {p.user_id for p in posts}
 
     comments_by_post: dict[int, list[models.PostComment]] = {pid: [] for pid in post_ids}
+    blocked = player_safety.blocked_user_ids(db, viewer_id)
     all_comments = (
         db.query(models.PostComment)
-        .filter(models.PostComment.post_id.in_(post_ids))
+        .filter(models.PostComment.post_id.in_(post_ids), models.PostComment.user_id.notin_(blocked or {-1}))
         .order_by(models.PostComment.created_at.asc(), models.PostComment.id.asc())
         .all()
     )
@@ -957,9 +958,10 @@ def list_post_comments(
 ):
     uid = token_data["id"]
     viewable_post(db, uid, post_id)
+    blocked = player_safety.blocked_user_ids(db, uid)
     rows = (
         db.query(models.PostComment)
-        .filter(models.PostComment.post_id == post_id)
+        .filter(models.PostComment.post_id == post_id, models.PostComment.user_id.notin_(blocked or {-1}))
         .order_by(models.PostComment.created_at.asc(), models.PostComment.id.asc())
         .limit(limit)
         .all()

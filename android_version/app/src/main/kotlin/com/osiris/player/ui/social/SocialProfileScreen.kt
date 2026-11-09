@@ -39,6 +39,7 @@ import com.osiris.player.ui.common.rememberNow
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.design.KeyButton
 import com.osiris.player.ui.theme.OsirisColors
+import com.osiris.shared.domain.model.ReportKind
 import com.osiris.shared.domain.model.SocialProfile
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.social.SocialProfileViewModel
@@ -49,7 +50,15 @@ fun SocialProfileScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onMess
     val vm = rememberShared(key = "profile-$userId") { graph.socialProfile(userId) }
     val s by vm.state.collectAsStateWithLifecycle()
     var openPostId by rememberSaveable { mutableStateOf<Int?>(null) }
-    OsirisScaffold(s.profile.valueOrNull?.user?.handle?.let { "@$it" } ?: "Profile", vm, onBack = onBack) { padding ->
+    val safety = rememberFeedSafety(graph)
+    OsirisScaffold(
+        s.profile.valueOrNull?.user?.handle?.let { "@$it" } ?: "Profile",
+        vm,
+        onBack = onBack,
+        actions = {
+            s.profile.valueOrNull?.takeUnless { it.isMe }?.let { UserSafetyMenu(it.user.userId, it.user.displayName, safety.vm) }
+        },
+    ) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LoadableContent(s.profile, onRetry = vm::refresh) { p ->
                 LazyVerticalGrid(
@@ -87,12 +96,15 @@ fun SocialProfileScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onMess
                             openPostId = null
                             vm.delete(it)
                         },
+                        onReport = { safety.vm.askReport(ReportKind.POST, it) },
+                        onBlock = { safety.vm.askBlock(it.userId, it.authorName) },
                     ),
                 )
             }
         }
     }
-    PostSheetsHost(vm)
+    PostSheetsHost(vm, safety)
+    ModerationHost(safety.vm, onBlocked = onBack)
 }
 
 private fun LazyGridScope.header(

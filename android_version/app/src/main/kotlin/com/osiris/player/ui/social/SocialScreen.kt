@@ -57,7 +57,7 @@ import com.osiris.player.ui.design.HudPill
 import com.osiris.player.ui.design.LocalTabBarInset
 import com.osiris.player.ui.today.CommentsSheet
 import com.osiris.shared.domain.model.FeedPost
-import com.osiris.shared.domain.repository.AuthState
+import com.osiris.shared.domain.model.ReportKind
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.social.PostListViewModel
 
@@ -78,6 +78,7 @@ class SocialNav(
 fun SocialScreen(graph: AppGraph, nav: SocialNav) {
     val vm = rememberShared { graph.socialFeed() }
     val s by vm.state.collectAsStateWithLifecycle()
+    val safety = rememberFeedSafety(graph)
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm, snackbar)
     // Back from the composer, a profile or a chat: new posts, follows and read messages show up.
@@ -130,7 +131,7 @@ fun SocialScreen(graph: AppGraph, nav: SocialNav) {
                             )
                         }
                     }
-                    postItems(posts, graph, vm, nav.onProfile)
+                    postItems(posts, graph, vm, safety, nav.onProfile)
                     if (s.loadingMore) {
                         item {
                             Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -140,7 +141,8 @@ fun SocialScreen(graph: AppGraph, nav: SocialNav) {
             }
         }
     }
-    PostSheetsHost(vm)
+    PostSheetsHost(vm, safety)
+    ModerationHost(safety.vm, onBlocked = vm::refresh)
 }
 
 @Composable
@@ -167,17 +169,16 @@ fun LazyListScope.postItems(
     posts: List<FeedPost>,
     graph: AppGraph,
     vm: PostListViewModel,
+    safety: FeedSafety,
     onProfile: (Int) -> Unit,
 ) {
     items(posts, key = { it.id }) { post ->
-        val auth by graph.data.auth.state.collectAsStateWithLifecycle()
-        val me = (auth as? AuthState.SignedIn)?.user?.id
         var confirmDelete by remember { mutableStateOf(false) }
         SocialPostCard(
             post,
             baseUrl = graph.config.apiBaseUrl,
             now = rememberNow(),
-            isMine = post.userId == me,
+            isMine = post.userId == safety.viewerId,
             actions = PostCallbacks(
                 onKudos = vm::toggleKudos,
                 onDoubleTap = vm::kudosByDoubleTap,
@@ -185,6 +186,8 @@ fun LazyListScope.postItems(
                 onShare = vm::share,
                 onAuthor = onProfile,
                 onDelete = { confirmDelete = true },
+                onReport = { safety.vm.askReport(ReportKind.POST, it) },
+                onBlock = { safety.vm.askBlock(it.userId, it.authorName) },
             ),
         )
         if (confirmDelete) {
@@ -206,7 +209,7 @@ fun LazyListScope.postItems(
 
 /** The comments and share sheets every post list opens. */
 @Composable
-fun PostSheetsHost(vm: PostListViewModel) {
+fun PostSheetsHost(vm: PostListViewModel, safety: FeedSafety) {
     val sheets by vm.sheets.collectAsStateWithLifecycle()
     ShareEffect(sheets.share, onShared = vm::shared)
     val postId = sheets.commentsPostId
@@ -215,6 +218,7 @@ fun PostSheetsHost(vm: PostListViewModel) {
             comments = sheets.comments,
             onAddComment = { vm.addComment(postId, it) },
             onDismiss = { vm.openComments(null) },
+            safety = safety,
         )
     }
 }

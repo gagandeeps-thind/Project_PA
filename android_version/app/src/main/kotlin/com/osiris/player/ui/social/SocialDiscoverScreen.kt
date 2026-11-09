@@ -44,6 +44,7 @@ import com.osiris.player.ui.common.rememberNow
 import com.osiris.player.ui.common.rememberShared
 import com.osiris.player.ui.theme.OsirisColors
 import com.osiris.shared.domain.model.FeedPost
+import com.osiris.shared.domain.model.ReportKind
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.social.SocialDiscoverState
 import com.osiris.shared.presentation.social.SocialDiscoverViewModel
@@ -61,6 +62,7 @@ class DiscoverNav(
 fun SocialDiscoverScreen(graph: AppGraph, nav: DiscoverNav) {
     val vm = rememberShared { graph.socialDiscover() }
     val s by vm.state.collectAsStateWithLifecycle()
+    val safety = rememberFeedSafety(graph)
     OsirisScaffold("Discover", vm, onBack = nav.onBack) { padding ->
         PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             Column(Modifier.fillMaxSize()) {
@@ -81,8 +83,12 @@ fun SocialDiscoverScreen(graph: AppGraph, nav: DiscoverNav) {
             }
         }
     }
-    s.openPost?.let { post -> OpenPostSheet(post, graph, vm, s, nav.onProfile) }
-    PostSheetsHost(vm)
+    s.openPost?.let { post -> OpenPostSheet(post, graph, vm, s, safety, nav.onProfile) }
+    PostSheetsHost(vm, safety)
+    ModerationHost(safety.vm) {
+        vm.open(null)
+        vm.refresh()
+    }
 }
 
 @Composable
@@ -133,7 +139,14 @@ private fun DiscoverGrid(posts: List<FeedPost>, graph: AppGraph, s: SocialDiscov
 }
 
 @Composable
-private fun OpenPostSheet(post: FeedPost, graph: AppGraph, vm: SocialDiscoverViewModel, s: SocialDiscoverState, onProfile: (Int) -> Unit) {
+private fun OpenPostSheet(
+    post: FeedPost,
+    graph: AppGraph,
+    vm: SocialDiscoverViewModel,
+    s: SocialDiscoverState,
+    safety: FeedSafety,
+    onProfile: (Int) -> Unit,
+) {
     ModalBottomSheet(
         onDismissRequest = { vm.open(null) },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -162,6 +175,8 @@ private fun OpenPostSheet(post: FeedPost, graph: AppGraph, vm: SocialDiscoverVie
                         onProfile(it)
                     },
                     onDelete = null,
+                    onReport = { safety.vm.askReport(ReportKind.POST, it) },
+                    onBlock = { safety.vm.askBlock(it.userId, it.authorName) },
                 ),
             )
         }

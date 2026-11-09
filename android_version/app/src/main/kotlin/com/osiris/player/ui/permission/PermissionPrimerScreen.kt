@@ -26,7 +26,6 @@ import com.osiris.player.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import com.osiris.player.ui.design.RaisedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -103,20 +102,6 @@ fun PermissionPrimerScreen(graph: AppGraph) {
                 color = FrostTheme.palette.textSecondary.color(),
             )
             s.items.forEach { item -> PermissionCard(item, onAllow = { vm.request(item.permission) }) }
-            FrostCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Share crash reports", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            "Anonymous diagnostics that help us fix crashes. Off unless you turn it on.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = FrostTheme.palette.textSecondary.color(),
-                        )
-                    }
-                    Spacer(Modifier.width(FrostMatte.Spacing.M.dp))
-                    Switch(checked = s.telemetry, onCheckedChange = vm::setTelemetry)
-                }
-            }
             KeyButton(onClick = vm::finish, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
         }
     }

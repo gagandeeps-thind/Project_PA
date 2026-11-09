@@ -58,3 +58,12 @@ def public_base_url() -> str | None:
     """Origin used in share and invite links (`OSIRIS_PUBLIC_BASE_URL`), without a trailing slash."""
     value = os.environ.get("OSIRIS_PUBLIC_BASE_URL", "").strip().rstrip("/")
     return value or None
+
+
+def android_package_name() -> str:
+    return os.environ.get("GOOGLE_PLAY_PACKAGE_NAME", "").strip() or "com.osiris.player"
+
+
+def android_cert_fingerprints() -> list[str]:
+    """SHA-256 fingerprints of the app's signing keys (`OSIRIS_ANDROID_CERT_SHA256`, comma-separated)."""
+    return [f.strip().upper() for f in os.environ.get("OSIRIS_ANDROID_CERT_SHA256", "").split(",") if f.strip()]

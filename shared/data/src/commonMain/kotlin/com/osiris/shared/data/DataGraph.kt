@@ -24,6 +24,8 @@ import com.osiris.shared.data.repository.PlayerRepositoryImpl
 import com.osiris.shared.data.repository.PrivacyRepositoryImpl
 import com.osiris.shared.data.repository.RunRepositoryImpl
 import com.osiris.shared.data.repository.SessionStore
+import com.osiris.shared.data.network.api.PaymentsApi
+import com.osiris.shared.data.repository.PaymentsRepositoryImpl
 import com.osiris.shared.data.repository.SocialRepositoryImpl
 import com.osiris.shared.data.repository.TrainingRepositoryImpl
 import com.osiris.shared.data.storage.PlatformDependencies
@@ -39,6 +41,7 @@ import com.osiris.shared.domain.repository.GroupChallengeRepository
 import com.osiris.shared.domain.repository.PlayerRepository
 import com.osiris.shared.domain.repository.PrivacyRepository
 import com.osiris.shared.domain.repository.RunRepository
+import com.osiris.shared.domain.repository.PaymentsRepository
 import com.osiris.shared.domain.repository.SocialRepository
 import com.osiris.shared.domain.repository.SupportChatRepository
 import com.osiris.shared.domain.repository.TrainingRepository
@@ -113,6 +116,7 @@ class DataGraph(
     val training: TrainingRepository = TrainingRepositoryImpl(TrainingApi(api), platform.settings)
     val groupChallenges: GroupChallengeRepository = GroupChallengeRepositoryImpl(GroupChallengeApi(api))
     val social: SocialRepository = SocialRepositoryImpl(SocialApi(api))
+    val payments: PaymentsRepository = PaymentsRepositoryImpl(PaymentsApi(api))
 
     /** Null when the build has no wallet (production): the app then hides the Wallet tab. */
     val wallet: WalletRepository? = if (config.features.walletDemo) MockWalletRepository(clock) else null

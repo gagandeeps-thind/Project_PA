@@ -13,7 +13,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import com.osiris.player.OsirisApplication
 import com.osiris.player.ui.theme.OsirisTheme
 
 /** Health Connect opens this to show players why Osiris reads their workouts. */
@@ -31,6 +33,9 @@ class HealthRationaleActivity : ComponentActivity() {
                                 "activity history. Nothing is read in the background and Osiris never writes to " +
                                 "Health Connect. Workouts stay private unless you post them.",
                         )
+                        val links = LocalUriHandler.current
+                        val baseUrl = (application as OsirisApplication).graph.config.apiBaseUrl
+                        TextButton(onClick = { links.openUri("$baseUrl/privacy") }) { Text("Privacy policy") }
                         TextButton(onClick = ::finish) { Text("Close") }
                     }
                 }

@@ -184,6 +184,58 @@ def test_reports_abuse_queue_and_unsafe_route_auto_pause() -> None:
     assert status["status"] == "actioned" and "highway" in status["message"]
 
 
+def _post(headers, caption):
+    r = client.post("/api/v2/social/posts", headers=headers, json={"caption": caption, "visibility": "public"})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_reported_posts_and_comments_can_be_removed() -> None:
+    cleanup()
+    admin = _admin()
+    author, author_profile = _register("poster")
+    reader, _ = _register("reader")
+    post = _post(author, "A rude caption")
+    comment = client.post(f"/api/v2/feed/posts/{post['id']}/comments", headers=author, json={"body": "A rude reply"}).json()
+
+    assert client.post("/api/v2/reports", headers=author, json={
+        "target_type": "post", "target_id": post["id"], "reason": "spam"}).status_code == 422
+    assert client.post("/api/v2/reports", headers=reader, json={
+        "target_type": "post", "target_id": 999999, "reason": "spam"}).status_code == 404
+    for target_type, target_id in (("post", post["id"]), ("comment", comment["id"]), ("user", author_profile["user_id"])):
+        r = client.post("/api/v2/reports", headers=reader, json={
+            "target_type": target_type, "target_id": target_id, "reason": "harassment"})
+        assert r.status_code == 201, r.text
+
+    queue = client.get("/api/v2/admin/reports", headers=admin).json()
+    by_type = {q["target_type"]: q for q in queue}
+    assert "A rude caption" in by_type["post"]["target_summary"] and "A rude reply" in by_type["comment"]["target_summary"]
+
+    def resolve(item, status):
+        r = client.post(f"/api/v2/admin/reports/{item['id']}/resolve", headers=admin, json={"status": status, "note": "Reviewed"})
+        assert r.status_code == 200, r.text
+
+    resolve(by_type["user"], "dismissed")
+    resolve(by_type["comment"], "actioned")
+    assert client.get(f"/api/v2/feed/posts/{post['id']}/comments", headers=reader).json() == []
+    resolve(by_type["post"], "actioned")
+    assert client.get(f"/api/v2/feed/posts/{post['id']}/comments", headers=reader).status_code == 404
+
+
+def test_blocking_by_user_id_hides_posts_and_comments() -> None:
+    cleanup()
+    alice, alice_profile = _register("alice")
+    bob, bob_profile = _register("bob")
+    post = _post(alice, "Morning miles")
+    client.post(f"/api/v2/feed/posts/{post['id']}/comments", headers=bob, json={"body": "Nice"})
+
+    assert client.post("/api/v2/blocks", headers=alice, json={"user_id": alice_profile["user_id"]}).status_code == 422
+    assert client.post("/api/v2/blocks", headers=alice, json={"user_id": 999999}).status_code == 404
+    assert client.post("/api/v2/blocks", headers=alice, json={"user_id": bob_profile["user_id"]}).status_code == 201
+    assert client.get(f"/api/v2/feed/posts/{post['id']}/comments", headers=alice).json() == []
+    assert client.get(f"/api/v2/feed/posts/{post['id']}/comments", headers=bob).status_code == 404
+
+
 def test_blocking_hides_and_prevents_joining() -> None:
     cleanup()
     creator, _ = _register("creator")
@@ -279,6 +331,8 @@ if __name__ == "__main__":
     for test in (
         test_location_consent_gates_runs_and_is_recorded,
         test_reports_abuse_queue_and_unsafe_route_auto_pause,
+        test_reported_posts_and_comments_can_be_removed,
+        test_blocking_by_user_id_hides_posts_and_comments,
         test_blocking_hides_and_prevents_joining,
         test_sign_out_everywhere_and_password_change,
         test_export_and_erase,

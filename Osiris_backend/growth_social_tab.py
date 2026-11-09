@@ -588,12 +588,7 @@ def delete_social_post(
     post = db.query(models.SocialPost).filter(models.SocialPost.id == post_id, models.SocialPost.user_id == uid).first()
     if post is None:
         raise _api_error(404, "POST_NOT_FOUND", "Post not found")
-    db.query(models.TrainingSession).filter(models.TrainingSession.social_post_id == post_id).update(
-        {models.TrainingSession.social_post_id: None}, synchronize_session=False
-    )
-    for table in (models.PostReaction, models.PostComment, models.PostPhoto):
-        db.query(table).filter(table.post_id == post_id).delete(synchronize_session=False)
-    db.delete(post)
+    player_safety.remove_post(db, post)
     db.commit()
     return Response(status_code=204)
 
