@@ -181,5 +181,5 @@ Crashes appear in Play Console under **Android vitals**.
 - Personal developer accounts created after 13 November 2023 must run a closed test with at least 12 testers opted in
   for 14 days in a row, then apply for production access. Organization accounts are generally exempt.
 - Complete the store listing: 512x512 icon, 1024x500 feature graphic, at least 2 phone screenshots, descriptions.
-- Build the missing pieces listed in the release notes for this branch: password reset, push notifications, a staffed
-  support desk, and Play refund handling.
+- Build what is still missing: password reset (needs an email provider), push notifications, a staffed support desk,
+  and Play refund handling.
