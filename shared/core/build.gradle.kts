@@ -3,16 +3,20 @@ import java.util.Properties
 // Platform-neutral building blocks: configuration, errors, results, logging, ids.
 // No dependency on other Osiris modules.
 
-val envName = providers.gradleProperty("osiris.env").getOrElse("dev")
+val isReleaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
+val envName = providers.gradleProperty("osiris.env").orNull
+    ?: if (isReleaseRequested) "prod" else "dev"
 val envDir = rootProject.layout.projectDirectory.dir("config/environments")
 val generatedDir = layout.buildDirectory.dir("generated/osirisEnv/commonMain/kotlin")
 
 val generateEnv by tasks.registering {
-    description = "Compiles config/environments/<osiris.env>.properties (+ local.properties) into GeneratedEnv.kt"
+    description = "Compiles config/environments/<osiris.env>.properties (+ local.properties in dev) into GeneratedEnv.kt"
     val envFile = envDir.file("$envName.properties")
     val localFile = envDir.file("local.properties")
     inputs.file(envFile)
-    inputs.files(localFile.asFile.takeIf { it.exists() } ?: files())
+    inputs.files(if (envName == "dev" && localFile.asFile.exists()) localFile else files())
     inputs.property("env", envName)
     outputs.dir(generatedDir)
     doLast {
@@ -20,7 +24,9 @@ val generateEnv by tasks.registering {
         val selected = envFile.asFile
         require(selected.exists()) { "Unknown osiris.env '$envName': ${selected.path} does not exist" }
         selected.inputStream().use(props::load)
-        localFile.asFile.takeIf { it.exists() }?.inputStream()?.use(props::load)
+        if (envName == "dev") {
+            localFile.asFile.takeIf { it.exists() }?.inputStream()?.use(props::load)
+        }
         val required = listOf(
             "environment", "api.baseUrl.android", "api.baseUrl.ios", "api.baseUrl.jvm",
             "api.connectTimeoutMs", "api.requestTimeoutMs", "http.logging", "features.legacy", "features.poseRecording",
@@ -28,6 +34,12 @@ val generateEnv by tasks.registering {
         )
         val missing = required.filter { props.getProperty(it).isNullOrBlank() }
         require(missing.isEmpty()) { "${selected.name} is missing: ${missing.joinToString()}" }
+        if (envName != "dev") {
+            val androidUrl = props.getProperty("api.baseUrl.android").trim()
+            require(androidUrl.startsWith("https://")) {
+                "osiris.env '$envName' must use an https:// api.baseUrl.android, got: $androidUrl"
+            }
+        }
         fun s(key: String) = "\"" + props.getProperty(key).trim().replace("\\", "\\\\").replace("\"", "\\\"") + "\""
         fun l(key: String) = props.getProperty(key).trim().toLong().toString() + "L"
         fun b(key: String) = props.getProperty(key).trim().toBooleanStrict().toString()

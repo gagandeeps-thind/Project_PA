@@ -4,15 +4,46 @@
 // to the shared code.
 //
 // Build:   ./gradlew :android_version:app:assembleDebug                  (dev backend, 10.0.2.2)
-//          ./gradlew :android_version:app:assembleRelease -Posiris.env=prod
-//          ./gradlew :android_version:app:bundleRelease -Posiris.env=prod
+//          ./gradlew :android_version:app:assembleRelease                (defaults to prod)
+//          ./gradlew :android_version:app:bundleRelease                  (defaults to prod)
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // The same environment file the shared core compiles in (see :shared:core:generateEnv).
+// Release builds default to `prod` so a signed APK/AAB never ships pointing at 10.0.2.2.
+val isReleaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
+val osirisEnvName = providers.gradleProperty("osiris.env").orNull
+    ?: if (isReleaseRequested) "prod" else "dev"
 val osirisEnv = java.util.Properties().apply {
-    val name = providers.gradleProperty("osiris.env").getOrElse("dev")
-    rootProject.file("config/environments/$name.properties").inputStream().use { load(it) }
-    rootProject.file("config/environments/local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    if (osirisEnvName != "dev") {
+        rootProject.file("config/environments/local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    rootProject.file("config/environments/$osirisEnvName.properties").inputStream().use { load(it) }
+    if (osirisEnvName == "dev") {
+        rootProject.file("config/environments/local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+}
+
+val verifyReleaseEnv by tasks.registering {
+    description = "Fails fast if a release artifact is built against the dev environment or cleartext HTTP."
+    val env = osirisEnvName
+    val androidBaseUrl = osirisEnv.getProperty("api.baseUrl.android").orEmpty().trim()
+    doLast {
+        check(env != "dev") {
+            "Release builds cannot use osiris.env=dev ($androidBaseUrl is unreachable on devices and blocked by cleartext policy). " +
+                "Omit -Posiris.env (defaults to prod) or pass -Posiris.env=prod."
+        }
+        check(androidBaseUrl.startsWith("https://")) {
+            "Release builds require an https:// api.baseUrl.android, got '$androidBaseUrl' (osiris.env=$env)."
+        }
+    }
+}
+
+tasks.matching {
+    it.name in setOf("preReleaseBuild", "assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle")
+}.configureEach {
+    dependsOn(verifyReleaseEnv)
 }
 
 // Release signing credentials loaded from keystore.properties / key.properties (git-ignored)
@@ -48,10 +79,10 @@ val hasReleaseSigning = releaseStoreFile != null &&
 
 val resolvedVersionCode = providers.gradleProperty("osiris.versionCode").orNull?.toIntOrNull()
     ?: System.getenv("OSIRIS_VERSION_CODE")?.toIntOrNull()
-    ?: 1
+    ?: 2
 val resolvedVersionName = providers.gradleProperty("osiris.versionName").orNull
     ?: System.getenv("OSIRIS_VERSION_NAME")?.takeIf { it.isNotBlank() }
-    ?: "1.0.0"
+    ?: "1.0.1"
 val playBillingPublicKey = (
     osirisEnv.getProperty("billing.playPublicKey")
         ?: System.getenv("OSIRIS_PLAY_BILLING_PUBLIC_KEY")
