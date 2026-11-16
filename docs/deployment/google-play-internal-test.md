@@ -10,7 +10,7 @@ Play Console menus move around. If a label differs, use the Console's search box
 |---|---|
 | Upload keystore | `android_version/release-upload-keystore.jks` and `keystore.properties` exist and are git-ignored |
 | Back up the keystore | **Do this now.** Copy both files and the passwords to your password manager |
-| App id | `com.osiris.player` cannot be changed after the first upload |
+| App id | `osiris.fit` cannot be changed after the first upload |
 | Production API | `https://api.osiris.fit` (healthy, migrations current) |
 | Supabase | Nothing to do. This release adds no database migration |
 

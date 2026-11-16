@@ -15,8 +15,8 @@ against the label, so a recording added after a device QA session stays a regres
 
 ## Copying a recording off the phone
 
-- Android: `adb exec-out run-as com.osiris.player ls files/pose_recordings`, then
-  `adb exec-out run-as com.osiris.player cat files/pose_recordings/<file>.json > <file>.json`
+- Android: `adb exec-out run-as osiris.fit ls files/pose_recordings`, then
+  `adb exec-out run-as osiris.fit cat files/pose_recordings/<file>.json > <file>.json`
 - iOS: Xcode > Window > Devices and Simulators > Osiris > Download Container, then
   `AppData/Documents/pose_recordings/`.
 

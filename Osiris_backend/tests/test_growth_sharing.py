@@ -277,7 +277,7 @@ def test_asset_links_need_the_signing_fingerprint() -> None:
         target = client.get("/.well-known/assetlinks.json").json()[0]["target"]
     finally:
         del os.environ["OSIRIS_ANDROID_CERT_SHA256"]
-    assert target["package_name"] == "com.osiris.player"
+    assert target["package_name"] == "osiris.fit"
     assert target["sha256_cert_fingerprints"] == ["AB:CD", "EF:01"]
 
 

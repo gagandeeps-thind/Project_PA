@@ -86,7 +86,7 @@ re-read from Google on this call (renewal or lapse).
 2. Play Console, Users and permissions: invite the service-account email with "View financial data"
    and "Manage orders and subscriptions".
 3. Render, `osiris-api`, Environment: `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` = the key file's JSON.
-   `GOOGLE_PLAY_PACKAGE_NAME` defaults to `com.osiris.player`.
+   `GOOGLE_PLAY_PACKAGE_NAME` defaults to `osiris.fit`.
 
 ## Not built yet
 

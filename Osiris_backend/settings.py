@@ -61,7 +61,7 @@ def public_base_url() -> str | None:
 
 
 def android_package_name() -> str:
-    return os.environ.get("GOOGLE_PLAY_PACKAGE_NAME", "").strip() or "com.osiris.player"
+    return os.environ.get("GOOGLE_PLAY_PACKAGE_NAME", "").strip() or "osiris.fit"
 
 
 def android_cert_fingerprints() -> list[str]:

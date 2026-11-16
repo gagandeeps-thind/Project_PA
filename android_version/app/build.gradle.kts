@@ -68,7 +68,7 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
 
     defaultConfig {
         // Unique application ID for Google Play Store distribution.
-        applicationId = "com.osiris.player"
+        applicationId = "osiris.fit"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = resolvedVersionCode

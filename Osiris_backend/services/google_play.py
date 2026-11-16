@@ -12,7 +12,7 @@ from datetime import datetime
 import settings
 from core.clock import _to_naive_utc
 
-PACKAGE_NAME = os.environ.get("GOOGLE_PLAY_PACKAGE_NAME", "com.osiris.player")
+PACKAGE_NAME = os.environ.get("GOOGLE_PLAY_PACKAGE_NAME", "osiris.fit")
 _API = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications"
 _SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 _TIMEOUT_S = 10

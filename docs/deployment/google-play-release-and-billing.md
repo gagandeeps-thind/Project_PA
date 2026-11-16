@@ -8,7 +8,7 @@ Step-by-step runbook for building the signed release Android App Bundle (`.aab`)
 
 | Setting | Value | Source |
 |---|---|---|
-| `applicationId` | `com.osiris.player` | `android_version/app/build.gradle.kts` |
+| `applicationId` | `osiris.fit` | `android_version/app/build.gradle.kts` |
 | `minSdk` | `26` (Android 8.0) | `gradle/libs.versions.toml` |
 | `targetSdk` / `compileSdk` | `36` (exceeds Google Play Target API 34+ requirement) | `gradle/libs.versions.toml` |
 | `versionCode` | Default `1` (`-Posiris.versionCode=<N>` or `OSIRIS_VERSION_CODE`) | `android_version/app/build.gradle.kts` |
@@ -98,7 +98,7 @@ jarsigner -verify -verbose -certs android_version/app/build/outputs/bundle/relea
 
 ### Step 3.1 — Copy the Play Licensing Public Key
 
-1. In Google Play Console, select your app (`com.osiris.player`).
+1. In Google Play Console, select your app (`osiris.fit`).
 2. Navigate to **Monetize with Play** -> **Monetization setup**.
 3. Copy the Base64-encoded RSA public key under **Licensing**.
 4. Set it in `config/environments/local.properties` (`billing.playPublicKey=<KEY>`) or export `OSIRIS_PLAY_BILLING_PUBLIC_KEY=<KEY>` in CI so `PlaySignaturePurchaseVerifier` verifies purchase receipts cryptographically on-device.
@@ -186,11 +186,11 @@ Share the following steps with your testers along with the **Copy link** URL fro
    - Open the **Google Play Store** app on your Android phone (Android 8.0+).
    - Tap your profile avatar in the top-right corner and confirm the signed-in Google account matches the exact email address added to the tester list.
 2. **Opt In to the Testing Program:**
-   - Open the **Web Opt-In Link** (`https://play.google.com/apps/internaltest/...` or `https://play.google.com/apps/testing/com.osiris.player`) in Chrome on your phone or computer.
+   - Open the **Web Opt-In Link** (`https://play.google.com/apps/internaltest/...` or `https://play.google.com/apps/testing/osiris.fit`) in Chrome on your phone or computer.
    - Sign in with your tester Google account and tap **Accept Invite** / **Become a Tester**.
 3. **Install Osiris from Google Play:**
    - Tap **Download it on Google Play** on the confirmation page (this opens the Play Store listing for **Osiris (Internal Beta)**).
-   - Tap **Install**. (If a local debug build of `com.osiris.player` is already installed on the device, uninstall it first so the Play Store-signed build can install cleanly.)
+   - Tap **Install**. (If a local debug build of `osiris.fit` is already installed on the device, uninstall it first so the Play Store-signed build can install cleanly.)
 4. **Verify Test Payment Instrument During Checkout:**
    - Open Osiris, sign in, and open the **Wallet** screen.
    - Tap a Mana Crystal pack or **SUBSCRIBE** on Osiris Pass.
