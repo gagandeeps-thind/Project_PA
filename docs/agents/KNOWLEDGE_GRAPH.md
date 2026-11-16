@@ -112,7 +112,7 @@ Dependencies only point down. `shared/` never imports Android, iOS or UI code. P
 | data | `network/ApiClient` + `network/api/` (AuthApi, RunApi, ChallengeApi, MeApi, CommunityApi, ExerciseApi, AriseApi, TrainingApi), `repository/*Impl`, `storage/` (SQLDelight, settings), `DataGraph` |
 | presentation | `common/` (SharedViewModel, Loadable), `navigation/` (AppNavigatorViewModel, Destinations, Tab), one package per screen: today, discover, arise, start, social, profile, run, exercise, challenge, community, session, settings, support, wallet, permission. `AppGraph` is the composition root |
 
-### Player app, Android (`android_version/app/src/main/kotlin/com/osiris/player/`)
+### Player app, Android (`android_version/app/src/main/kotlin/osiris/fit/`)
 | Path | What |
 |---|---|
 | `ui/navigation/OsirisRoot.kt` | tabs (**Home · Arise · Start · Social · Profile**), routes, deep links. Wallet is a pushed route. Social opens on the following feed; leaderboards moved under Discover |

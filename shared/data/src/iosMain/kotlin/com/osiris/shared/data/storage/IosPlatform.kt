@@ -68,7 +68,7 @@ object IosPlatform {
 
 /** Generic-password items in the Keychain, readable only on this device after first unlock. */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-internal class KeychainSecureStore(private val service: String = "com.osiris.player") : SecureStore {
+internal class KeychainSecureStore(private val service: String = "osiris.fit") : SecureStore {
 
     private fun query(key: String, extra: Map<Any?, Any?> = emptyMap()): CFDictionaryRef? {
         val map = mutableMapOf<Any?, Any?>(

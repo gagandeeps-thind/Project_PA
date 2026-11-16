@@ -15,7 +15,7 @@ final class PoseCamera: NSObject, ObservableObject {
     let front: Bool
     let stats = PoseStats()
 
-    private let queue = DispatchQueue(label: "com.osiris.player.pose", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "osiris.fit.pose", qos: .userInteractive)
     private let output = AVCaptureVideoDataOutput()
     private let request = VNDetectHumanBodyPoseRequest()
     private let sequenceHandler = VNSequenceRequestHandler()

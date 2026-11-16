@@ -33,7 +33,7 @@
 }
 
 # Keep Osiris Billing domain models, callbacks, and verification contracts.
--keep class com.osiris.player.platform.billing.** { *; }
+-keep class osiris.fit.platform.billing.** { *; }
 
 # Ktor and OkHttp reference optional platform classes.
 -dontwarn org.slf4j.**

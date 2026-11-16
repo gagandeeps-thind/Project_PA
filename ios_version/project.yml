@@ -32,7 +32,7 @@ targets:
         # osiris://challenge/<id>, osiris://invite/<token> (DeepLinkParser). Universal links for the
         # https invite pages need the Associated Domains entitlement, which needs the Apple team id.
         CFBundleURLTypes:
-          - CFBundleURLName: com.osiris.player
+          - CFBundleURLName: osiris.fit
             CFBundleURLSchemes: [osiris]
         UIBackgroundModes: [location]
         # Portrait only: the camera set and the run map are laid out for it, as on Android phones.
@@ -42,7 +42,7 @@ targets:
           NSAllowsLocalNetworking: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.osiris.player
+        PRODUCT_BUNDLE_IDENTIFIER: osiris.fit
         FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../shared/presentation/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
         OTHER_LDFLAGS: [-framework, OsirisShared, -lsqlite3]
     preBuildScripts:

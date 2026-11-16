@@ -1,0 +1,391 @@
+package osiris.fit.ui.navigation
+
+import android.provider.Settings
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SupportAgent
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import osiris.fit.ui.arise.AriseScreen
+import osiris.fit.ui.arise.WorkoutScreen
+import osiris.fit.ui.challenge.ChallengeBoardScreen
+import osiris.fit.ui.challenge.ChallengeDetailScreen
+import osiris.fit.ui.challenge.CoursesScreen
+import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.community.CommunitiesScreen
+import osiris.fit.ui.community.CommunityDetailScreen
+import osiris.fit.ui.community.RankingsScreen
+import osiris.fit.ui.design.FrostBackground
+import osiris.fit.ui.design.FrostBar
+import osiris.fit.ui.design.FrostBarItem
+import osiris.fit.ui.design.LocalTabBarInset
+import osiris.fit.ui.design.TabBarHeight
+import osiris.fit.ui.exercise.ExerciseCameraScreen
+import osiris.fit.ui.exercise.ExerciseHubScreen
+import osiris.fit.ui.permission.PermissionPrimerScreen
+import osiris.fit.ui.profile.ProfileScreen
+import osiris.fit.ui.run.RunScreen
+import osiris.fit.ui.session.LoginScreen
+import osiris.fit.ui.session.OnboardingScreen
+import osiris.fit.ui.settings.SettingsScreen
+import osiris.fit.ui.start.StartIcon
+import osiris.fit.ui.support.SupportChatScreen
+import osiris.fit.ui.today.TodayScreen
+import osiris.fit.ui.wallet.WalletScreen
+import com.osiris.shared.domain.model.StartMode
+import com.osiris.shared.domain.run.Sport
+import com.osiris.shared.presentation.AppGraph
+import com.osiris.shared.presentation.arise.WorkoutTarget
+import com.osiris.shared.presentation.navigation.Destination
+import com.osiris.shared.presentation.navigation.RootState
+import com.osiris.shared.presentation.navigation.Tab
+
+/** Route names. Arguments are path segments or optional query parameters. */
+object Routes {
+    const val LOGIN = "login"
+    const val ONBOARD = "onboard"
+    const val TODAY = "today"
+    const val ARISE = "arise"
+    const val SOCIAL = "social"
+    const val START = "start"
+    const val TRAINING = "training/{mode}"
+    const val LIVE = "live/{mode}/{activity}"
+    const val GROUPS = "groups"
+    const val GROUP = "group/{id}"
+    const val WALLET = "wallet"
+    const val PROFILE = "profile"
+    const val RUN = "run?challengeId={challengeId}&sport={sport}&record={record}&route={route}&attack={attack}"
+    const val WORKOUT = "workout/{kind}/{id}"
+    const val CHALLENGES = "challenges"
+    const val CHALLENGE = "challenge/{id}"
+    const val COURSES = "courses"
+    const val COMMUNITIES = "communities"
+    const val COMMUNITY = "community/{slug}"
+    const val RANKINGS = "rankings"
+    const val SETTINGS = "settings"
+    const val SUPPORT = "support"
+    const val EXERCISE = "exercise"
+    const val EXERCISE_CAMERA = "exercise/{key}?sets={sets}&reps={reps}&holdS={holdS}&start={start}"
+
+    /** Saved-state key the camera coach hands a Start set back under. */
+    const val CAMERA_SET = "camera_set"
+
+    fun run(challengeId: Int? = null) = if (challengeId == null) "run" else "run?challengeId=$challengeId"
+    fun ariseRun(sport: Sport, record: Boolean, routeId: Int? = null, attackDomainId: Int? = null) =
+        "run?sport=${sport.name}&record=$record" + (routeId?.let { "&route=$it" } ?: "") +
+            (attackDomainId?.let { "&attack=$it" } ?: "")
+    fun workout(target: WorkoutTarget) = when (target) {
+        is WorkoutTarget.Exceed -> "workout/exceed/${target.domainId}"
+        is WorkoutTarget.Attack -> "workout/attack/${target.attackId}"
+    }
+    fun challenge(id: Int) = "challenge/$id"
+    fun community(slug: String) = "community/${android.net.Uri.encode(slug)}"
+    fun exerciseCamera(key: String, sets: Int = 1, reps: Int = 0, holdS: Int = 0, start: StartMode? = null) =
+        "exercise/$key?sets=$sets&reps=$reps&holdS=$holdS" + (start?.let { "&start=${it.wire}" } ?: "")
+    fun training(mode: StartMode) = "training/${mode.wire}"
+    fun live(mode: StartMode, activityKey: String) = "live/${mode.wire}/$activityKey"
+    fun group(id: Int) = "group/$id"
+}
+
+/** The bar's sections and the route each one opens. The wallet opens from Start's top-right corner. */
+private class Section(val tab: Tab, val route: String, val label: String, val icon: ImageVector)
+
+private val sections = listOf(
+    Section(Tab.HOME, Routes.TODAY, "Home", Icons.Outlined.Home),
+    Section(Tab.ARISE, Routes.ARISE, "Arise", Icons.Outlined.Explore),
+    Section(Tab.START, Routes.START, "Start", StartIcon),
+    Section(Tab.SOCIAL, Routes.SOCIAL, "Social", Icons.Outlined.Groups),
+    Section(Tab.PROFILE, Routes.PROFILE, "Profile", Icons.Outlined.Person),
+)
+
+/**
+ * The app root, guarded by the shared navigator: permission primer on first launch, then sign-in,
+ * then the tabbed app. A restored session skips straight to Home. [link] is the latest deep link
+ * the OS delivered; [onLinkHandled] clears it once the navigator has taken it.
+ */
+@Composable
+fun OsirisRoot(graph: AppGraph, link: String?, onLinkHandled: () -> Unit) {
+    val navigator = rememberShared { graph.navigator() }
+    val state by navigator.state.collectAsStateWithLifecycle()
+    LaunchedEffect(link) {
+        if (link != null) {
+            navigator.open(link)
+            onLinkHandled()
+        }
+    }
+    FrostBackground {
+        when (val s = state) {
+            RootState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            RootState.PermissionPrimer -> PermissionPrimerScreen(graph)
+            is RootState.SignedOut -> SignedOutNav(graph, s)
+            is RootState.SignedIn -> SignedInNav(graph, s.pending, onPendingOpened = navigator::pendingOpened)
+        }
+    }
+}
+
+@Composable
+private fun SignedOutNav(graph: AppGraph, state: RootState.SignedOut) {
+    val nav = rememberNavController()
+    val start = if (state.invite != null || state.referral != null) Routes.ONBOARD else Routes.LOGIN
+    GlassNavHost(nav, startDestination = start) {
+        composable(Routes.LOGIN) { LoginScreen(graph, onCreateAccount = { nav.navigate(Routes.ONBOARD) }) }
+        composable(Routes.ONBOARD) {
+            OnboardingScreen(
+                graph,
+                onBack = { if (!nav.popBackStack()) nav.navigate(Routes.LOGIN) },
+                inviteToken = state.invite,
+                referralCode = state.referral,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignedInNav(graph: AppGraph, pending: Destination?, onPendingOpened: () -> Unit) {
+    val nav = rememberNavController()
+    val entry by nav.currentBackStackEntryAsState()
+    val route = entry?.destination?.route
+    LaunchedEffect(pending) {
+        when (pending) {
+            null -> return@LaunchedEffect
+            is Destination.Section -> when {
+                pending.tab == Tab.WALLET -> nav.open(Routes.WALLET)
+                else -> sections.firstOrNull { it.tab == pending.tab }?.let { nav.selectTab(it.route) }
+            }
+            is Destination.Challenge -> nav.open(Routes.challenge(pending.id))
+            is Destination.Community -> nav.open(Routes.community(pending.slug))
+            // A signed-in player already has an account; the invite's challenge is on Arise.
+            is Destination.Invite, is Destination.Referral -> nav.selectTab(Routes.ARISE)
+        }
+        onPendingOpened()
+    }
+    val onTab = sections.any { it.route == route }
+    val inset = if (onTab) TabBarHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() else 0.dp
+    val backdrop = rememberGraphicsLayer()
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxSize().drawWithContent {
+                backdrop.record { this@drawWithContent.drawContent() }
+                drawLayer(backdrop)
+            },
+        ) {
+            CompositionLocalProvider(LocalTabBarInset provides inset) { SignedInGraph(graph, nav) }
+        }
+        if (onTab) {
+            FrostBar(
+                sections.map { s -> FrostBarItem(s.label, s.icon, selected = s.route == route, onClick = { nav.selectTab(s.route) }) },
+                backdrop,
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignedInGraph(graph: AppGraph, nav: NavHostController) {
+    GlassNavHost(nav, startDestination = Routes.TODAY) {
+        composable(Routes.TODAY) { TodayScreen(graph, nav) }
+        composable(
+            Routes.RUN,
+            arguments = listOf(
+                navArgument("challengeId") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("sport") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("record") { type = NavType.BoolType; defaultValue = false },
+                navArgument("route") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("attack") { type = NavType.IntType; defaultValue = -1 },
+            ),
+        ) { entry ->
+            val args = entry.arguments
+            RunScreen(
+                graph,
+                challengeId = args?.getInt("challengeId")?.takeIf { it >= 0 },
+                onBack = nav::popBackStack,
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+                sport = args?.getString("sport")?.let { name -> Sport.entries.firstOrNull { it.name == name } },
+                record = args?.getBoolean("record") ?: false,
+                guideRouteId = args?.getInt("route")?.takeIf { it >= 0 },
+                attackDomainId = args?.getInt("attack")?.takeIf { it >= 0 },
+                onWorkout = { nav.navigate(Routes.workout(it)) },
+            )
+        }
+        composable(
+            Routes.WORKOUT,
+            arguments = listOf(navArgument("kind") { type = NavType.StringType }, navArgument("id") { type = NavType.IntType }),
+        ) { entry ->
+            val id = entry.arguments!!.getInt("id")
+            WorkoutScreen(
+                graph,
+                target = if (entry.arguments!!.getString("kind") == "attack") WorkoutTarget.Attack(id) else WorkoutTarget.Exceed(id),
+                onCamera = { key, reps -> nav.navigate(Routes.exerciseCamera(key, sets = 1, reps = reps)) },
+                onBack = nav::popBackStack,
+            )
+        }
+        composable(Routes.ARISE) {
+            AriseScreen(
+                graph,
+                onRun = { sport, record, routeId -> nav.navigate(Routes.ariseRun(sport, record, routeId)) },
+                onAttack = { domainId -> nav.navigate(Routes.ariseRun(Sport.RUN, record = false, attackDomainId = domainId)) },
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+                onCreateChallenge = { nav.open(Routes.COURSES) },
+                onNearbyChallenges = { nav.open(Routes.CHALLENGES) },
+            )
+        }
+        composable(Routes.CHALLENGES) {
+            ChallengeBoardScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.challenge(it)) })
+        }
+        composable(Routes.CHALLENGE, arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
+            ChallengeDetailScreen(
+                graph,
+                id = entry.arguments!!.getInt("id"),
+                onBack = nav::popBackStack,
+                onRun = { nav.navigate(Routes.run(it)) },
+            )
+        }
+        composable(Routes.COURSES) {
+            CoursesScreen(
+                graph,
+                onBack = nav::popBackStack,
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+                onStartRun = { nav.navigate(Routes.run()) },
+            )
+        }
+        composable(Routes.COMMUNITIES) {
+            CommunitiesScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.community(it)) })
+        }
+        composable(Routes.COMMUNITY, arguments = listOf(navArgument("slug") { type = NavType.StringType })) { entry ->
+            CommunityDetailScreen(
+                graph,
+                slug = entry.arguments!!.getString("slug")!!,
+                onBack = nav::popBackStack,
+                onOpenChallenge = { nav.navigate(Routes.challenge(it)) },
+            )
+        }
+        socialGraph(graph, nav)
+        composable(Routes.RANKINGS) { RankingsScreen(graph, onBack = nav::popBackStack, onSettings = { nav.open(Routes.SETTINGS) }) }
+        composable(Routes.WALLET) { WalletScreen(graph, onBack = nav::popBackStack) }
+        startGraph(graph, nav)
+        composable(Routes.PROFILE) {
+            ProfileScreen(graph, actions = {
+                IconButton(onClick = { nav.open(Routes.SUPPORT) }) { Icon(Icons.Outlined.SupportAgent, "Live support") }
+                IconButton(onClick = { nav.open(Routes.SETTINGS) }) { Icon(Icons.Outlined.Settings, "Settings") }
+            })
+        }
+        composable(Routes.SUPPORT) { SupportChatScreen(graph, onBack = nav::popBackStack) }
+        composable(Routes.SETTINGS) { SettingsScreen(graph, onBack = nav::popBackStack) }
+        composable(Routes.EXERCISE) { ExerciseHubScreen(graph, onBack = nav::popBackStack, onOpen = { nav.navigate(Routes.exerciseCamera(it)) }) }
+        composable(
+            Routes.EXERCISE_CAMERA,
+            arguments = listOf(
+                navArgument("key") { type = NavType.StringType },
+                navArgument("sets") { type = NavType.IntType; defaultValue = 1 },
+                navArgument("reps") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("holdS") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("start") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+        ) { entry ->
+            val args = entry.arguments!!
+            val key = args.getString("key")!!
+            ExerciseCameraScreen(
+                graph,
+                key = key,
+                sets = args.getInt("sets", 1),
+                reps = args.getInt("reps", 0),
+                holdS = args.getInt("holdS", 0),
+                onDone = nav::popBackStack,
+                onStartSet = args.getString("start")?.let {
+                    { setId, startedAt ->
+                        nav.previousBackStackEntry?.savedStateHandle?.set(Routes.CAMERA_SET, "$key|$setId|$startedAt")
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** How long a screen takes to surface out of the black, and to sink back into it. */
+private val surface = tween<Float>(durationMillis = 320, easing = FastOutSlowInEasing)
+private val sink = tween<Float>(durationMillis = 180, easing = FastOutSlowInEasing)
+
+/**
+ * A NavHost whose screens surface out of the black: the new one grows from slightly small as the old
+ * one swells and fades past the viewer; going back runs the same motion in reverse. Cuts instead when
+ * the system has animations turned off.
+ */
+@Composable
+private fun GlassNavHost(nav: NavHostController, startDestination: String, builder: NavGraphBuilder.() -> Unit) {
+    val context = LocalContext.current
+    val still = remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
+    if (still) {
+        NavHost(
+            nav,
+            startDestination,
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            builder = builder,
+        )
+    } else {
+        NavHost(
+            nav,
+            startDestination,
+            enterTransition = { fadeIn(surface) + scaleIn(surface, initialScale = 0.96f) },
+            exitTransition = { fadeOut(sink) + scaleOut(surface, targetScale = 1.03f) },
+            popEnterTransition = { fadeIn(surface) + scaleIn(surface, initialScale = 1.03f) },
+            popExitTransition = { fadeOut(sink) + scaleOut(surface, targetScale = 0.96f) },
+            builder = builder,
+        )
+    }
+}
+
+/** Navigates to a top-level route from the home screen. */
+fun NavHostController.open(route: String) = navigate(route) { launchSingleTop = true }
+
+/** Switches tab, keeping one back stack entry per tab and restoring its state. */
+private fun NavHostController.selectTab(route: String) = navigate(route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}

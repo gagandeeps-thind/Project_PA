@@ -63,7 +63,7 @@ apply(plugin = "org.jetbrains.kotlin.android")
 apply(plugin = "org.jetbrains.kotlin.plugin.compose")
 
 extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
-    namespace = "com.osiris.player"
+    namespace = "osiris.fit"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
