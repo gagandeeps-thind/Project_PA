@@ -64,6 +64,22 @@ def android_package_name() -> str:
     return os.environ.get("GOOGLE_PLAY_PACKAGE_NAME", "").strip() or "osiris.fit"
 
 
+def google_play_allow_test_purchases() -> bool:
+    """`GOOGLE_PLAY_ALLOW_TEST_PURCHASES` (default on, so internal testing works). Off: purchases
+    made by Play licence testers are refused instead of granted."""
+    return os.environ.get("GOOGLE_PLAY_ALLOW_TEST_PURCHASES", "1").strip().lower() not in ("0", "false", "no")
+
+
 def android_cert_fingerprints() -> list[str]:
     """SHA-256 fingerprints of the app's signing keys (`OSIRIS_ANDROID_CERT_SHA256`, comma-separated)."""
     return [f.strip().upper() for f in os.environ.get("OSIRIS_ANDROID_CERT_SHA256", "").split(",") if f.strip()]
+
+
+def apple_bundle_id() -> str:
+    return os.environ.get("APPLE_BUNDLE_ID", "").strip() or "osiris.fit"
+
+
+def apple_app_store_environments() -> frozenset[str]:
+    """`APPLE_APP_STORE_ENVIRONMENT`: the StoreKit environments whose purchases are granted, comma-
+    separated ("Production", "Sandbox" or both). Unset (the default) keeps App Store billing closed."""
+    return frozenset(e.strip() for e in os.environ.get("APPLE_APP_STORE_ENVIRONMENT", "").split(",") if e.strip())

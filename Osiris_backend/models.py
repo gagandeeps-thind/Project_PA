@@ -1,8 +1,9 @@
 from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey, Index, LargeBinary, UniqueConstraint
 from sqlalchemy import false as sa_false, true as sa_true
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from database import Base
 import datetime
+import json
 
 
 def _default_now_naive_utc():
@@ -18,6 +19,8 @@ OPENING_CRYSTAL_BALANCE = 100
 
 class User(Base):
     __tablename__ = "users"
+    # Suggested/trending players and the global rank order by XP.
+    __table_args__ = (Index("ix_users_xp_id", "xp", "id"),)
 
     # Every database table needs a Primary Key (a unique ID)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -63,7 +66,7 @@ class Domain(Base):
     __tablename__ = "domains"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    owner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"))
+    owner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), index=True)
     guild_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     
     # For MVP SQLite, we store the polygon coordinates as a JSON string.
@@ -86,8 +89,27 @@ class Domain(Base):
     defense_workout_json: Mapped[str | None] = mapped_column(String, nullable=True)
     pending_workout_json: Mapped[str | None] = mapped_column(String, nullable=True)
     pending_workout_issued_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    # Average of the vertices, kept in step with geometry_json so radius searches can prefilter in SQL.
+    centroid_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    centroid_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     owner = relationship("User", back_populates="domains")
+
+    __table_args__ = (Index("ix_domains_type_centroid", "defense_type", "centroid_lat"),)
+
+    @validates("geometry_json")
+    def _keep_centroid(self, _key: str, value: str | None) -> str | None:
+        self.centroid_lat, self.centroid_lng = geometry_centroid(value)
+        return value
+
+
+def geometry_centroid(geometry_json: str | None) -> tuple[float | None, float | None]:
+    """Vertex average of a [{"lat", "lng"}, ...] polygon; (None, None) when empty or unreadable."""
+    try:
+        points = json.loads(geometry_json or "[]")
+        return (sum(p["lat"] for p in points) / len(points), sum(p["lng"] for p in points) / len(points))
+    except (ValueError, TypeError, KeyError, ZeroDivisionError):
+        return None, None
 
 
 class AriseAttack(Base):
@@ -110,7 +132,7 @@ class DomainPhoto(Base):
     __tablename__ = "domain_photos"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), nullable=False, unique=True)
-    jpeg: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    jpeg: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
 class SiegeLog(Base):
@@ -149,7 +171,6 @@ class Merchant(Base):
 
     Activation lifecycle (v2.9):
       - On register: is_active=False, payment_status='payment_pending'.
-      - Merchant calls /payments/intent → provider_payment_id is recorded.
       - Provider hits /payments/webhook with terminal status:
           * 'payment_successful' → is_active=True, last_payment_at set.
           * 'payment_pending'    → no change (still inactive).
@@ -167,7 +188,7 @@ class Merchant(Base):
     # Payment tracking (v2.9). payment_status is the source of truth; is_active is derived
     # by the webhook handler so legacy reads of is_active stay correct.
     payment_status: Mapped[str | None] = mapped_column(String, default="payment_pending")  # payment_pending | payment_successful | payment_declined
-    payment_provider_id: Mapped[str | None] = mapped_column(String, nullable=True)         # e.g., Stripe PaymentIntent ID
+    payment_provider_id: Mapped[str | None] = mapped_column(String, nullable=True)         # the provider's payment id
     pilot_fee_cents: Mapped[int | None] = mapped_column(Integer, default=5000)             # $50 USD default; per-merchant override possible
     last_payment_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, default=_default_now_naive_utc)
@@ -185,7 +206,7 @@ class Bounty(Base):
     title: Mapped[str | None] = mapped_column(String)
     description: Mapped[str | None] = mapped_column(String)
     bounty_type: Mapped[str | None] = mapped_column(String, default="daily")
-    merchant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("merchants.id"), nullable=True)
+    merchant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
 
     # Geofence
     target_lat: Mapped[float | None] = mapped_column(Float)
@@ -279,8 +300,10 @@ class CrystalLedger(Base):
       - 'siege_win_payout'    : winner's 80% pot share credited on a siege WIN
       - 'siege_forfeit'       : challenger's match debited (forfeited) on a siege LOSS
       - 'bounty_reward'       : crystals awarded for completing a bounty
-      - 'crystal_purchase'    : (Phase 3) real-money one-way top-up, credited on a Stripe
-                                payment_intent.succeeded webhook (see CrystalPurchase)
+      - 'crystal_purchase'    : real-money one-way top-up, credited once per verified
+                                store purchase (see GooglePlayPurchase)
+      - 'crystal_refund'      : crystals taken back when the store refunds such a purchase,
+                                capped at the wallet balance
 
     Append-only: there is no update or delete path anywhere in the codebase.
     """
@@ -355,7 +378,7 @@ class TelemetrySession(Base):
     sample_count_barometer: Mapped[int | None] = mapped_column(Integer, default=0)
     has_pose: Mapped[bool | None] = mapped_column(Boolean, default=False)
     occurred_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, index=True)         # device_timestamp
-    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, default=_default_now_naive_utc)
+    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, default=_default_now_naive_utc, index=True)
 
 
 class TelemetryData(Base):
@@ -378,61 +401,32 @@ class TelemetryData(Base):
 
 
 class PaymentWebhookEvent(Base):
-    """Idempotency guard for the payment webhook. Stripe (and most providers) retry failed
+    """Idempotency guard for the payment webhook. Payment providers retry failed
     webhook deliveries; without dedup, the same successful payment can credit revenue twice
     if the first response is slow or 5xx's. Every inbound webhook records its
     `provider_event_id` here BEFORE side effects run — a duplicate insert (unique constraint
     violation) makes the handler return the prior outcome instead of re-processing.
 
-    `provider_event_id` is the provider's top-level event id (Stripe: `event.id`), distinct
-    from `payment_provider_id` (Stripe: `payment_intent.id`) — multiple events can reference
-    the same payment intent, so we dedupe at the event level.
+    `provider_event_id` is the provider's top-level event id, distinct
+    from `payment_provider_id` (the payment's id) — multiple events can reference
+    the same payment, so we dedupe at the event level.
     """
     __tablename__ = "payment_webhook_events"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     provider_event_id: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     merchant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
-    # Phase 3: the same dedup table now guards player crystal-purchase webhooks too, so an
-    # event references either a merchant (pilot fee) or a user (crystal top-up), never both.
+    # Historical: card-payment webhooks (removed) also wrote user_id / event_type here, so old
+    # rows reference either a merchant (pilot fee) or a user (crystal top-up). New rows: merchant only.
     user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    event_type: Mapped[str | None] = mapped_column(String, nullable=True)  # Stripe event.type, e.g. 'payment_intent.succeeded'
+    event_type: Mapped[str | None] = mapped_column(String, nullable=True)  # provider event type (historical rows only)
     payment_status: Mapped[str | None] = mapped_column(String, nullable=True)
     provider_payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
     amount_cents: Mapped[int | None] = mapped_column(Integer, default=0)
     received_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, default=_default_now_naive_utc, index=True)
 
 
-class CrystalPurchase(Base):
-    """Phase 3 — a player's real-money Mana Crystal top-up (one-way: money -> crystals).
-
-    Lifecycle:
-      - Player calls POST /payments/crystals/intent with a server-defined pack id. We create a
-        Stripe PaymentIntent (server sets the price — the client never sends an amount) and
-        insert this row with status='pending'.
-      - Stripe fires payment_intent.succeeded -> the webhook credits the crystals via
-        services.ledger.apply_crystal_delta exactly once and stamps status='succeeded' +
-        crystal_ledger_id + fulfilled_at.
-      - payment_intent.payment_failed -> status='failed', no crystals.
-
-    Idempotency / no-double-mint (RED LINE): `stripe_payment_intent_id` is UNIQUE and the
-    webhook only credits a row whose status is not already 'succeeded'. A retried/duplicate
-    webhook for the same intent is therefore a no-op. This row is the player-purchase
-    counterpart to PaymentWebhookEvent (which dedupes at the Stripe event level).
-
-    Purchase fulfillment is recorded as a one-way provider-confirmed credit in this model.
-    """
-    __tablename__ = "crystal_purchases"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True, nullable=False)
-    pack_id: Mapped[str] = mapped_column(String, nullable=False)              # server pack key, e.g. 'starter'
-    crystal_amount: Mapped[int] = mapped_column(Integer, nullable=False)      # crystals to credit on success
-    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)        # price charged (server-authoritative)
-    currency: Mapped[str | None] = mapped_column(String, default="usd")
-    stripe_payment_intent_id: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
-    status: Mapped[str | None] = mapped_column(String, default="pending", index=True)  # pending | succeeded | failed
-    crystal_ledger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("crystal_ledger.id"), nullable=True)
-    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, default=_default_now_naive_utc)
-    fulfilled_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+# The `crystal_purchases` table (card-payment top-ups, removed) is kept in the database as audit
+# history but has no model; alembic/env.py excludes it from autogenerate and `alembic check`.
 
 
 class GooglePlayPurchase(Base):
@@ -447,8 +441,32 @@ class GooglePlayPurchase(Base):
     purchase_token: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     product_id: Mapped[str] = mapped_column(String, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)    # consumable | non_consumable | subscription
-    state: Mapped[str] = mapped_column(String, nullable=False)   # see routers/payments.py _SUB_STATES
+    state: Mapped[str] = mapped_column(String, nullable=False)   # credited | owned | refunded | canceled | pending, or services/google_play.py SUB_STATES
     order_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    expires_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)  # subscriptions
+    crystal_ledger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("crystal_ledger.id"), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=_default_now_naive_utc, onupdate=_default_now_naive_utc, nullable=False,
+    )
+
+
+class AppStorePurchase(Base):
+    """An App Store (StoreKit 2) purchase whose Apple signature the server has verified.
+
+    RED LINE — no double-mint: `transaction_id` is UNIQUE, so a crystal pack is credited once per
+    transaction however often it is re-sent, and a transaction belongs to one account. It holds the
+    transactionId of a one-time purchase and the originalTransactionId of a subscription, so
+    renewals update one row. Attribute names match GooglePlayPurchase where the meaning does."""
+    __tablename__ = "app_store_purchases"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    transaction_id: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    product_id: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)    # consumable | non_consumable | subscription
+    state: Mapped[str] = mapped_column(String, nullable=False)   # credited | owned | refunded | active | expired
+    order_id: Mapped[str | None] = mapped_column(String, nullable=True)  # latest transactionId seen
+    environment: Mapped[str] = mapped_column(String, nullable=False)     # Production | Sandbox
     expires_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)  # subscriptions
     crystal_ledger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("crystal_ledger.id"), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
@@ -492,7 +510,12 @@ class RunSession(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
-    __table_args__ = (UniqueConstraint("user_id", "id", name="uq_run_sessions_user_id_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "id", name="uq_run_sessions_user_id_id"),
+        # Leaderboards, seasons and the funnel filter accepted runs by finish time, globally or per player.
+        Index("ix_run_sessions_verif_finished", "verification_status", "finished_at"),
+        Index("ix_run_sessions_user_verif_finished", "user_id", "verification_status", "finished_at"),
+    )
 
 
 class RoutePoint(Base):
@@ -629,7 +652,10 @@ class ChallengeAttempt(Base):
     reviewed_by_admin_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True)
     review_note: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    __table_args__ = (UniqueConstraint("challenge_id", "user_id", name="uq_challenge_attempts_challenge_user"),)
+    __table_args__ = (
+        UniqueConstraint("challenge_id", "user_id", name="uq_challenge_attempts_challenge_user"),
+        Index("ix_challenge_attempts_outcome_decided", "outcome", "decided_at"),
+    )
 
 
 class UserBadge(Base):
@@ -923,6 +949,8 @@ class ExerciseSession(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "client_session_id", name="uq_exercise_sessions_user_client"),
+        Index("ix_exercise_sessions_key_status_created", "exercise_key", "status", "created_at"),
+        Index("ix_exercise_sessions_user_local_date", "user_id", "local_date"),
     )
 
 
@@ -940,6 +968,8 @@ class PlayerNotification(Base):
     action_route: Mapped[str | None] = mapped_column(String, nullable=True)
     read_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_player_notifications_user_read", "user_id", "read_at"),)
 
 
 class UserFollow(Base):
@@ -983,6 +1013,8 @@ class SocialPost(Base):
     chart_json: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False, index=True)
 
+    __table_args__ = (Index("ix_social_posts_user_id_id", "user_id", "id"),)
+
 
 class PostPhoto(Base):
     """The photo on a SocialPost. Served at /api/v2/social/media/{token}; the random token keeps
@@ -992,7 +1024,7 @@ class PostPhoto(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     post_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=False, unique=True)
     token: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    jpeg: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    jpeg: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
 
@@ -1069,15 +1101,17 @@ class TrainingSession(Base):
     speed_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     elev_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     elev_max: Mapped[float | None] = mapped_column(Float, nullable=True)
-    series_json: Mapped[str] = mapped_column(String, nullable=False, default="{}")
+    # Deferred: the raw sensor series is large and only the session detail and the data export read it.
+    series_json: Mapped[str] = mapped_column(String, nullable=False, default="{}", deferred=True)
     devices_json: Mapped[str] = mapped_column(String, nullable=False, default="[]")
-    social_post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=True)
+    social_post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("social_posts.id"), nullable=True, index=True)
     local_date: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=_default_now_naive_utc, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "client_session_id", name="uq_training_sessions_user_client"),
         Index("ix_training_sessions_user_activity_started", "user_id", "activity_key", "started_at"),
+        Index("ix_training_sessions_user_local_date", "user_id", "local_date"),
     )
 
 

@@ -146,9 +146,9 @@ class FakePlayer : PlayerRepository {
     override suspend fun followOsirian(userId: Int) = ok(FollowStatus(userId = userId, following = true, followersCount = 10))
     override suspend fun unfollowOsirian(userId: Int) = ok(FollowStatus(userId = userId, following = false, followersCount = 9))
     override suspend fun dismissOsirian(userId: Int) = ok(Unit)
-    override suspend fun feedPosts(limit: Int, offset: Int) = ok(
-        listOf(FeedPost(id = 101, userId = 42, authorName = "Aria Vance", kind = "workout", caption = "Push-ups 10 x 3 done!")),
-    )
+    var feed = listOf(FeedPost(id = 101, userId = 42, authorName = "Aria Vance", kind = "workout", caption = "Push-ups 10 x 3 done!"))
+    val feedOffsets = mutableListOf<Int>()
+    override suspend fun feedPosts(limit: Int, offset: Int) = ok(feed.drop(offset).take(limit)).also { feedOffsets += offset }
     override suspend fun createPost(draft: PostCreateDraft): Outcome<FeedPost> {
         createdPosts += draft
         return ok(FeedPost(id = 102, userId = 7, authorName = "Me", kind = draft.kind, caption = draft.caption))
@@ -175,6 +175,9 @@ class FakeRuns(initial: ActiveRun? = null) : RunRepository {
     override val active = MutableStateFlow(initial)
     override val offline = MutableStateFlow(false)
     val fixes = mutableListOf<LocationFix>()
+
+    /** Thrown by [addFix], as the real repository does when the phone cannot save the point. */
+    var addFixError: Throwable? = null
     var finishResult: Outcome<RunResult> = ok(RunResult("accepted", distanceM = 2400.0, durationSeconds = 720.0, xpAwarded = 40))
     override suspend fun bindAccount(userId: Int?) = Unit
     override suspend fun start(challengeId: Int?, now: Instant, sport: Sport, autoPause: AutoPause): Outcome<ActiveRun> {
@@ -186,6 +189,7 @@ class FakeRuns(initial: ActiveRun? = null) : RunRepository {
         return ok(run)
     }
     override suspend fun addFix(fix: LocationFix, now: Instant) {
+        addFixError?.let { throw it }
         fixes += fix
         active.value = active.value?.withFix(fix, now)
     }

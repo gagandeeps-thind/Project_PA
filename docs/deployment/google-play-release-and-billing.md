@@ -11,7 +11,7 @@ Step-by-step runbook for building the signed release Android App Bundle (`.aab`)
 | `applicationId` | `osiris.fit` | `android_version/app/build.gradle.kts` |
 | `minSdk` | `26` (Android 8.0) | `gradle/libs.versions.toml` |
 | `targetSdk` / `compileSdk` | `36` (exceeds Google Play Target API 34+ requirement) | `gradle/libs.versions.toml` |
-| `versionCode` | Default `1` (`-Posiris.versionCode=<N>` or `OSIRIS_VERSION_CODE`) | `android_version/app/build.gradle.kts` |
+| `versionCode` | Required for a release bundle (`-Posiris.versionCode=<N>` or `OSIRIS_VERSION_CODE`); debug builds use `1` | `android_version/app/build.gradle.kts` |
 | `versionName` | Default `1.0.0` (`-Posiris.versionName=<X.Y.Z>` or `OSIRIS_VERSION_NAME`) | `android_version/app/build.gradle.kts` |
 | Billing Library | `com.android.billingclient:billing-ktx:7.1.1` | `gradle/libs.versions.toml` |
 
@@ -65,7 +65,10 @@ export OSIRIS_PLAY_BILLING_PUBLIC_KEY="<BASE64_RSA_KEY_FROM_PLAY_CONSOLE>"
 
 ### Step 2.3 — Build the Signed Release `.aab`
 
-From the repository root, run:
+From the repository root, run `scripts/build_android_release.sh <versionCode> [versionName]`. It runs the Gradle
+command below and then prints the package name, version code and signing certificate read back from the bundle.
+Release tasks always build the prod environment and fail when it is not prod, when signing credentials are missing,
+or when a bundle has no version code.
 
 ```bash
 # macOS / Linux / Git Bash
@@ -101,25 +104,39 @@ jarsigner -verify -verbose -certs android_version/app/build/outputs/bundle/relea
 1. In Google Play Console, select your app (`osiris.fit`).
 2. Navigate to **Monetize with Play** -> **Monetization setup**.
 3. Copy the Base64-encoded RSA public key under **Licensing**.
-4. Set it in `config/environments/local.properties` (`billing.playPublicKey=<KEY>`) or export `OSIRIS_PLAY_BILLING_PUBLIC_KEY=<KEY>` in CI so `PlaySignaturePurchaseVerifier` verifies purchase receipts cryptographically on-device.
+4. Set it in `config/environments/prod.properties` (`billing.playPublicKey=<KEY>`; it is a public key, and prod builds ignore `local.properties`) or export `OSIRIS_PLAY_BILLING_PUBLIC_KEY=<KEY>` in CI so `PlaySignaturePurchaseVerifier` verifies purchase receipts cryptographically on-device.
 
-### Step 3.2 — Create One-Time In-App Products (`Monetize with Play` -> `Products` -> `In-app products`)
+### Step 3.2 — Create the Crystal Packs Now (`Monetize with Play` -> `Products` -> `In-app products`)
 
-Create and **Activate** each of the following product IDs (matching `PlayBillingCatalog` in `BillingContract.kt`):
+Create and **Activate** only the three crystal packs (product IDs match `PlayBillingCatalog` in `BillingContract.kt`). Osiris Pass and the Founder Pack come later (Step 3.3): they unlock nothing yet, and selling them would invite refunds and policy trouble.
 
 | Product ID | Type in App | Name | Suggested Base Price (USD) | Notes |
 |---|---|---|---|---|
 | `osiris_crystals_starter` | Consumable (`consumeAsync`) | Starter Pouch (500 Mana Crystals) | $4.99 | Multi-quantity optional; Play auto-converts global prices |
 | `osiris_crystals_adventurer` | Consumable (`consumeAsync`) | Adventurer's Cache (1,200 Mana Crystals) | $9.99 | Multi-quantity optional; Play auto-converts global prices |
 | `osiris_crystals_champion` | Consumable (`consumeAsync`) | Champion's Hoard (2,600 Mana Crystals) | $19.99 | Multi-quantity optional; Play auto-converts global prices |
-| `osiris_founder_pack` | Non-consumable (`acknowledgePurchase`) | Founder's Emblem & Permanent Course Slot | $14.99 | Permanent account unlock |
+
+How the app and server handle a pack purchase:
+- **Server figures only.** The crystal amounts live on the server (`CRYSTAL_PACKS`). With multi-quantity on, the server credits quantity x pack; the app shows the server's `crystals_credited` and `balance`, never its own numbers. A partial refund of a multi-quantity purchase is handled by hand (API log line `google play partial refund needs manual review`).
+- **Account binding.** Every purchase carries `obfuscatedAccountId` = lowercase hex SHA-256 of `osiris:<user id>` (`StoreAccount` in `shared/data`). The server refuses (409) a purchase made for another Osiris account. The app launches no purchase while signed out.
+- **Retries.** A purchase the server has not confirmed is retried when billing connects, each time the app comes to the foreground, after each sign-in, on opening the Wallet and on pull-to-refresh. It is consumed only after the server confirms it; Google Play refunds one that stays unconfirmed for 3 days.
+- **Server not configured.** Until `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set on the API, verify answers 503: nothing is granted, the Wallet shows *Purchases temporarily unavailable* and disables buying until a later verify succeeds.
 
 For each product:
 1. Click **Create product**, enter the exact **Product ID**, **Name**, and **Description**.
 2. Under **Price**, click **Set price**, enter the default price, select **All countries / regions** to automatically calculate localized pricing + taxes globally, and click **Apply prices**.
 3. Click **Save** and then **Activate**.
 
-### Step 3.3 — Create Subscriptions & Base Plans (`Monetize with Play` -> `Products` -> `Subscriptions`)
+### Step 3.3 — Later: Founder Pack and Osiris Pass (`features.passProducts`)
+
+Do this only once Osiris Pass and the Founder Pack unlock real perks. Until then `features.passProducts=false` in every `config/environments/*.properties`, and the app neither queries nor shows these products. To launch them:
+
+1. Ship the perks, gated on `GET /api/v2/payments/entitlements` (`PaymentsRepository.entitlements()` in the shared code).
+2. Create the Founder Pack under **In-app products**: `osiris_founder_pack`, non-consumable (`acknowledgePurchase`), Founder's Emblem & Permanent Course Slot, suggested $14.99.
+3. Create the subscriptions below.
+4. Set `features.passProducts=true` in `prod.properties` and release a new build.
+
+With the flag on, a player holding one pass cannot buy the other plan from the app (there is no upgrade/downgrade flow), and the Wallet shows **Manage subscription in Google Play**, which opens Play's subscription page for the active plan.
 
 Create and **Activate** the following subscriptions and base plans:
 
@@ -193,6 +210,6 @@ Share the following steps with your testers along with the **Copy link** URL fro
    - Tap **Install**. (If a local debug build of `osiris.fit` is already installed on the device, uninstall it first so the Play Store-signed build can install cleanly.)
 4. **Verify Test Payment Instrument During Checkout:**
    - Open Osiris, sign in, and open the **Wallet** screen.
-   - Tap a Mana Crystal pack or **SUBSCRIBE** on Osiris Pass.
+   - Tap a Mana Crystal pack (Osiris Pass shows only in builds with `features.passProducts=true`).
    - Confirm the Google Play purchase sheet displays **"Test card, always approves"** (or **"Test card, always declines"** for testing error/grace-period flows) and a notice stating *"This is a test order, you will not be charged."*
 

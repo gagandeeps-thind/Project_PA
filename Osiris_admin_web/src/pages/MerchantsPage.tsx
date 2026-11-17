@@ -1,24 +1,27 @@
 /* ───────────────────────────────────────────────────────────
  *  Merchants Page
  * ─────────────────────────────────────────────────────────── */
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Store } from "lucide-react";
 import {
   apiErrorMessage,
   getMerchants,
+  PAGE_SIZE,
   activateMerchant,
   deactivateMerchant,
 } from "../api/client";
 import type { Merchant } from "../api/types";
 import { TableSkeleton } from "../components/Skeleton";
+import ListFooter from "../components/ListFooter";
+import { useFetch } from "../hooks/useFetch";
 
 type FilterTab = "all" | "active" | "pending" | "declined";
 
 export default function MerchantsPage() {
-  const [merchants, setMerchants] = useState<Merchant[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<FilterTab>("all");
+  /* The server sends the whole list, so paging here only limits how many rows are drawn. */
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   /* Confirmation dialog state */
   const [dialog, setDialog] = useState<{
@@ -28,39 +31,29 @@ export default function MerchantsPage() {
   }>({ open: false, action: "activate", merchant: null });
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchMerchants = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const status = filter === "all" ? undefined : filter;
-      const data = await getMerchants(status);
-      setMerchants(data);
-    } catch (err: unknown) {
-      setError(apiErrorMessage(err, "Failed to load merchants"));
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => {
-    fetchMerchants();
-  }, [fetchMerchants]);
+  const list = useFetch(
+    useCallback((signal: AbortSignal) => getMerchants(filter === "all" ? undefined : filter, signal), [filter]),
+    "Failed to load merchants"
+  );
+  const merchants = list.data ?? [];
+  const loading = list.loading;
 
   /* Badge helper */
   const statusBadge = (m: Merchant) => {
     if (m.is_active) return <span className="badge badge-success">Active</span>;
-    if (m.payment_status === "declined")
+    if (m.payment_status === "payment_declined")
       return <span className="badge badge-error">Declined</span>;
     return <span className="badge badge-warning">Pending</span>;
   };
 
+  /* The values the API stores (routers/payments.py). */
   const paymentBadge = (status: string) => {
     switch (status) {
-      case "paid":
+      case "payment_successful":
         return <span className="badge badge-success">Paid</span>;
-      case "pending":
+      case "payment_pending":
         return <span className="badge badge-warning">Pending</span>;
-      case "declined":
+      case "payment_declined":
         return <span className="badge badge-error">Declined</span>;
       default:
         return <span className="badge badge-cyan">{status}</span>;
@@ -78,6 +71,7 @@ export default function MerchantsPage() {
   const confirmAction = async () => {
     if (!dialog.merchant) return;
     setActionLoading(true);
+    setError("");
     try {
       if (dialog.action === "activate") {
         await activateMerchant(dialog.merchant.id);
@@ -85,7 +79,7 @@ export default function MerchantsPage() {
         await deactivateMerchant(dialog.merchant.id);
       }
       setDialog({ open: false, action: "activate", merchant: null });
-      await fetchMerchants();
+      await list.reload();
     } catch (err: unknown) {
       setError(apiErrorMessage(err, "Action failed"));
     } finally {
@@ -113,14 +107,17 @@ export default function MerchantsPage() {
           <button
             key={t.key}
             className={`filter-tab ${filter === t.key ? "active" : ""}`}
-            onClick={() => setFilter(t.key)}
+            onClick={() => {
+              setFilter(t.key);
+              setVisible(PAGE_SIZE);
+            }}
           >
             {t.label}
           </button>
         ))}
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {(error || list.error) && <div className="error-message">{error || list.error}</div>}
 
       {loading ? (
         <TableSkeleton />
@@ -130,6 +127,7 @@ export default function MerchantsPage() {
           <p>No merchants found for this filter.</p>
         </div>
       ) : (
+        <>
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
@@ -144,7 +142,7 @@ export default function MerchantsPage() {
               </tr>
             </thead>
             <tbody>
-              {merchants.map((m) => (
+              {merchants.slice(0, visible).map((m) => (
                 <tr key={m.id}>
                   <td style={{ fontWeight: 600 }}>{m.name}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{m.email}</td>
@@ -179,6 +177,13 @@ export default function MerchantsPage() {
             </tbody>
           </table>
         </div>
+        <ListFooter
+          shown={Math.min(visible, merchants.length)}
+          total={merchants.length}
+          hasMore={visible < merchants.length}
+          onMore={() => setVisible(visible + PAGE_SIZE)}
+        />
+        </>
       )}
 
       {/* Confirmation Dialog */}

@@ -43,7 +43,6 @@ from services.exercises import CATALOG
 
 router = APIRouter()
 
-KM_PER_DEG_LAT = 111.195
 ARISE = "arise"
 MAX_PHOTO_BYTES = 300_000
 PACE_WINDOW = timedelta(days=30)
@@ -53,11 +52,21 @@ REP_EXERCISES = [e["key"] for e in CATALOG if e.get("kind") == "reps"]
 
 # --- routes -------------------------------------------------------------------------
 
-def _route(db: Session, course: models.Course) -> AriseRoute:
+def _names(db: Session, user_ids) -> dict[int, str]:
+    """Display names for many players in one query; `_display_name`'s fallback for anyone without a profile."""
+    ids = set(user_ids)
+    found: dict[int, str] = {uid: name for uid, name in db.query(
+        models.PlayerProfile.user_id, models.PlayerProfile.display_name).filter(
+        models.PlayerProfile.user_id.in_(ids or {-1})).all()}
+    return {uid: found.get(uid) or f"Runner {uid}" for uid in ids}
+
+
+def _route(db: Session, course: models.Course, names: Optional[dict[int, str]] = None) -> AriseRoute:
     return AriseRoute(
         id=course.id, name=course.name, activity_type=course.activity_type, distance_m=course.distance_m,
         benchmark_seconds=course.benchmark_seconds, hide_ends=course.hide_ends,
-        owner_name=_display_name(db, course.owner_id), line=json.loads(course.public_route_json or "[]"),
+        owner_name=names[course.owner_id] if names is not None else _display_name(db, course.owner_id),
+        line=json.loads(course.public_route_json or "[]"),
     )
 
 
@@ -78,6 +87,12 @@ def publish_route(req: AriseRoutePublish, db: Session = Depends(get_db), token_d
     return _route(db, course)
 
 
+def _box(lat: float, lng: float, radius_km: float, lat_col, lng_col) -> list:
+    """SQL prefilter holding the whole radius (spatial_utils.radius_box); `_near` then measures exactly."""
+    lats, lngs = spatial_utils.radius_box(lat, lng, radius_km)
+    return [lat_col.between(*lats)] + ([lng_col.between(*lngs)] if lngs else [])
+
+
 def _near(rows, lat: float, lng: float, radius_km: float, position) -> list:
     """`rows` within `radius_km` of (lat, lng), nearest first, at most 100."""
     pairs = sorted(((spatial_utils.haversine_distance(lat, lng, *position(r)), r) for r in rows), key=lambda p: p[0])
@@ -93,13 +108,14 @@ def nearby_routes(
     token_data: dict = Depends(get_active_player),
 ):
     """Public routes whose marker is within `radius_km`, nearest first (at most 100)."""
-    span = radius_km / KM_PER_DEG_LAT
     rows = db.query(models.Course).filter(
         models.Course.is_public.is_(True),
         models.Course.status == "active",
-        models.Course.public_lat.between(lat - span, lat + span),
+        *_box(lat, lng, radius_km, models.Course.public_lat, models.Course.public_lng),
     ).all()
-    return [_route(db, c) for c in _near(rows, lat, lng, radius_km, lambda c: (c.public_lat, c.public_lng))]
+    near = _near(rows, lat, lng, radius_km, lambda c: (c.public_lat, c.public_lng))
+    names = _names(db, (c.owner_id for c in near))
+    return [_route(db, c, names) for c in near]
 
 
 # --- domains ------------------------------------------------------------------------
@@ -115,12 +131,18 @@ def _workout(raw: Optional[str]) -> Optional[AriseWorkout]:
     return AriseWorkout(sets=sets, total_reps=sum(s["reps"] for s in sets))
 
 
-def _domain(db: Session, d: models.Domain, difficulty: Optional[str] = None) -> AriseDomain:
+def _domain(db: Session, d: models.Domain, difficulty: Optional[str] = None,
+            photo_ids: Optional[set[int]] = None, names: Optional[dict[int, str]] = None) -> AriseDomain:
+    """`photo_ids` and `names`, when given, are preloaded for a whole list (see nearby_domains)."""
     loop = _loop(d)
     centre = arise.centroid(loop) if loop else (0.0, 0.0)
-    has_photo = db.query(models.DomainPhoto.id).filter(models.DomainPhoto.domain_id == d.id).first() is not None
+    if photo_ids is not None:
+        has_photo = d.id in photo_ids
+    else:
+        has_photo = db.query(models.DomainPhoto.id).filter(models.DomainPhoto.domain_id == d.id).first() is not None
+    owner_name = names[d.owner_id] if names is not None else _display_name(db, d.owner_id)
     return AriseDomain(
-        id=d.id, owner_id=d.owner_id, owner_name=_display_name(db, d.owner_id), area_sqkm=d.area_sqkm or 0.0,
+        id=d.id, owner_id=d.owner_id, owner_name=owner_name, area_sqkm=d.area_sqkm or 0.0,
         distance_m=d.distance_m or 0.0, duration_s=d.duration_s or 0.0, centroid_lat=centre[0], centroid_lng=centre[1],
         geometry=[[p[0], p[1]] for p in loop], source_run_session_id=d.source_run_session_id,
         workout=_workout(d.defense_workout_json),
@@ -242,15 +264,20 @@ def nearby_domains(
     me = token_data["id"]
     rows = db.query(models.Domain).filter(
         models.Domain.defense_type == ARISE, models.Domain.owner_id != me, models.Domain.geometry_json.isnot(None),
+        *_box(lat, lng, radius_km, models.Domain.centroid_lat, models.Domain.centroid_lng),
     ).all()
-    near = _near(rows, lat, lng, radius_km, lambda d: arise.centroid(_loop(d)))
+    near = _near(rows, lat, lng, radius_km, lambda d: (d.centroid_lat, d.centroid_lng))
     user = db.query(models.User).filter(models.User.id == me).one()
     pace, level = _best_pace(db, me), arise.player_level(user.xp or 0)
-    suggested, hard = [], []
+    photo_ids = {i for (i,) in db.query(models.DomainPhoto.domain_id).filter(
+        models.DomainPhoto.domain_id.in_([d.id for d in near] or [-1]))}
+    names = _names(db, (d.owner_id for d in near))
+    suggested: list[tuple[float, AriseDomain]] = []
+    hard: list[tuple[float, AriseDomain]] = []
     for d in near:
         workout = _workout(d.defense_workout_json)
         bucket, score = arise.difficulty(pace, level, d.distance_m or 0, d.duration_s or 0, workout.total_reps if workout else 0)
-        (suggested if bucket == "suggested" else hard).append((score, _domain(db, d, bucket)))
+        (suggested if bucket == "suggested" else hard).append((score, _domain(db, d, bucket, photo_ids, names)))
     hard.sort(key=lambda pair: -pair[0])
     return AriseDomains(suggested=[x for _, x in suggested], hard=[x for _, x in hard])
 

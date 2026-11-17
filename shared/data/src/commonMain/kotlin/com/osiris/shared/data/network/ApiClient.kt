@@ -5,6 +5,10 @@ import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.logging.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.cache.HttpCache
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -24,8 +28,10 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
+import io.ktor.http.URLProtocol
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.http.isWebsocket
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.websocket.close
 import kotlin.coroutines.cancellation.CancellationException
@@ -62,13 +68,29 @@ class ApiClient(
         coerceInputValues = true
     }
 
+    private val cache = BoundedCacheStorage()
+
     private val http = HttpClient(engine) {
         expectSuccess = false
         install(ContentNegotiation) { json(json) }
         // The backend tags JSON GETs with an ETag and `no-cache`; this keeps the last body in memory and
         // revalidates with If-None-Match, so an unchanged screen costs a 304 instead of the payload.
         // Gzip is negotiated by the platform engines (OkHttp, NSURLSession) without a plugin.
-        install(HttpCache)
+        install(HttpCache) {
+            publicStorage(cache)
+            privateStorage(cache)
+        }
+        // A GET that fails on the way (a cell handover, a restarting server) is tried again, briefly.
+        // Only GETs: a POST without an idempotency key must never be replayed. Timeouts are not retried,
+        // or a dead network would hold a screen for three timeouts instead of one.
+        install(HttpRequestRetry) {
+            maxRetries = GET_RETRIES
+            retryIf { request, response ->
+                isPlainGet(request.method, request.url.protocol) && response.status.value in RETRIED_STATUSES
+            }
+            retryOnExceptionIf { request, cause -> isPlainGet(request.method, request.url.protocol) && !cause.isTimeout() }
+            exponentialDelay(baseDelayMs = RETRY_BASE_DELAY_MS, randomizationMs = RETRY_JITTER_MS)
+        }
         // Pings keep an idle chat inside the socket timeout below.
         install(WebSockets) { pingIntervalMillis = config.requestTimeoutMs / 2 }
         install(HttpTimeout) {
@@ -155,6 +177,15 @@ class ApiClient(
         }
     }
 
+    /** Drops every cached response; called at each account change. */
+    suspend fun clearCache() = cache.clear()
+
+    /** Not the WebSocket handshake, which is also a GET: the chat reconnects only when the player asks. */
+    private fun isPlainGet(method: HttpMethod, protocol: URLProtocol) = method == HttpMethod.Get && !protocol.isWebsocket()
+
+    private fun Throwable.isTimeout() =
+        this is HttpRequestTimeoutException || this is ConnectTimeoutException || this is SocketTimeoutException
+
     private suspend fun HttpRequestBuilder.authorize() {
         tokens.token()?.let { bearerAuth(it) }
     }
@@ -187,6 +218,14 @@ class ApiClient(
 
     companion object {
         const val TAG = "OsirisApi"
+
+        /** Extra attempts for a failed GET, so three requests at most. */
+        const val GET_RETRIES = 2
+        private const val RETRY_BASE_DELAY_MS = 300L
+        private const val RETRY_JITTER_MS = 200L
+
+        /** Bad gateway, unavailable, gateway timeout: the proxy or a restarting instance, not the request. */
+        private val RETRIED_STATUSES = setOf(502, 503, 504)
 
         /** Builds a JSON object body without nulls (the backend treats a sent null as a value). */
         fun body(vararg pairs: Pair<String, Any?>): JsonObject = JsonBodies.of(*pairs)

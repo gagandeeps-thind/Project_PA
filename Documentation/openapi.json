@@ -86,6 +86,7 @@
             "type": "array"
           },
           "activity_type": {
+            "maxLength": 32,
             "title": "Activity Type",
             "type": "string"
           },
@@ -325,6 +326,7 @@
           "status": {
             "anyOf": [
               {
+                "maxLength": 16,
                 "type": "string"
               },
               {
@@ -720,6 +722,7 @@
             "type": "string"
           },
           "status": {
+            "maxLength": 32,
             "title": "Status",
             "type": "string"
           }
@@ -784,6 +787,23 @@
           "suspended"
         ],
         "title": "AdminUserStatus",
+        "type": "object"
+      },
+      "AppStoreVerifyRequest": {
+        "description": "The StoreKit 2 transaction (`VerificationResult.jwsRepresentation`). Everything else, the\nproduct included, is read from Apple's signed payload.",
+        "properties": {
+          "signed_transaction": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._\\-]+$",
+            "title": "Signed Transaction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signed_transaction"
+        ],
+        "title": "AppStoreVerifyRequest",
         "type": "object"
       },
       "AriseAttackResult": {
@@ -1653,17 +1673,20 @@
         "properties": {
           "activity_type": {
             "default": "walk",
+            "maxLength": 32,
             "title": "Activity Type",
             "type": "string"
           },
           "bounty_type": {
             "default": "daily",
+            "maxLength": 32,
             "title": "Bounty Type",
             "type": "string"
           },
           "coupon_text": {
             "anyOf": [
               {
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -1674,11 +1697,13 @@
           },
           "crystal_reward": {
             "default": 0,
+            "maximum": 500.0,
             "minimum": 0.0,
             "title": "Crystal Reward",
             "type": "integer"
           },
           "description": {
+            "maxLength": 1000,
             "title": "Description",
             "type": "string"
           },
@@ -1697,6 +1722,7 @@
           "max_completions": {
             "default": 50,
             "exclusiveMinimum": 0.0,
+            "maximum": 10000.0,
             "title": "Max Completions",
             "type": "integer"
           },
@@ -1713,29 +1739,39 @@
           },
           "radius_m": {
             "default": 30.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 5000.0,
             "title": "Radius M",
             "type": "number"
           },
           "target_lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
             "title": "Target Lat",
             "type": "number"
           },
           "target_lng": {
+            "maximum": 180.0,
+            "minimum": -180.0,
             "title": "Target Lng",
             "type": "number"
           },
           "target_score": {
             "default": 0,
+            "maximum": 100000.0,
             "minimum": 0.0,
             "title": "Target Score",
             "type": "integer"
           },
           "title": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Title",
             "type": "string"
           },
           "xp_reward": {
             "default": 50,
+            "maximum": 1000.0,
             "minimum": 0.0,
             "title": "Xp Reward",
             "type": "integer"
@@ -2051,6 +2087,7 @@
           "brand_color": {
             "anyOf": [
               {
+                "maxLength": 7,
                 "type": "string"
               },
               {
@@ -2084,6 +2121,7 @@
             "title": "Description"
           },
           "kind": {
+            "maxLength": 32,
             "title": "Kind",
             "type": "string"
           },
@@ -2107,6 +2145,7 @@
           },
           "visibility": {
             "default": "public",
+            "maxLength": 16,
             "title": "Visibility",
             "type": "string"
           },
@@ -2282,6 +2321,7 @@
           "brand_color": {
             "anyOf": [
               {
+                "maxLength": 7,
                 "type": "string"
               },
               {
@@ -2628,111 +2668,6 @@
         "title": "CourseSummary",
         "type": "object"
       },
-      "CrystalPackInfo": {
-        "properties": {
-          "amount_cents": {
-            "title": "Amount Cents",
-            "type": "integer"
-          },
-          "crystals": {
-            "title": "Crystals",
-            "type": "integer"
-          },
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "pack_id": {
-            "title": "Pack Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "pack_id",
-          "label",
-          "crystals",
-          "amount_cents",
-          "currency"
-        ],
-        "title": "CrystalPackInfo",
-        "type": "object"
-      },
-      "CrystalPurchaseIntentRequest": {
-        "properties": {
-          "pack_id": {
-            "title": "Pack Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "pack_id"
-        ],
-        "title": "CrystalPurchaseIntentRequest",
-        "type": "object"
-      },
-      "CrystalPurchaseIntentResponse": {
-        "properties": {
-          "amount_cents": {
-            "title": "Amount Cents",
-            "type": "integer"
-          },
-          "client_secret": {
-            "title": "Client Secret",
-            "type": "string"
-          },
-          "crystal_amount": {
-            "title": "Crystal Amount",
-            "type": "integer"
-          },
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "pack_id": {
-            "title": "Pack Id",
-            "type": "string"
-          },
-          "payment_intent_id": {
-            "title": "Payment Intent Id",
-            "type": "string"
-          },
-          "publishable_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Publishable Key"
-          },
-          "purchase_id": {
-            "title": "Purchase Id",
-            "type": "integer"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "purchase_id",
-          "pack_id",
-          "crystal_amount",
-          "amount_cents",
-          "currency",
-          "payment_intent_id",
-          "client_secret",
-          "status"
-        ],
-        "title": "CrystalPurchaseIntentResponse",
-        "type": "object"
-      },
       "DirectMessageIn": {
         "properties": {
           "body": {
@@ -2840,6 +2775,8 @@
             "items": {
               "$ref": "#/components/schemas/Coordinate"
             },
+            "maxItems": 2000,
+            "minItems": 4,
             "title": "Coordinates",
             "type": "array"
           },
@@ -2859,6 +2796,7 @@
           },
           "defense_type": {
             "default": "pushups",
+            "maxLength": 32,
             "title": "Defense Type",
             "type": "string"
           },
@@ -2990,10 +2928,12 @@
       "EraseRequest": {
         "properties": {
           "confirm": {
+            "maxLength": 32,
             "title": "Confirm",
             "type": "string"
           },
           "password": {
+            "maxLength": 256,
             "title": "Password",
             "type": "string"
           }
@@ -3008,6 +2948,7 @@
       "EventIn": {
         "properties": {
           "event_name": {
+            "maxLength": 64,
             "title": "Event Name",
             "type": "string"
           },
@@ -3025,6 +2966,7 @@
           },
           "properties": {
             "additionalProperties": true,
+            "maxProperties": 30,
             "title": "Properties",
             "type": "object"
           }
@@ -4620,6 +4562,7 @@
         "properties": {
           "business_type": {
             "default": "general",
+            "maxLength": 50,
             "title": "Business Type",
             "type": "string"
           },
@@ -4629,6 +4572,8 @@
             "type": "string"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -4974,6 +4919,7 @@
       "PasswordChange": {
         "properties": {
           "current_password": {
+            "maxLength": 256,
             "title": "Current Password",
             "type": "string"
           },
@@ -4989,62 +4935,6 @@
           "new_password"
         ],
         "title": "PasswordChange",
-        "type": "object"
-      },
-      "PaymentIntentResponse": {
-        "description": "Returned when a merchant initiates the pilot-fee payment. `client_secret` is what the\nFlutter Stripe SDK uses to confirm the card on-device; `publishable_key` lets the client\ninit the SDK from the server's config so the pk isn't pinned in two places.",
-        "properties": {
-          "client_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Secret"
-          },
-          "merchant_id": {
-            "title": "Merchant Id",
-            "type": "integer"
-          },
-          "next_action": {
-            "title": "Next Action",
-            "type": "string"
-          },
-          "payment_status": {
-            "title": "Payment Status",
-            "type": "string"
-          },
-          "pilot_fee_cents": {
-            "title": "Pilot Fee Cents",
-            "type": "integer"
-          },
-          "provider_payment_id": {
-            "title": "Provider Payment Id",
-            "type": "string"
-          },
-          "publishable_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Publishable Key"
-          }
-        },
-        "required": [
-          "merchant_id",
-          "pilot_fee_cents",
-          "provider_payment_id",
-          "payment_status",
-          "next_action"
-        ],
-        "title": "PaymentIntentResponse",
         "type": "object"
       },
       "PaymentWebhookResponse": {
@@ -5734,6 +5624,7 @@
           "goal": {
             "anyOf": [
               {
+                "maxLength": 32,
                 "type": "string"
               },
               {
@@ -6102,6 +5993,7 @@
           },
           "goal": {
             "default": "fitness",
+            "maxLength": 32,
             "title": "Goal",
             "type": "string"
           },
@@ -6205,6 +6097,7 @@
             "title": "Details"
           },
           "reason": {
+            "maxLength": 32,
             "title": "Reason",
             "type": "string"
           },
@@ -6232,6 +6125,7 @@
             "title": "Target Ref"
           },
           "target_type": {
+            "maxLength": 32,
             "title": "Target Type",
             "type": "string"
           }
@@ -6842,6 +6736,7 @@
             "type": "integer"
           },
           "kind": {
+            "maxLength": 32,
             "title": "Kind",
             "type": "string"
           }
@@ -7912,6 +7807,7 @@
           },
           "preferred_path": {
             "default": "Balance",
+            "maxLength": 32,
             "title": "Preferred Path",
             "type": "string"
           },
@@ -8302,7 +8198,7 @@
     },
     "/api/v1/admin/merchants": {
       "get": {
-        "description": "Admin-only triage view. Filter by activation status; sorted newest-first.",
+        "description": "Admin-only triage view. Filter by activation status; sorted newest-first. Without `limit`\nevery merchant is returned, as before.",
         "operationId": "admin_list_merchants_api_v1_admin_merchants_get",
         "parameters": [
           {
@@ -8319,6 +8215,35 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -8530,7 +8455,7 @@
     },
     "/api/v1/bounties/nearby": {
       "get": {
-        "description": "Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted\nnearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with\n`ST_DWithin` in Phase 2.",
+        "description": "Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted\nnearest-first. Only bounties in the radius's bounding box are loaded, then measured exactly;\nPostGIS will replace this with `ST_DWithin`. `limit`/`offset` page the sorted list; without\n`limit` every match is returned, as before.",
         "operationId": "get_nearby_bounties_api_v1_bounties_nearby_get",
         "parameters": [
           {
@@ -8538,6 +8463,8 @@
             "name": "lat",
             "required": true,
             "schema": {
+              "maximum": 90,
+              "minimum": -90,
               "title": "Lat",
               "type": "number"
             }
@@ -8547,6 +8474,8 @@
             "name": "lng",
             "required": true,
             "schema": {
+              "maximum": 180,
+              "minimum": -180,
               "title": "Lng",
               "type": "number"
             }
@@ -8557,8 +8486,39 @@
             "required": false,
             "schema": {
               "default": 5.0,
+              "exclusiveMinimum": 0,
+              "maximum": 1000,
               "title": "Radius Km",
               "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -8786,7 +8746,7 @@
     },
     "/api/v1/domains/nearby": {
       "get": {
-        "description": "Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),\nsorted nearest-first.\n\nThis endpoint is AUTHENTICATED (a player JWT is required). Previously it\nwas public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any\nlat/lng to any unauthenticated caller \u2014 a stalking + economic-recon primitive. Requiring\nauth closes the unauthenticated leak. NOTE (residual risk, see register): the response\nstill exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an\nopaque handle + centroid-only for non-owners is a follow-up that changes the client\ncontract and is deferred for a product decision. MVP uses an in-memory haversine sweep;\nPostGIS `ST_DWithin` replaces this in Phase 4.",
+        "description": "Returns existing claimed domains whose centroid falls within `radius_km` of (lat, lng),\nsorted nearest-first.\n\nThis endpoint is AUTHENTICATED (a player JWT is required). Previously it\nwas public, which leaked `owner_id` + exact polygon geometry + `vault_balance` for any\nlat/lng to any unauthenticated caller \u2014 a stalking + economic-recon primitive. Requiring\nauth closes the unauthenticated leak. NOTE (residual risk, see register): the response\nstill exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an\nopaque handle + centroid-only for non-owners is a follow-up that changes the client\ncontract and is deferred for a product decision. MVP uses an in-memory haversine sweep;\nPostGIS `ST_DWithin` replaces this in Phase 4. Only domains inside the radius's bounding box\n(stored centroid) are loaded; at most `limit` (default 100) nearest are returned.",
         "operationId": "get_nearby_domains_api_v1_domains_nearby_get",
         "parameters": [
           {
@@ -8794,6 +8754,8 @@
             "name": "lat",
             "required": true,
             "schema": {
+              "maximum": 90,
+              "minimum": -90,
               "title": "Lat",
               "type": "number"
             }
@@ -8803,6 +8765,8 @@
             "name": "lng",
             "required": true,
             "schema": {
+              "maximum": 180,
+              "minimum": -180,
               "title": "Lng",
               "type": "number"
             }
@@ -8813,8 +8777,22 @@
             "required": false,
             "schema": {
               "default": 5.0,
+              "exclusiveMinimum": 0,
+              "maximum": 50,
               "title": "Radius Km",
               "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -9079,51 +9057,6 @@
         "summary": "Get Merchant Bounties"
       }
     },
-    "/api/v1/merchants/{merchant_id}/payments/intent": {
-      "post": {
-        "description": "Initiate the pilot-fee payment via Stripe. Creates a Stripe PaymentIntent for the\nmerchant's `pilot_fee_cents` and returns its `client_secret` so the Flutter Stripe SDK can\nconfirm the card on-device. Activation does NOT happen here \u2014 it happens when Stripe POSTs\n`payment_intent.succeeded` to /payments/stripe/webhook.",
-        "operationId": "create_payment_intent_api_v1_merchants__merchant_id__payments_intent_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "merchant_id",
-            "required": true,
-            "schema": {
-              "title": "Merchant Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaymentIntentResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Create Payment Intent"
-      }
-    },
     "/api/v1/onboard": {
       "post": {
         "description": "API Endpoint to register a new user, calculate their stats, and assign an avatar.",
@@ -9161,92 +9094,6 @@
           }
         },
         "summary": "Onboard User"
-      }
-    },
-    "/api/v1/payments/crystals/intent": {
-      "post": {
-        "description": "Start a real-money crystal top-up. The price and crystal grant come from CRYSTAL_PACKS\non the server \u2014 the client only chooses a `pack_id`. Creates a Stripe PaymentIntent and a\n'pending' CrystalPurchase; crystals are credited later by the webhook on success.",
-        "operationId": "create_crystal_purchase_intent_api_v1_payments_crystals_intent_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CrystalPurchaseIntentRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CrystalPurchaseIntentResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Create Crystal Purchase Intent"
-      }
-    },
-    "/api/v1/payments/crystals/packs": {
-      "get": {
-        "description": "Buyable crystal packs with server-authoritative pricing. The client renders these and\nsends back only a `pack_id`; it never sets a price.",
-        "operationId": "list_crystal_packs_api_v1_payments_crystals_packs_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CrystalPackInfo"
-                  },
-                  "title": "Response List Crystal Packs Api V1 Payments Crystals Packs Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Crystal Packs"
-      }
-    },
-    "/api/v1/payments/stripe/webhook": {
-      "post": {
-        "description": "Stripe-native webhook. Verifies the `Stripe-Signature` header against the RAW body with\n`stripe.Webhook.construct_event`, then routes `payment_intent.*` events by their metadata\n`kind` to the merchant-pilot-fee or crystal-purchase processor.\n\nEvent-level idempotency: PaymentWebhookEvent keyed on the Stripe `event.id` (unique index)\nmakes retried deliveries no-ops. Purchase-level idempotency (no double-mint) is enforced\nseparately by `_fulfill_crystal_purchase`.",
-        "operationId": "stripe_webhook_api_v1_payments_stripe_webhook_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaymentWebhookResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Stripe Webhook"
       }
     },
     "/api/v1/payments/webhook": {
@@ -9496,6 +9343,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 3650,
                   "type": "integer"
                 },
                 {
@@ -10200,6 +10048,31 @@
     "/api/v2/admin/group-challenges": {
       "get": {
         "operationId": "list_official_challenges_api_v2_admin_group_challenges_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -10214,6 +10087,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -14445,9 +14328,116 @@
         "summary": "Follow Osirian"
       }
     },
+    "/api/v2/payments/app-store/notifications": {
+      "post": {
+        "description": "App Store Server Notifications v2. Not JWT-gated: the body's `signedPayload` must carry\nApple's signature for this app, and the endpoint is closed (503) until App Store billing is\nconfigured. Every type is applied from the signed transaction inside, so a repeated or\nout-of-order delivery changes nothing. A 5xx answer makes Apple deliver again later.",
+        "operationId": "app_store_notifications_api_v2_payments_app_store_notifications_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "App Store Notifications"
+      }
+    },
+    "/api/v2/payments/app-store/verify": {
+      "post": {
+        "description": "Verify a StoreKit 2 transaction and grant it. Crystal packs are credited through the ledger\nonce per transaction id; repeating the call is safe and grants nothing more. The app finishes\nthe transaction once this answers 200 (see docs/architecture/app-store-billing.md).",
+        "operationId": "verify_app_store_purchase_api_v2_payments_app_store_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppStoreVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GooglePlayVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Verify App Store Purchase"
+      }
+    },
+    "/api/v2/payments/entitlements": {
+      "get": {
+        "description": "What the player's verified store purchases unlock now. `/api/v2/payments/entitlements` is the\nstore-neutral path; the `google-play` one is kept for older app builds.",
+        "operationId": "google_play_entitlements_api_v2_payments_entitlements_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GooglePlayEntitlementsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Google Play Entitlements"
+      }
+    },
     "/api/v2/payments/google-play/entitlements": {
       "get": {
-        "description": "What the player's verified Google Play purchases unlock now.",
+        "description": "What the player's verified store purchases unlock now. `/api/v2/payments/entitlements` is the\nstore-neutral path; the `google-play` one is kept for older app builds.",
         "operationId": "google_play_entitlements_api_v2_payments_google_play_entitlements_get",
         "responses": {
           "200": {
@@ -14467,6 +14457,79 @@
           }
         ],
         "summary": "Google Play Entitlements"
+      }
+    },
+    "/api/v2/payments/google-play/rtdn": {
+      "post": {
+        "description": "Real-time Developer Notifications, delivered by a Pub/Sub push subscription. Not JWT-gated:\nthe caller proves itself with the shared `GOOGLE_PLAY_RTDN_TOKEN` (`?token=` in the push URL, or\nthe `X-Osiris-Rtdn-Token` header) and the endpoint is closed (503) until that is set.\n\nThe message is only a hint: the purchase is re-read from Google and the stored row follows it\n(renewed, canceled, expired, revoked, refunded), so a repeated or forged-content delivery\nchanges nothing. A 5xx answer makes Pub/Sub deliver again later.",
+        "operationId": "google_play_rtdn_api_v2_payments_google_play_rtdn_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-osiris-rtdn-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Osiris-Rtdn-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Play Rtdn"
       }
     },
     "/api/v2/payments/google-play/verify": {

@@ -3,12 +3,10 @@ package osiris.fit.ui.community
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import osiris.fit.ui.design.KeyButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import osiris.fit.ui.common.OsirisScaffold
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.common.rememberShared
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.theme.OsirisColors
@@ -53,7 +52,7 @@ fun RankingsScreen(graph: AppGraph, onBack: (() -> Unit)?, onSettings: () -> Uni
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
                         item {
                             when (val local = s.local) {
-                                Loadable.Loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                                Loadable.Loading -> SkeletonRows(rows = 5)
                                 // Usually "set your city first": the way out is Settings.
                                 is Loadable.Failed -> Column {
                                     Text(local.message)
@@ -68,7 +67,7 @@ fun RankingsScreen(graph: AppGraph, onBack: (() -> Unit)?, onSettings: () -> Uni
                 PullToRefreshBox(isRefreshing = false, onRefresh = vm::refreshSeasons) {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
                         when (val seasons = s.seasons) {
-                            Loadable.Loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                            Loadable.Loading -> item { SkeletonRows() }
                             is Loadable.Failed -> item { Text(seasons.message, color = OsirisColors.Error) }
                             is Loadable.Ready -> if (seasons.value.isEmpty()) {
                                 item { Text("No season in your city right now. Set your city in Settings to see local seasons.") }

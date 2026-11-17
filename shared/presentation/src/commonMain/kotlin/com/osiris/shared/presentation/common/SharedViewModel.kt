@@ -2,7 +2,9 @@ package com.osiris.shared.presentation.common
 
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.core.logging.platformLogger
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,7 +21,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * [clear] when the SwiftUI view model is released. Tests pass a test dispatcher.
  */
 abstract class SharedViewModel(dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate) {
-    protected val scope: CoroutineScope = CoroutineScope(SupervisorJob() + dispatcher)
+    // A failure nothing caught (a repository call that throws instead of returning an Outcome) is
+    // logged and shown as a message; without the handler it would end the process.
+    private val uncaught = CoroutineExceptionHandler { _, e ->
+        platformLogger().error(TAG, "Uncaught failure in a view model", e)
+        showError(AppError.from(e))
+    }
+    protected val scope: CoroutineScope = CoroutineScope(SupervisorJob() + dispatcher + uncaught)
 
     private val _message = MutableStateFlow<UiMessage?>(null)
 
@@ -47,6 +55,10 @@ abstract class SharedViewModel(dispatcher: CoroutineDispatcher = Dispatchers.Mai
 
     open fun clear() {
         scope.cancel()
+    }
+
+    private companion object {
+        const val TAG = "OsirisViewModel"
     }
 }
 

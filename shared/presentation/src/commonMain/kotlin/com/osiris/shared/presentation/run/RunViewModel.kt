@@ -114,8 +114,9 @@ sealed interface RunDialog {
  * Run recording: live route, challenge course overlay, nearby challenges, and the
  * finish flow (verify, celebrate, challenge result, offer a course).
  *
- * The platform owns GPS: it subscribes while the screen is open, keeps a foreground service
- * while [RunState.recording], and passes every position to [onLocation].
+ * The platform owns GPS and passes every position while the screen is open. A platform that records
+ * the run outside the screen (Android's foreground service adds the fixes to [RunRepository] itself)
+ * calls [onPosition]; one that does not calls [onLocation], which also records the fix.
  */
 class RunViewModel(
     private val runs: RunRepository,
@@ -174,8 +175,14 @@ class RunViewModel(
         }
     }
 
-    /** Every position from the platform, recording or not. */
+    /** Every position from the platform, recording or not; also adds it to the active run. */
     fun onLocation(fix: LocationFix) {
+        onPosition(fix)
+        if (runs.active.value != null) scope.launch { runs.addFix(fix, clock.now()) }
+    }
+
+    /** A position for the map and the route line only: something else records the run's fixes. */
+    fun onPosition(fix: LocationFix) {
         _state.update {
             it.copy(
                 position = fix.position,
@@ -188,7 +195,6 @@ class RunViewModel(
             nearbyLoaded = true
             loadNearby(fix.position)
         }
-        if (runs.active.value != null) scope.launch { runs.addFix(fix, clock.now()) }
     }
 
     /** The platform could not get a position (permission refused, location off). */

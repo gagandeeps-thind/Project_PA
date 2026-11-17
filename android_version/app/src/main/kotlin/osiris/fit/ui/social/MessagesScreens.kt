@@ -56,6 +56,7 @@ import osiris.fit.ui.common.LoadableContent
 import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.rememberNow
 import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
 import com.osiris.shared.domain.model.Conversation
@@ -150,7 +151,7 @@ private fun NewMessageSheet(vm: InboxViewModel, onDismiss: () -> Unit, onPick: (
             Text("New message", style = MaterialTheme.typography.titleLarge)
             Text("Your followers and the people you follow", color = OsirisColors.Faint, fontSize = 12.sp)
             when (val contacts = s.contacts) {
-                null, Loadable.Loading -> CircularProgressIndicator(Modifier.padding(24.dp))
+                null, Loadable.Loading -> SkeletonRows(Modifier.padding(vertical = 16.dp))
                 is Loadable.Failed -> Text(contacts.message, color = OsirisColors.Error, modifier = Modifier.padding(16.dp))
                 is Loadable.Ready -> if (contacts.value.isEmpty()) {
                     Text("Follow someone first, or wait for a follower.", modifier = Modifier.padding(vertical = 24.dp))
@@ -177,6 +178,12 @@ fun ChatScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onProfile: (Int
     val vm = rememberShared(key = "chat-$userId") { graph.chat(userId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val safety = rememberFeedSafety(graph)
+    // Polls only while this screen is on top and the app is in the foreground, so a covered or
+    // backgrounded chat neither uses the network nor marks messages read.
+    LifecycleResumeEffect(vm) {
+        vm.resume()
+        onPauseOrDispose { vm.pause() }
+    }
     OsirisScaffold(
         s.user?.displayName ?: "Message",
         vm,
@@ -201,8 +208,12 @@ fun ChatScreen(graph: AppGraph, userId: Int, onBack: () -> Unit, onProfile: (Int
 @Composable
 private fun MessageList(messages: List<DirectMessage>, s: ChatState, onOlder: () -> Unit, modifier: Modifier) {
     val list = rememberLazyListState()
-    // Newest at the bottom: jump there when a message arrives or is sent.
-    LaunchedEffect(messages.lastOrNull()?.id) { if (messages.isNotEmpty()) list.animateScrollToItem(messages.lastIndex) }
+    val earlier = messages.isNotEmpty() && !s.reachedStart
+    val seen = messages.lastOrNull()?.let { it.mine && it.read } == true
+    // Newest at the bottom: jump there when a message arrives or is sent. The list's last item is not
+    // the last message's index: "Earlier messages" sits above the messages and "Seen" below them.
+    val last = messages.lastIndex + (if (earlier) 1 else 0) + (if (seen) 1 else 0)
+    LaunchedEffect(messages.lastOrNull()?.id, seen) { if (messages.isNotEmpty()) list.animateScrollToItem(last) }
     LazyColumn(
         state = list,
         modifier = modifier.fillMaxWidth(),
@@ -211,7 +222,7 @@ private fun MessageList(messages: List<DirectMessage>, s: ChatState, onOlder: ()
     ) {
         if (messages.isEmpty()) {
             item { Text("Say hi 👋  Plan your next session together.", color = OsirisColors.Faint, modifier = Modifier.padding(24.dp)) }
-        } else if (!s.reachedStart) {
+        } else if (earlier) {
             item {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TextButton(onClick = onOlder, enabled = !s.loadingOlder) { Text("Earlier messages") }
@@ -219,7 +230,7 @@ private fun MessageList(messages: List<DirectMessage>, s: ChatState, onOlder: ()
             }
         }
         items(messages, key = { it.id }) { m -> Bubble(m) }
-        if (messages.lastOrNull()?.let { it.mine && it.read } == true) {
+        if (seen) {
             item { Text("Seen", fontSize = 11.sp, color = OsirisColors.Faint, modifier = Modifier.fillMaxWidth().padding(end = 4.dp)) }
         }
     }

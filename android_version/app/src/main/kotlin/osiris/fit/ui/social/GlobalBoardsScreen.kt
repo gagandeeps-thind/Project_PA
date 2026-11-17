@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import osiris.fit.ui.design.RaisedButton
@@ -30,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.design.HeroMetric
 import osiris.fit.ui.design.accentKey
 import com.osiris.shared.core.design.FrostMatte
@@ -63,7 +62,7 @@ fun GlobalBoardsScreen(graph: AppGraph, onBack: () -> Unit, onLocal: () -> Unit,
                 item { Chips(BoardPeriod.entries, s.period, { it.title }) { vm.select(it) } }
                 if (s.showsExercise) item { Chips(BoardExercise.entries, s.exercise, { it.title }) { vm.select(it) } }
                 when (val board = s.board) {
-                    Loadable.Loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp)) }
+                    Loadable.Loading -> item { SkeletonRows(Modifier.padding(top = 16.dp), rows = 5) }
                     is Loadable.Failed -> item { Text(board.message, color = OsirisColors.Error, modifier = Modifier.padding(top = 16.dp)) }
                     is Loadable.Ready -> board(board.value)
                 }

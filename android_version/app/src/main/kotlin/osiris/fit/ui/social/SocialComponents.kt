@@ -1,7 +1,5 @@
 package osiris.fit.ui.social
 
-import android.graphics.BitmapFactory
-import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,15 +40,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
@@ -61,6 +56,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import osiris.fit.platform.image.RemoteImages
+import osiris.fit.platform.image.rememberRemoteImage
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.theme.OsirisColors
 import com.osiris.shared.core.design.FrostMatte
@@ -69,29 +66,10 @@ import com.osiris.shared.domain.model.ActiveFriend
 import com.osiris.shared.domain.model.FeedPost
 import com.osiris.shared.domain.model.PostAttachment
 import com.osiris.shared.domain.model.PostChart
-import java.net.URL
 import kotlin.time.Instant
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /** The full URL of a photo path the API returned (`/api/v2/social/media/...`). */
 fun mediaUrl(baseUrl: String, path: String): String = baseUrl.trimEnd('/') + path
-
-/** Decoded post photos, so scrolling back up does not download them again. */
-private val photoCache = LruCache<String, ImageBitmap>(PHOTO_CACHE_ENTRIES)
-
-/** A post photo from [url], cached in memory; null while loading or if it fails. */
-@Composable
-fun rememberPostPhoto(url: String): ImageBitmap? {
-    val image by produceState<ImageBitmap?>(photoCache.get(url), url) {
-        if (value == null) {
-            value = withContext(Dispatchers.IO) {
-                runCatching { URL(url).openStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
-            }?.also { photoCache.put(url, it) }
-        }
-    }
-    return image
-}
 
 /** A round avatar with the player's initials; [ring] draws the "trained today" gradient ring. */
 @Composable
@@ -260,7 +238,7 @@ fun PostMedia(post: FeedPost, baseUrl: String) {
 
 @Composable
 private fun PostPhoto(url: String) {
-    val image = rememberPostPhoto(url)
+    val image = rememberRemoteImage(url)
     Box(Modifier.fillMaxWidth().aspectRatio(1f).background(OsirisColors.Surface), contentAlignment = Alignment.Center) {
         if (image != null) {
             Image(image, "Post photo", modifier = Modifier.fillMaxWidth().aspectRatio(1f), contentScale = ContentScale.Crop)
@@ -407,7 +385,7 @@ fun PostTile(post: FeedPost, baseUrl: String, onClick: () -> Unit) {
         Modifier.aspectRatio(1f).background(OsirisColors.Surface).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        val photo = post.photoUrl?.let { rememberPostPhoto(mediaUrl(baseUrl, it)) }
+        val photo = post.photoUrl?.let { rememberRemoteImage(mediaUrl(baseUrl, it), RemoteImages.THUMBNAIL_PX) }
         val first = post.attachments.firstOrNull()
         when {
             photo != null -> Image(
@@ -438,6 +416,5 @@ fun PostTile(post: FeedPost, baseUrl: String, onClick: () -> Unit) {
 @Composable
 fun FollowersOnlyIcon() = Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
 
-private const val PHOTO_CACHE_ENTRIES = 40
 private const val MAX_TILES = 4
 private const val MIN_BAR = 0.04f

@@ -90,7 +90,7 @@ def _alembic_head_revision() -> Optional[str]:
 def root():
     return {
         "message": "Verified Fitness Reward System API is running",
-        "docs": "/docs"
+        "docs": "/docs" if _IS_DEV_ENV else None,  # docs are served in dev only (main.py)
     }
 
 

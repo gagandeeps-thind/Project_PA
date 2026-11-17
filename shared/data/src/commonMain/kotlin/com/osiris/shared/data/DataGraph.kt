@@ -31,6 +31,7 @@ import com.osiris.shared.data.repository.TrainingRepositoryImpl
 import com.osiris.shared.data.storage.PlatformDependencies
 import com.osiris.shared.data.support.SupportChatRepositoryImpl
 import com.osiris.shared.data.wallet.MockWalletRepository
+import com.osiris.shared.domain.repository.AccountScoped
 import com.osiris.shared.domain.repository.AriseRepository
 import com.osiris.shared.domain.repository.AuthRepository
 import com.osiris.shared.domain.repository.ChallengeRepository
@@ -98,7 +99,8 @@ class DataGraph(
         session = session,
         settings = platform.settings,
         installId = installId,
-        accountScoped = listOf(runImpl, exerciseImpl),
+        // The HTTP cache holds personal responses, so it is emptied with the other per-account data.
+        accountScoped = listOf(runImpl, exerciseImpl, AccountScoped { api.clearCache() }),
         logger = platform.logger,
         clock = clock,
     )

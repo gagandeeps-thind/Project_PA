@@ -11,6 +11,7 @@ import com.osiris.shared.presentation.common.Loadable
 import com.osiris.shared.presentation.common.SharedViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,6 +83,9 @@ data class ChatState(
 /**
  * One conversation. New messages arrive by polling every [pollMs] while the screen is open (0 turns
  * polling off, as tests do). Opening it marks the thread read.
+ *
+ * The screen calls [pause] when it is covered or the app goes to the background and [resume] when it
+ * is on top again, so nothing is fetched, or marked read, while the player is not looking.
  */
 class ChatViewModel(
     private val userId: Int,
@@ -92,8 +96,16 @@ class ChatViewModel(
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
+    private var polling: Job? = null
+
     init {
-        scope.launch {
+        resume()
+    }
+
+    /** Loads the newest messages and polls again; does nothing while already polling. */
+    fun resume() {
+        if (polling?.isActive == true) return
+        polling = scope.launch {
             load()
             if (pollMs > 0) {
                 while (isActive) {
@@ -102,6 +114,12 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    /** Stops polling until [resume]. */
+    fun pause() {
+        polling?.cancel()
+        polling = null
     }
 
     /** Fetches the newest page and merges it with what is shown, keeping older pages. */

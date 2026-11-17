@@ -44,11 +44,18 @@ def compare_type(context, inspected_column, metadata_column, inspected_type, met
     return None  # fall back to Alembic's default comparison
 
 
+def include_object(obj, name, type_, reflected, compare_to):
+    # crystal_purchases is retained purchase history from the removed card-payment path: it has
+    # no model, and must be neither dropped nor reported by `alembic check`.
+    return not (type_ == "table" and name == "crystal_purchases")
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         # SQLite needs batch mode for ALTER TABLE; harmless on Postgres.
@@ -71,6 +78,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             render_as_batch=is_sqlite,
             compare_type=compare_type,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

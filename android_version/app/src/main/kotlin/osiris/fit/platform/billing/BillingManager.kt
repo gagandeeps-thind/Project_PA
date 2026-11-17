@@ -20,6 +20,7 @@ import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.consumePurchase
 import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
+import com.osiris.shared.domain.wallet.PurchaseVerification
 import osiris.fit.BuildConfig
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -34,6 +35,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Manages the full Google Play Billing lifecycle for Osiris on Android:
@@ -45,20 +48,30 @@ import kotlinx.coroutines.launch
  *   (`consumePurchase`) or acknowledges non-consumables and subscriptions (`acknowledgePurchase`)
  *   within Google Play's required window.
  * - Tracks active, grace-period, and expired subscription entitlements in [state].
+ *
+ * @param accountId the signed-in player's Play `obfuscatedAccountId`, null when signed out. Without one
+ *   nothing is launched or sent to the server; unconfirmed purchases are retried after sign-in.
+ * @param sellsPass whether Osiris Pass and the Founder Pack are queried and offered (`features.passProducts`).
  */
 class BillingManager(
     context: Context,
     private val verifier: PurchaseVerifier = PlaySignaturePurchaseVerifier(BuildConfig.PLAY_BILLING_PUBLIC_KEY),
-    private val onConsumableGranted: (productId: String, crystals: Int, purchaseToken: String) -> Unit = { _, _, _ -> },
+    private val accountId: () -> String? = { null },
+    private val sellsPass: Boolean = false,
     coroutineContext: CoroutineContext = SupervisorJob() + Dispatchers.Main.immediate,
 ) : BillingService, PurchasesUpdatedListener, BillingClientStateListener {
 
     private val appContext: Context = context.applicationContext
     private val scope: CoroutineScope = CoroutineScope(coroutineContext)
-    private val _state = MutableStateFlow(BillingState())
+    private val _state = MutableStateFlow(BillingState(sellsPass = sellsPass))
     override val state: StateFlow<BillingState> = _state.asStateFlow()
 
     private val productDetailsCache = ConcurrentHashMap<String, ProductDetails>()
+
+    // A purchase can arrive from onPurchasesUpdated and from a refresh at the same time: handle one at a
+    // time, and never verify or consume again a token this process already consumed.
+    private val purchaseLock = Mutex()
+    private val consumedTokens = mutableSetOf<String>()
     private var reconnectJob: Job? = null
     private var retryAttempt: Int = 0
     private var hadActiveSubscription: Boolean = false
@@ -148,8 +161,8 @@ class BillingManager(
         } else {
             scope.launch {
                 _state.update { it.copy(isLoading = true) }
-                val inAppProducts = queryProductDetailsForType(PlayBillingCatalog.INAPP_PRODUCT_IDS, ProductType.INAPP)
-                val subProducts = queryProductDetailsForType(PlayBillingCatalog.SUBSCRIPTION_PRODUCT_IDS, ProductType.SUBS)
+                val inAppProducts = queryProductDetailsForType(PlayBillingCatalog.inAppProductIds(sellsPass), ProductType.INAPP)
+                val subProducts = queryProductDetailsForType(PlayBillingCatalog.subscriptionProductIds(sellsPass), ProductType.SUBS)
                 _state.update {
                     it.copy(
                         oneTimeProducts = inAppProducts,
@@ -220,7 +233,7 @@ class BillingManager(
             BillingProduct(
                 productId = details.productId,
                 kind = kind,
-                title = details.title,
+                title = details.name,
                 description = details.description,
                 formattedPrice = primaryOffer.formattedPrice,
                 priceAmountMicros = primaryOffer.priceAmountMicros,
@@ -235,7 +248,7 @@ class BillingManager(
             BillingProduct(
                 productId = details.productId,
                 kind = kind,
-                title = details.title,
+                title = details.name,
                 description = details.description,
                 formattedPrice = oneTime.formattedPrice,
                 priceAmountMicros = oneTime.priceAmountMicros,
@@ -250,9 +263,12 @@ class BillingManager(
         offerToken: String?,
         obfuscatedAccountId: String?,
     ) {
+        val account = obfuscatedAccountId ?: accountId()
+        val blocked = purchaseBlocked(productId, account)
         val details = productDetailsCache[productId]
         val productParams = details?.let { buildProductDetailsParams(it, basePlanId, offerToken) }
         when {
+            blocked != null -> _state.update { it.copy(feedback = blocked) }
             !billingClient.isReady -> {
                 _state.update {
                     it.copy(feedback = BillingErrorMapper.fromResponseCode(BillingResponseCode.SERVICE_DISCONNECTED))
@@ -282,9 +298,7 @@ class BillingManager(
             else -> {
                 val flowBuilder = BillingFlowParams.newBuilder()
                     .setProductDetailsParamsList(listOf(productParams))
-                if (!obfuscatedAccountId.isNullOrBlank()) {
-                    flowBuilder.setObfuscatedAccountId(obfuscatedAccountId)
-                }
+                    .setObfuscatedAccountId(account.orEmpty())
                 val launchResult = billingClient.launchBillingFlow(activity, flowBuilder.build())
                 if (launchResult.responseCode != BillingResponseCode.OK) {
                     val feedback = BillingErrorMapper.fromResponseCode(
@@ -294,6 +308,25 @@ class BillingManager(
                     _state.update { it.copy(feedback = feedback) }
                 }
             }
+        }
+    }
+
+    /** Why a purchase must not start, or null: signed out, server not taking purchases, or a pass already held. */
+    private fun purchaseBlocked(productId: String, account: String?): BillingFeedback? {
+        val current = _state.value
+        val passActive = current.subscriptionStatus == SubscriptionStatus.ACTIVE ||
+            current.subscriptionStatus == SubscriptionStatus.IN_GRACE_PERIOD
+        val otherPassHeld = passActive && PlayBillingCatalog.kindOf(productId) == ProductKind.SUBSCRIPTION &&
+            current.activeSubscriptionProductId != productId
+        return when {
+            account.isNullOrBlank() -> BillingFeedback(null, "Sign in to buy, so the purchase reaches your account.", isError = true)
+            current.purchasesUnavailable -> BillingErrorMapper.feedback(BillingErrorCode.PURCHASES_UNAVAILABLE)
+            otherPassHeld -> BillingFeedback(
+                BillingErrorCode.ITEM_ALREADY_OWNED,
+                "You already have Osiris Pass. Change or cancel your plan in Google Play.",
+                isError = true,
+            )
+            else -> null
         }
     }
 
@@ -321,7 +354,7 @@ class BillingManager(
                 val updatedPurchases = purchases.orEmpty()
                 if (updatedPurchases.isNotEmpty()) {
                     scope.launch {
-                        updatedPurchases.forEach { purchase -> handlePurchase(purchase) }
+                        purchaseLock.withLock { updatedPurchases.forEach { purchase -> handlePurchase(purchase) } }
                         refreshActivePurchasesInternal()
                     }
                 }
@@ -345,7 +378,7 @@ class BillingManager(
     }
 
     private suspend fun handlePurchase(purchase: Purchase): BillingPurchaseRecord? =
-        when (purchase.purchaseState) {
+        when (purchase.purchaseState.takeUnless { purchase.purchaseToken in consumedTokens }) {
             Purchase.PurchaseState.PENDING -> {
                 _state.update {
                     it.copy(
@@ -364,51 +397,53 @@ class BillingManager(
         }
 
     private suspend fun verifyAndFulfillPurchase(purchase: Purchase): BillingPurchaseRecord {
-        val verified = verifier.verify(
+        // Signed out the server would answer 401: keep the purchase untouched and retry after sign-in.
+        if (accountId() == null) return toPurchaseRecord(purchase, PurchaseEntitlementStatus.FAILED_VERIFICATION)
+        val answer = verifier.verify(
             packageName = appContext.packageName,
             signedData = purchase.originalJson,
             signature = purchase.signature,
             purchaseToken = purchase.purchaseToken,
             productIds = purchase.products,
         )
-        return if (!verified) {
-            _state.update {
-                it.copy(
-                    feedback = BillingFeedback(
-                        code = BillingErrorCode.VERIFICATION_FAILED,
-                        userMessage = "We couldn't confirm this purchase yet, and you won't be charged again. Pull down to retry.",
-                        isError = true,
-                    ),
-                )
-            }
-            toPurchaseRecord(purchase, PurchaseEntitlementStatus.FAILED_VERIFICATION)
-        } else if (purchase.products.any(PlayBillingCatalog::isConsumable)) {
-            consumeVerifiedPurchase(purchase)
-        } else {
-            acknowledgeVerifiedPurchase(purchase)
+        val feedback = BillingErrorMapper.fromVerification(answer)
+        _state.update {
+            it.copy(
+                purchasesUnavailable = when {
+                    answer.isSuccess -> false
+                    feedback?.code == BillingErrorCode.PURCHASES_UNAVAILABLE -> true
+                    else -> it.purchasesUnavailable
+                },
+                feedback = feedback ?: it.feedback,
+            )
+        }
+        val verification = answer.getOrNull()?.takeIf { it.entitled }
+        return when {
+            verification == null -> toPurchaseRecord(purchase, PurchaseEntitlementStatus.FAILED_VERIFICATION)
+            purchase.products.any(PlayBillingCatalog::isConsumable) -> consumeVerifiedPurchase(purchase, verification)
+            else -> acknowledgeVerifiedPurchase(purchase)
         }
     }
 
-    private suspend fun consumeVerifiedPurchase(purchase: Purchase): BillingPurchaseRecord {
+    private suspend fun consumeVerifiedPurchase(purchase: Purchase, verification: PurchaseVerification): BillingPurchaseRecord {
         val consumeParams = ConsumeParams.newBuilder()
             .setPurchaseToken(purchase.purchaseToken)
             .build()
         val consumeResult = billingClient.consumePurchase(consumeParams)
         if (consumeResult.billingResult.responseCode == BillingResponseCode.OK) {
-            val totalCrystals = purchase.products.sumOf(PlayBillingCatalog::crystalsForProduct)
-            purchase.products.forEach { productId ->
-                val crystals = PlayBillingCatalog.crystalsForProduct(productId)
-                onConsumableGranted(productId, crystals, purchase.purchaseToken)
-            }
-            _state.update {
-                it.copy(
-                    grantedConsumableCrystals = it.grantedConsumableCrystals + totalCrystals,
-                    feedback = BillingFeedback(
-                        code = null,
-                        userMessage = "Purchase complete! +$totalCrystals Mana Crystals added.",
-                        isError = false,
-                    ),
-                )
+            consumedTokens += purchase.purchaseToken
+            // The server's figures, quantity included; 0 means an earlier attempt already credited it.
+            if (verification.crystalsCredited > 0) {
+                val balance = verification.balance?.let { " Your balance is now $it." }.orEmpty()
+                _state.update {
+                    it.copy(
+                        feedback = BillingFeedback(
+                            code = null,
+                            userMessage = "Purchase complete! +${verification.crystalsCredited} Mana Crystals added.$balance",
+                            isError = false,
+                        ),
+                    )
+                }
             }
         } else {
             val feedback = BillingErrorMapper.fromResponseCode(
@@ -450,8 +485,9 @@ class BillingManager(
         val inAppPurchases = queryPurchasesForType(ProductType.INAPP)
         val subPurchases = queryPurchasesForType(ProductType.SUBS)
 
-        val processedInApp = inAppPurchases.mapNotNull { handlePurchase(it) }
-        val processedSubs = subPurchases.mapNotNull { handlePurchase(it) }
+        val (processedInApp, processedSubs) = purchaseLock.withLock {
+            inAppPurchases.mapNotNull { handlePurchase(it) } to subPurchases.mapNotNull { handlePurchase(it) }
+        }
 
         val ownedNonConsumables = processedInApp
             .filter { it.status == PurchaseEntitlementStatus.VERIFIED_AND_GRANTED }

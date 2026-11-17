@@ -27,6 +27,7 @@ import models
 from growth_api import emit_event, get_or_create_profile
 from core.clock import _now_naive_utc
 from core.errors import _api_error
+from core.rate_limit import _rl_join
 from core.security import get_active_player, get_current_admin
 from database import get_db
 from schemas import ChallengePublic
@@ -47,18 +48,18 @@ HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 class CommunityCreate(BaseModel):
     name: str = Field(min_length=3, max_length=60)
-    kind: str
+    kind: str = Field(max_length=32)
     description: Optional[str] = Field(default=None, max_length=500)
-    brand_color: Optional[str] = None
+    brand_color: Optional[str] = Field(default=None, max_length=7)
     city: Optional[str] = Field(default=None, max_length=60)
-    visibility: str = "public"
+    visibility: str = Field(default="public", max_length=16)
     weekly_team_goal_km: float = Field(default=100.0, gt=0, le=100_000)
     perk_text: Optional[str] = Field(default=None, max_length=200)
 
 
 class CommunityUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
-    brand_color: Optional[str] = None
+    brand_color: Optional[str] = Field(default=None, max_length=7)
     weekly_team_goal_km: Optional[float] = Field(default=None, gt=0, le=100_000)
     perk_text: Optional[str] = Field(default=None, max_length=200)
 
@@ -165,7 +166,7 @@ class AdminCommunityItem(BaseModel):
 
 class AdminCommunityStatus(BaseModel):
     verified: Optional[bool] = None
-    status: Optional[str] = None
+    status: Optional[str] = Field(default=None, max_length=16)
     reason: str = Field(min_length=3, max_length=500)
 
 
@@ -227,8 +228,11 @@ def _week_window(now: datetime) -> tuple[datetime, datetime]:
 
 def _leaderboard(
     db: Session, *, scope: str, title: str, user_ids: list[int], start: datetime, end: datetime, viewer_id: int,
+    daily: Optional[dict[int, dict]] = None,
 ) -> Leaderboard:
-    daily = _daily_by_user(db, user_ids, start, end)
+    """`daily`: `_daily_by_user` for the same players and window, when the caller already has it."""
+    if daily is None:
+        daily = _daily_by_user(db, user_ids, start, end)
     standings = lb.rank({uid: lb.score(days) for uid, days in daily.items()})
     shown_ids = [s.key for s in standings[:LEADERBOARD_LIMIT]] + [viewer_id]
     profiles = {p.user_id: p for p in db.query(models.PlayerProfile).filter(
@@ -351,7 +355,8 @@ def create_community(req: CommunityCreate, db: Session = Depends(get_db),
         slug=_unique_slug(db, models.Community, req.name), name=req.name.strip(), kind=req.kind,
         description=req.description, brand_color=req.brand_color,
         city=lb.slugify(req.city) if req.city else None, visibility=req.visibility,
-        join_code=secrets.token_hex(3).upper() if req.visibility == "private" else None,
+        # 40 bits: with the join rate limit, guessing a code is out of reach. Older 6-character codes still work.
+        join_code=secrets.token_hex(5).upper() if req.visibility == "private" else None,
         weekly_team_goal_km=req.weekly_team_goal_km, perk_text=req.perk_text, owner_user_id=uid,
     )
     db.add(c)
@@ -383,7 +388,8 @@ def my_communities(db: Session = Depends(get_db), token_data: dict = Depends(get
     uid = token_data["id"]
     rows = (db.query(models.Community)
             .join(models.CommunityMember, models.CommunityMember.community_id == models.Community.id)
-            .filter(models.CommunityMember.user_id == uid, models.Community.status == "active").all())
+            .filter(models.CommunityMember.user_id == uid, models.Community.status == "active")
+            .order_by(models.Community.id.asc()).limit(100).all())
     ctx = CommunityContext(db, rows, uid)
     return [_community_out(db, c, uid, ctx) for c in rows]
 
@@ -413,7 +419,7 @@ def update_community(slug: str, req: CommunityUpdate, db: Session = Depends(get_
     return _community_out(db, c, token_data["id"])
 
 
-@router.post("/api/v2/communities/{slug}/join", response_model=CommunityOut)
+@router.post("/api/v2/communities/{slug}/join", response_model=CommunityOut, dependencies=[Depends(_rl_join)])
 def join_community(slug: str, req: JoinRequest, db: Session = Depends(get_db),
                          token_data: dict = Depends(get_active_player)):
     uid = token_data["id"]
@@ -530,7 +536,7 @@ def list_seasons(city: Optional[str] = None, db: Session = Depends(get_db),
     q = db.query(models.Season).filter(models.Season.ends_at > _now_naive_utc())
     if city:
         q = q.filter(models.Season.city == lb.slugify(city))
-    seasons = q.order_by(models.Season.starts_at.asc()).all()
+    seasons = q.order_by(models.Season.starts_at.asc()).limit(100).all()
     entries = _season_entries(db, [s.id for s in seasons], uid)
     return [_season_out(db, s, uid, entries) for s in seasons]
 
@@ -554,16 +560,19 @@ def season_leaderboard(slug: str, db: Session = Depends(get_db), token_data: dic
     uid = token_data["id"]
     s = _get_season(db, slug)
     entrants = [u for (u,) in db.query(models.SeasonEntry.user_id).filter(models.SeasonEntry.season_id == s.id).all()]
-    end = min(s.ends_at, _now_naive_utc())
+    end = max(min(s.ends_at, _now_naive_utc()), s.starts_at)
+    daily = _daily_by_user(db, entrants, s.starts_at, end)
     players = _leaderboard(db, scope="season", title=s.name, user_ids=entrants,
-                           start=s.starts_at, end=max(end, s.starts_at), viewer_id=uid)
+                           start=s.starts_at, end=end, viewer_id=uid, daily=daily)
     players.period_end = s.ends_at
 
-    daily = _daily_by_user(db, entrants, s.starts_at, max(end, s.starts_at))
     player_scores = {u: lb.score(daily.get(u, {})) for u in entrants}
     communities = db.query(models.Community).filter(
         models.Community.city == s.city, models.Community.status == "active").all()
-    members = {c.id: _member_ids(db, c.id) for c in communities}
+    members: dict[int, list[int]] = {c.id: [] for c in communities}
+    for cid, member_id in db.query(models.CommunityMember.community_id, models.CommunityMember.user_id).filter(
+            models.CommunityMember.community_id.in_(list(members) or [-1])):
+        members[cid].append(member_id)
     standings = lb.rank(lb.community_season_scores(members, player_scores))
     by_id = {c.id: c for c in communities}
     mine = {c for c, uids in members.items() if uid in uids}

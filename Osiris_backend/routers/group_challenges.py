@@ -7,7 +7,7 @@ never touch crystals."""
 from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 import growth_feed
@@ -28,6 +28,8 @@ router = APIRouter()
 
 TOP = 3
 MINE_LIMIT = 30
+# Official, invited and friends' lists: soonest-ending first, so the cap drops the ones furthest out.
+LIST_LIMIT = 50
 
 
 def _status(ch: models.GroupChallenge) -> str:
@@ -104,19 +106,19 @@ def list_group_challenges(db: Session = Depends(get_db), token_data: dict = Depe
     mine = _memberships(db, uid)
     active = [models.GroupChallenge.status == "active", models.GroupChallenge.ends_at > now]
     official = db.query(models.GroupChallenge).filter(models.GroupChallenge.is_official.is_(True), *active) \
-        .order_by(models.GroupChallenge.ends_at.asc()).all()
+        .order_by(models.GroupChallenge.ends_at.asc()).limit(LIST_LIMIT).all()
     joined = db.query(models.GroupChallenge).filter(
         models.GroupChallenge.id.in_([cid for cid, s in mine.items() if s == "joined"] or [-1]),
         models.GroupChallenge.is_official.is_(False), models.GroupChallenge.status == "active",
     ).order_by(models.GroupChallenge.ends_at.desc()).limit(MINE_LIMIT).all()
     invited = db.query(models.GroupChallenge).filter(
         models.GroupChallenge.id.in_([cid for cid, s in mine.items() if s == "invited"] or [-1]), *active,
-    ).order_by(models.GroupChallenge.ends_at.asc()).all()
+    ).order_by(models.GroupChallenge.ends_at.asc()).limit(LIST_LIMIT).all()
     friends = training.connection_ids(db, uid)
     open_to_me = db.query(models.GroupChallenge).filter(
         models.GroupChallenge.creator_id.in_(friends or {-1}), models.GroupChallenge.is_official.is_(False),
         models.GroupChallenge.id.notin_(list(mine) or [-1]), *active,
-    ).order_by(models.GroupChallenge.ends_at.asc()).all()
+    ).order_by(models.GroupChallenge.ends_at.asc()).limit(LIST_LIMIT).all()
     return GroupChallengeLists(
         official=_cards(db, uid, official, mine), mine=_cards(db, uid, joined, mine),
         invited=_cards(db, uid, invited, mine), connections=_cards(db, uid, open_to_me, mine),
@@ -206,7 +208,11 @@ def create_official_challenge(
 
 
 @router.get("/api/v2/admin/group-challenges", response_model=List[GroupChallengeOut])
-def list_official_challenges(db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin)):
+def list_official_challenges(
+    limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin),
+):
     rows = db.query(models.GroupChallenge).filter(models.GroupChallenge.is_official.is_(True)) \
-        .order_by(models.GroupChallenge.created_at.desc()).limit(200).all()
+        .order_by(models.GroupChallenge.created_at.desc(), models.GroupChallenge.id.desc()) \
+        .offset(offset).limit(limit).all()
     return _cards(db, -1, rows, {})

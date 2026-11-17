@@ -35,6 +35,8 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            Button { nav.open(.store) } label: { Image(systemName: "sparkles") }
+                .accessibilityLabel("Mana Crystal Store")
             Button { nav.open(.support) } label: { Image(systemName: "bubble.left.and.bubble.right") }
                 .accessibilityLabel("Live support")
             Button { nav.open(.settings) } label: { Image(systemName: "gearshape") }.accessibilityLabel("Settings")

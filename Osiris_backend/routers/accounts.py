@@ -9,7 +9,10 @@ import growth_safety
 import models
 from core.clock import _to_naive_utc
 from core.rate_limit import _rl_login, _rl_onboard
-from core.security import create_access_token, get_current_user_token, get_password_hash, verify_password
+from core.security import (
+    ADMIN_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user_token, get_password_hash,
+    password_fingerprint, require_valid_session, verify_password, verify_password_or_dummy,
+)
 from database import get_db
 from schemas import AuthLoginRequest, AuthLoginResponse, UserCreate, UserLogin, UserProfile
 from services import ledger
@@ -81,12 +84,9 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db), _rl: None 
     role-aware `/api/v1/auth/login` endpoint and switch UI based on the returned `role`."""
     user = db.query(models.User).filter(models.User.email == credentials.email).first()
 
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Verify the password using bcrypt
-    if not verify_password(credentials.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid password")
+    # One status, message and bcrypt cost whether or not the email exists, so login reveals no accounts.
+    if not verify_password_or_dummy(credentials.password, user.hashed_password if user else None):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     # Security check passed! Update their activity timestamp so they don't get hit by rank decay
     user.last_activity_date = _to_naive_utc(credentials.device_timestamp)
@@ -111,7 +111,10 @@ def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl
                 email=admin.email,
                 name=admin.name or admin.email,
                 message="Admin authenticated. Open admin portal.",
-                access_token=create_access_token({"sub": str(admin.id), "role": "admin"})
+                access_token=create_access_token(
+                    {"sub": str(admin.id), "role": "admin", "pwv": password_fingerprint(admin.hashed_password)},
+                    expires_minutes=ADMIN_TOKEN_EXPIRE_MINUTES,
+                ),
             )
 
         # 2. Merchant probe (registered via /api/v1/merchants/register).
@@ -123,7 +126,9 @@ def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl
                 email=merchant.email,
                 name=merchant.name or merchant.email,
                 message="Merchant authenticated. Open merchant portal.",
-                access_token=create_access_token({"sub": str(merchant.id), "role": "merchant"})
+                access_token=create_access_token(
+                    {"sub": str(merchant.id), "role": "merchant", "pwv": password_fingerprint(merchant.hashed_password)}
+                ),
             )
 
         # 3. Player probe (registered via /api/v1/onboard).
@@ -141,6 +146,9 @@ def auth_login(credentials: AuthLoginRequest, db: Session = Depends(get_db), _rl
             )
 
         # No match in any table — return 401 with a generic message so callers can't enumerate.
+        # When no row existed bcrypt never ran; run it once so the response time does not tell either.
+        if not (admin or merchant or user):
+            verify_password_or_dummy(credentials.password, None)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     except HTTPException:
         # Auth-flow HTTPExceptions (e.g., the 401 above) are intentional — let them through
@@ -167,6 +175,7 @@ def get_user_profile(
         raise HTTPException(status_code=403, detail="Players can only fetch their own profile")
     if role not in ("player", "admin"):
         raise HTTPException(status_code=403, detail="Forbidden")
+    require_valid_session(token_data, db)
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -189,6 +198,8 @@ def delete_user_account(
         raise HTTPException(status_code=403, detail="Players can only delete their own account")
     if role not in ("player", "admin"):
         raise HTTPException(status_code=403, detail="Forbidden")
+    # A suspended player keeps the right to erase; a signed-out session or a removed admin does not.
+    require_valid_session(token_data, db, allow_suspended=True)
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -220,6 +231,8 @@ def export_user_data(
         raise HTTPException(status_code=403, detail="Players can only export their own account data")
     if role not in ("player", "admin"):
         raise HTTPException(status_code=403, detail="Forbidden")
+    # Export is a data-protection right, so a suspended player keeps it; a signed-out session does not.
+    require_valid_session(token_data, db, allow_suspended=True)
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:

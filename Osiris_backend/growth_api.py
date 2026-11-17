@@ -308,7 +308,7 @@ class RegisterRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: NewPassword
     display_name: str = Field(min_length=2, max_length=30)
-    goal: str = Field(default=quest_rules.DEFAULT_GOAL)
+    goal: str = Field(default=quest_rules.DEFAULT_GOAL, max_length=32)
     referral_code: Optional[str] = Field(default=None, max_length=16)
     # A challenge invite link token; implies the inviter's referral code.
     invite_token: Optional[str] = Field(default=None, max_length=64)
@@ -340,7 +340,7 @@ class RegisterResponse(BaseModel):
 
 class ProfileUpdate(BaseModel):
     display_name: Optional[str] = Field(default=None, min_length=2, max_length=30)
-    goal: Optional[str] = None
+    goal: Optional[str] = Field(default=None, max_length=32)
     public_profile: Optional[bool] = None
     location_consent: Optional[bool] = None
     onboarding_completed: Optional[bool] = None
@@ -391,9 +391,9 @@ class TodayResponse(BaseModel):
 
 
 class EventIn(BaseModel):
-    event_name: str
+    event_name: str = Field(max_length=64)
     install_id: Optional[str] = Field(default=None, max_length=64)
-    properties: dict[str, Any] = Field(default_factory=dict)
+    properties: dict[str, Any] = Field(default_factory=dict, max_length=30)  # key count; size is checked below
 
 
 class FunnelStep(BaseModel):

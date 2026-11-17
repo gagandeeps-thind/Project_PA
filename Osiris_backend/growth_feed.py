@@ -33,6 +33,7 @@ import models
 import settings
 from core.clock import _now_naive_utc
 from core.errors import _api_error
+from core.rate_limit import _rl_social
 from core.security import get_active_player
 from database import get_db
 from growth_api import get_or_create_profile
@@ -580,7 +581,7 @@ def suggested_osirians(
         for (cid,) in db.query(models.User.id)
         .filter(models.User.suspended_at.is_(None), models.User.id.notin_(excluded))
         .order_by(models.User.xp.desc(), models.User.id.desc())
-        .limit(max(limit * 4, 200))
+        .limit(max(limit * 4, 60))
         .all()
     ]
     cards = _build_osirian_cards(db, uid, candidate_ids, followed)
@@ -731,15 +732,27 @@ def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) 
     post_ids = [p.id for p in posts]
     author_ids = {p.user_id for p in posts}
 
+    # Counts and the three newest comments per post in SQL, so a popular post does not load every comment.
     comments_by_post: dict[int, list[models.PostComment]] = {pid: [] for pid in post_ids}
     blocked = player_safety.blocked_user_ids(db, viewer_id)
-    all_comments = (
+    visible = [models.PostComment.post_id.in_(post_ids), models.PostComment.user_id.notin_(blocked or {-1})]
+    comment_counts: dict[int, int] = {
+        pid: int(n) for pid, n in db.query(models.PostComment.post_id, func.count(models.PostComment.id))
+        .filter(*visible).group_by(models.PostComment.post_id).all()
+    }
+    newest = func.row_number().over(
+        partition_by=models.PostComment.post_id,
+        order_by=(models.PostComment.created_at.desc(), models.PostComment.id.desc()),
+    ).label("newest")
+    ranked = db.query(models.PostComment.id, newest).filter(*visible).subquery()
+    recent_comments = (
         db.query(models.PostComment)
-        .filter(models.PostComment.post_id.in_(post_ids), models.PostComment.user_id.notin_(blocked or {-1}))
+        .join(ranked, ranked.c.id == models.PostComment.id)
+        .filter(ranked.c.newest <= 3)
         .order_by(models.PostComment.created_at.asc(), models.PostComment.id.asc())
         .all()
     )
-    for c in all_comments:
+    for c in recent_comments:
         comments_by_post[c.post_id].append(c)
         author_ids.add(c.user_id)
 
@@ -759,12 +772,16 @@ def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) 
     }
 
     reactions_by_post: dict[int, dict[str, int]] = {pid: {} for pid in post_ids}
-    my_reactions: dict[int, str] = {}
-    for r in db.query(models.PostReaction).filter(models.PostReaction.post_id.in_(post_ids)).all():
-        bucket = reactions_by_post[r.post_id]
-        bucket[r.reaction] = bucket.get(r.reaction, 0) + 1
-        if r.user_id == viewer_id:
-            my_reactions[r.post_id] = r.reaction
+    for pid, reaction, n in (
+        db.query(models.PostReaction.post_id, models.PostReaction.reaction, func.count(models.PostReaction.id))
+        .filter(models.PostReaction.post_id.in_(post_ids))
+        .group_by(models.PostReaction.post_id, models.PostReaction.reaction).all()
+    ):
+        reactions_by_post[pid][reaction] = int(n)
+    my_reactions: dict[int, str] = {
+        pid: reaction for pid, reaction in db.query(models.PostReaction.post_id, models.PostReaction.reaction)
+        .filter(models.PostReaction.post_id.in_(post_ids), models.PostReaction.user_id == viewer_id).all()
+    }
 
     out: List[FeedPostOut] = []
     for p in posts:
@@ -815,7 +832,7 @@ def _hydrate_posts(db: Session, posts: List[models.SocialPost], viewer_id: int) 
                 reactions=rx,
                 total_reactions=sum(rx.values()),
                 my_reaction=my_reactions.get(p.id),
-                comment_count=len(post_comments),
+                comment_count=comment_counts.get(p.id, 0),
                 recent_comments=recent_comments_out,
                 share_count=p.share_count or 0,
                 created_at=p.created_at,
@@ -857,7 +874,17 @@ def list_feed_posts(
     return FeedPostsResponse(items=items)
 
 
-@router.post("/api/v2/feed/posts", response_model=FeedPostOut, status_code=201)
+def _owned(db: Session, model, row_id: Optional[int], uid: int, user_column="user_id"):
+    """The caller's own row, None when no id was sent, 404 when the id is not theirs."""
+    if row_id is None:
+        return None
+    row = db.query(model).filter(model.id == row_id, getattr(model, user_column) == uid).first()
+    if row is None:
+        raise _api_error(404, "RELATED_NOT_FOUND", "That run, session or domain is not yours")
+    return row
+
+
+@router.post("/api/v2/feed/posts", response_model=FeedPostOut, status_code=201, dependencies=[Depends(_rl_social)])
 def create_feed_post(
     req: PostCreateIn,
     db: Session = Depends(get_db),
@@ -872,6 +899,14 @@ def create_feed_post(
         else:
             ex_name = req.exercise_key.replace("_", " ").title()
 
+    # Numbers other players read as achievements come from the caller's own verified rows, never
+    # from the request: XP from the exercise session, distance from an accepted run, area from a domain.
+    # Crystals have no per-post source, so they are not shown.
+    run = _owned(db, models.RunSession, req.related_run_id, uid)
+    session = _owned(db, models.ExerciseSession, req.related_exercise_session_id, uid)
+    domain = _owned(db, models.Domain, req.related_domain_id, uid, user_column="owner_id")
+    accepted_run = run if run is not None and run.verification_status == "accepted" else None
+
     total_reps = req.total_reps or (req.reps_per_set * req.sets)
     summary_dict: dict[str, Any] = {
         "exercise_key": req.exercise_key,
@@ -880,12 +915,12 @@ def create_feed_post(
         "reps_per_set": req.reps_per_set,
         "total_reps": total_reps,
         "hold_s": round(req.hold_s, 1),
-        "distance_m": round(req.distance_m, 1),
-        "duration_s": round(req.duration_s, 1),
-        "domain_area_sqkm": round(req.domain_area_sqkm, 4),
-        "streak_days": req.streak_days or int(user.streak or 0),
-        "crystals_earned": req.crystals_earned,
-        "xp_earned": req.xp_earned,
+        "distance_m": round(accepted_run.distance_m or 0.0, 1) if accepted_run else 0.0,
+        "duration_s": round(accepted_run.duration_seconds or 0.0, 1) if accepted_run else round(req.duration_s, 1),
+        "domain_area_sqkm": round(domain.area_sqkm or 0.0, 4) if domain else 0.0,
+        "streak_days": int(user.streak or 0),
+        "crystals_earned": 0,
+        "xp_earned": session.xp_awarded if session else 0,
     }
     summary_dict["measure_label"] = _measure_label(summary_dict)
 
@@ -897,7 +932,7 @@ def create_feed_post(
         user_id=uid,
         kind=req.kind,
         caption=caption,
-        media_url=req.media_url,
+        media_url=None,  # not trusted: any URL here would be fetched by every reader's app
         workout_summary_json=json.dumps(summary_dict, sort_keys=True),
         related_run_id=req.related_run_id,
         related_exercise_session_id=req.related_exercise_session_id,

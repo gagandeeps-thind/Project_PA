@@ -1,41 +1,25 @@
 /* ───────────────────────────────────────────────────────────
  *  Dashboard Page – Platform KPIs
  * ─────────────────────────────────────────────────────────── */
-import { useEffect, useState } from "react";
 import {
   Gem,
   BarChart3,
   Store,
   Activity,
 } from "lucide-react";
-import { apiErrorMessage, getPlatformRevenue, getMerchants } from "../api/client";
+import { getPlatformRevenue, getMerchants } from "../api/client";
 import type { PlatformRevenue } from "../api/types";
 import { CardsSkeleton } from "../components/Skeleton";
+import { useFetch } from "../hooks/useFetch";
+
+/* The API has no merchant count, so this asks for the active ones only and counts them. */
+const loadDashboard = (signal: AbortSignal) =>
+  Promise.all([getPlatformRevenue(signal), getMerchants("active", signal)]);
 
 export default function DashboardPage() {
-  const [revenue, setRevenue] = useState<PlatformRevenue | null>(null);
-  const [merchantCount, setMerchantCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [rev, merchants] = await Promise.all([
-          getPlatformRevenue(),
-          getMerchants(),
-        ]);
-        setRevenue(rev);
-        setMerchantCount(
-          merchants.filter((m) => m.is_active).length
-        );
-      } catch (err: unknown) {
-        setError(apiErrorMessage(err, "Failed to load data"));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const { data, loading, error } = useFetch(loadDashboard, "Failed to load data");
+  const revenue: PlatformRevenue | null = data?.[0] ?? null;
+  const merchantCount = data?.[1].length ?? 0;
 
   if (loading) {
     return <CardsSkeleton />;

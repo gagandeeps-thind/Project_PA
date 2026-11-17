@@ -23,7 +23,23 @@ import type {
   CreateOfficialChallengePayload,
 } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const CONFIGURED_URL: string | undefined = import.meta.env.VITE_API_BASE_URL;
+
+/** Non-empty when a production build was made without VITE_API_BASE_URL. main.tsx shows it
+ *  instead of the console, so a misbuilt deploy never calls localhost from an admin's browser. */
+export const API_CONFIG_ERROR =
+  CONFIGURED_URL || import.meta.env.DEV
+    ? ""
+    : "This console was built without VITE_API_BASE_URL, so it does not know where the Osiris API is. " +
+      "Set it in the build environment and deploy again.";
+
+// Only `vite dev` reaches the fallback: a production build without the variable is blocked above.
+const BASE_URL = CONFIGURED_URL || "http://localhost:8000";
+
+/** Rows per page on every server-paged list. */
+export const PAGE_SIZE = 50;
+/** The server returns at most this many official challenges and has no offset for them. */
+export const OFFICIAL_CHALLENGE_CAP = 200;
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -54,16 +70,52 @@ export function onUnauthorized(handler: () => void): () => void {
   };
 }
 
-api.interceptors.response.use(undefined, (error: unknown) => {
-  if (
-    axios.isAxiosError(error) &&
-    error.response?.status === 401 &&
-    error.config?.url !== LOGIN_PATH
-  ) {
-    unauthorizedHandler?.();
+/* ── Short-lived GET cache ───────────────────────────────── */
+/* Returning to a page within the TTL reuses the last answer instead of refetching. Any write
+ * (sign-in included, and failed writes too, since a timed-out write may still have landed)
+ * empties it, so a list reloaded after an action is always fresh. */
+const CACHE_TTL_MS = 15_000;
+const CACHE_MAX_ENTRIES = 100;
+const cache = new Map<string, { at: number; data: unknown }>();
+let cacheEpoch = 0;
+
+function clearCache() {
+  cache.clear();
+  cacheEpoch += 1;
+}
+
+type Params = Record<string, string | number | undefined>;
+
+async function get<T>(url: string, params: Params = {}, signal?: AbortSignal): Promise<T> {
+  const key = `${url}?${JSON.stringify(params)}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.data as T;
+  const epoch = cacheEpoch;
+  const { data } = await api.get<T>(url, { params, signal });
+  // An answer that was in flight while a write landed may predate it: do not keep it.
+  if (epoch === cacheEpoch) {
+    if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
+    cache.set(key, { at: Date.now(), data });
   }
-  return Promise.reject(error);
-});
+  return data;
+}
+
+api.interceptors.response.use(
+  (response) => {
+    if (response.config.method !== "get") clearCache();
+    return response;
+  },
+  (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+      if (error.config?.method !== "get") clearCache();
+      if (error.response?.status === 401 && error.config?.url !== LOGIN_PATH) {
+        clearCache();
+        unauthorizedHandler?.();
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 /* ── Auth ─────────────────────────────────────────────────── */
 export async function loginAdmin(
@@ -85,13 +137,9 @@ export async function loginAdmin(
 }
 
 /* ── Merchants ────────────────────────────────────────────── */
-export async function getMerchants(status?: string): Promise<Merchant[]> {
-  const params: Record<string, string> = {};
-  if (status) params.status = status;
-  const { data } = await api.get<Merchant[]>("/api/v1/admin/merchants", {
-    params,
-  });
-  return data;
+/** The server has no paging for merchants: this is the whole list for the filter. */
+export function getMerchants(status?: string, signal?: AbortSignal): Promise<Merchant[]> {
+  return get<Merchant[]>("/api/v1/admin/merchants", { status }, signal);
 }
 
 export async function activateMerchant(id: number): Promise<void> {
@@ -103,21 +151,19 @@ export async function deactivateMerchant(id: number): Promise<void> {
 }
 
 /* ── Revenue ──────────────────────────────────────────────── */
-export async function getPlatformRevenue(): Promise<PlatformRevenue> {
-  const { data } = await api.get<PlatformRevenue>("/api/v1/platform/revenue");
-  return data;
+export function getPlatformRevenue(signal?: AbortSignal): Promise<PlatformRevenue> {
+  return get<PlatformRevenue>("/api/v1/platform/revenue", {}, signal);
 }
 
 /* ── Bounties ─────────────────────────────────────────────── */
-export async function getNearbyBounties(
+/** The server has no paging for bounties: this is every bounty in the radius. */
+export function getNearbyBounties(
   lat: number,
   lng: number,
-  radiusKm: number
+  radiusKm: number,
+  signal?: AbortSignal
 ): Promise<Bounty[]> {
-  const { data } = await api.get<Bounty[]>("/api/v1/bounties/nearby", {
-    params: { lat, lng, radius_km: radiusKm },
-  });
-  return data;
+  return get<Bounty[]>("/api/v1/bounties/nearby", { lat, lng, radius_km: radiusKm }, signal);
 }
 
 export async function createBounty(
@@ -153,9 +199,8 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 /* ── Trust console (R2, /api/v2/admin) ───────────────────── */
-export async function getReviewQueue(): Promise<ReviewQueueItem[]> {
-  const { data } = await api.get<ReviewQueueItem[]>("/api/v2/admin/review-queue");
-  return data;
+export function getReviewQueue(offset = 0, signal?: AbortSignal): Promise<ReviewQueueItem[]> {
+  return get<ReviewQueueItem[]>("/api/v2/admin/review-queue", { limit: PAGE_SIZE, offset }, signal);
 }
 
 export async function reviewAttempt(
@@ -166,11 +211,8 @@ export async function reviewAttempt(
   await api.post(`/api/v2/admin/attempts/${attemptId}/review`, { decision, note });
 }
 
-export async function getAdminChallenges(status?: string): Promise<AdminChallenge[]> {
-  const { data } = await api.get<AdminChallenge[]>("/api/v2/admin/challenges", {
-    params: status ? { status } : {},
-  });
-  return data;
+export function getAdminChallenges(status?: string, offset = 0, signal?: AbortSignal): Promise<AdminChallenge[]> {
+  return get<AdminChallenge[]>("/api/v2/admin/challenges", { status, limit: PAGE_SIZE, offset }, signal);
 }
 
 export async function setChallengeStatus(
@@ -199,28 +241,21 @@ export async function unsuspendUser(userId: number): Promise<AdminUserStatus> {
   return data;
 }
 
-export async function getAuditEvents(filters: {
-  entity_type?: string;
-  entity_id?: number;
-  action?: string;
-}): Promise<AuditEvent[]> {
-  const params: Record<string, string | number> = { limit: 200 };
-  if (filters.entity_type) params.entity_type = filters.entity_type;
-  if (filters.entity_id !== undefined) params.entity_id = filters.entity_id;
-  if (filters.action) params.action = filters.action;
-  const { data } = await api.get<AuditEvent[]>("/api/v2/admin/audit-events", { params });
-  return data;
+/** Newest first. For the next page pass the last id shown as `before_id`. */
+export function getAuditEvents(
+  filters: { entity_type?: string; entity_id?: number; action?: string; before_id?: number },
+  signal?: AbortSignal
+): Promise<AuditEvent[]> {
+  return get<AuditEvent[]>("/api/v2/admin/audit-events", { ...filters, limit: PAGE_SIZE }, signal);
 }
 
 /* ── Growth release: funnel, communities, seasons, reports ─── */
-export async function getFunnel(days: number): Promise<Funnel> {
-  const { data } = await api.get<Funnel>("/api/v2/admin/funnel", { params: { days } });
-  return data;
+export function getFunnel(days: number, signal?: AbortSignal): Promise<Funnel> {
+  return get<Funnel>("/api/v2/admin/funnel", { days }, signal);
 }
 
-export async function getAdminCommunities(): Promise<AdminCommunity[]> {
-  const { data } = await api.get<AdminCommunity[]>("/api/v2/admin/communities");
-  return data;
+export function getAdminCommunities(offset = 0, signal?: AbortSignal): Promise<AdminCommunity[]> {
+  return get<AdminCommunity[]>("/api/v2/admin/communities", { limit: PAGE_SIZE, offset }, signal);
 }
 
 export async function setCommunityStatus(
@@ -246,9 +281,8 @@ export async function createSeason(season: {
   return data;
 }
 
-export async function getReports(status: string): Promise<AdminReport[]> {
-  const { data } = await api.get<AdminReport[]>("/api/v2/admin/reports", { params: { status } });
-  return data;
+export function getReports(status: string, offset = 0, signal?: AbortSignal): Promise<AdminReport[]> {
+  return get<AdminReport[]>("/api/v2/admin/reports", { status, limit: PAGE_SIZE, offset }, signal);
 }
 
 export async function resolveReport(
@@ -269,11 +303,17 @@ export async function resetDisplayName(userId: number, reason: string): Promise<
 }
 
 /* ── Camera-verified exercise review ─────────────────────── */
-export async function getExerciseSets(status: string, userId?: number): Promise<AdminExerciseSet[]> {
-  const params: Record<string, string | number> = { status };
-  if (userId) params.user_id = userId;
-  const { data } = await api.get<AdminExerciseSet[]>("/api/v2/admin/exercise-sessions", { params });
-  return data;
+export function getExerciseSets(
+  status: string,
+  userId?: number,
+  offset = 0,
+  signal?: AbortSignal
+): Promise<AdminExerciseSet[]> {
+  return get<AdminExerciseSet[]>(
+    "/api/v2/admin/exercise-sessions",
+    { status, user_id: userId || undefined, limit: PAGE_SIZE, offset },
+    signal
+  );
 }
 
 export async function reviewExerciseSet(
@@ -289,14 +329,12 @@ export async function reviewExerciseSet(
 }
 
 /* ── Official group challenges (Start tab) ───────────────── */
-export async function getTrainingActivities(): Promise<TrainingActivity[]> {
-  const { data } = await api.get<TrainingActivity[]>("/api/v2/training/activities");
-  return data;
+export function getTrainingActivities(signal?: AbortSignal): Promise<TrainingActivity[]> {
+  return get<TrainingActivity[]>("/api/v2/training/activities", {}, signal);
 }
 
-export async function getOfficialChallenges(): Promise<GroupChallenge[]> {
-  const { data } = await api.get<GroupChallenge[]>("/api/v2/admin/group-challenges");
-  return data;
+export function getOfficialChallenges(signal?: AbortSignal): Promise<GroupChallenge[]> {
+  return get<GroupChallenge[]>("/api/v2/admin/group-challenges", {}, signal);
 }
 
 export async function createOfficialChallenge(body: CreateOfficialChallengePayload): Promise<GroupChallenge> {

@@ -70,7 +70,7 @@ val testConfig = AppConfig(
     connectTimeoutMs = 1_000,
     requestTimeoutMs = 1_000,
     httpLogging = false,
-    features = FeatureFlags(legacyGame = false, poseRecording = true),
+    features = FeatureFlags(poseRecording = true),
 )
 
 /** A data graph against [server], with in-memory settings, secrets and SQLite. */

@@ -26,10 +26,6 @@ object PlayBillingCatalog {
     const val BASE_PLAN_MONTHLY = "monthly-base"
     const val BASE_PLAN_ANNUAL = "annual-base"
 
-    private const val STARTER_CRYSTALS = 500
-    private const val ADVENTURER_CRYSTALS = 1200
-    private const val CHAMPION_CRYSTALS = 2600
-
     val CONSUMABLE_PRODUCT_IDS: Set<String> = setOf(
         PRODUCT_CRYSTALS_STARTER,
         PRODUCT_CRYSTALS_ADVENTURER,
@@ -67,13 +63,26 @@ object PlayBillingCatalog {
     /** True when the product must be consumed via `consumeAsync` to allow repeat purchases. */
     fun isConsumable(productId: String): Boolean = kindOf(productId) == ProductKind.CONSUMABLE_INAPP
 
-    /** Server-aligned crystal grant for a consumable pack ID, or 0 for non-crystal products. */
-    fun crystalsForProduct(productId: String): Int = when (productId) {
-        PRODUCT_CRYSTALS_STARTER -> STARTER_CRYSTALS
-        PRODUCT_CRYSTALS_ADVENTURER -> ADVENTURER_CRYSTALS
-        PRODUCT_CRYSTALS_CHAMPION -> CHAMPION_CRYSTALS
-        else -> 0
+    /** One-time products the store queries: crystal packs, plus the Founder Pack only when [sellsPass]. */
+    fun inAppProductIds(sellsPass: Boolean): List<String> =
+        if (sellsPass) INAPP_PRODUCT_IDS else INAPP_PRODUCT_IDS.filter { it in CONSUMABLE_PRODUCT_IDS }
+
+    /** Subscriptions the store queries: Osiris Pass only when [sellsPass] (`features.passProducts`). */
+    fun subscriptionProductIds(sellsPass: Boolean): List<String> = if (sellsPass) SUBSCRIPTION_PRODUCT_IDS else emptyList()
+
+    /** `P1M` -> `Monthly`; the plan label players see instead of the base plan id. */
+    fun planLabel(billingPeriod: String): String = when (billingPeriod) {
+        "P1W" -> "Weekly"
+        "P1M" -> "Monthly"
+        "P3M" -> "Every 3 months"
+        "P6M" -> "Every 6 months"
+        "P1Y" -> "Yearly"
+        else -> billingPeriod
     }
+
+    /** Google Play's own page for managing (or cancelling) one subscription. */
+    fun manageSubscriptionUrl(productId: String, packageName: String): String =
+        "https://play.google.com/store/account/subscriptions?sku=$productId&package=$packageName"
 }
 
 /** Category of Google Play product determining its post-purchase lifecycle. */
@@ -178,6 +187,9 @@ enum class BillingErrorCode {
     NETWORK_ERROR,
     SERVICE_DISCONNECTED,
     VERIFICATION_FAILED,
+
+    /** The Osiris server is not taking purchases right now (503, e.g. Play credentials not configured). */
+    PURCHASES_UNAVAILABLE,
     UNKNOWN,
 }
 
@@ -188,14 +200,20 @@ data class BillingFeedback(
     val isError: Boolean,
 )
 
-/** Complete observable state of Google Play Billing for the UI layer. */
+/**
+ * Complete observable state of Google Play Billing for the UI layer.
+ *
+ * @property sellsPass Osiris Pass and the Founder Pack are offered (`features.passProducts`).
+ * @property purchasesUnavailable the Osiris server refused to verify (503): buying is paused, nothing was granted.
+ */
 data class BillingState(
     val connectionState: BillingConnectionState = BillingConnectionState.DISCONNECTED,
     val oneTimeProducts: List<BillingProduct> = emptyList(),
     val subscriptions: List<BillingProduct> = emptyList(),
     val activePurchases: List<BillingPurchaseRecord> = emptyList(),
     val ownedNonConsumables: Set<String> = emptySet(),
-    val grantedConsumableCrystals: Int = 0,
+    val sellsPass: Boolean = false,
+    val purchasesUnavailable: Boolean = false,
     val subscriptionStatus: SubscriptionStatus = SubscriptionStatus.NONE,
     val activeSubscriptionProductId: String? = null,
     val isLoading: Boolean = false,
@@ -223,7 +241,8 @@ interface BillingService {
      * @param productId Target product or subscription ID from [PlayBillingCatalog].
      * @param basePlanId Optional subscription base plan ID (e.g., `monthly-base`).
      * @param offerToken Optional subscription offer token (resolved from [basePlanId] if omitted).
-     * @param obfuscatedAccountId Optional hashed player identifier for fraud prevention and attribution.
+     * @param obfuscatedAccountId Hashed player id the server checks the purchase against; defaults to
+     *   the signed-in player's (`StoreSupport.playAccountId`). With no player signed in nothing is launched.
      */
     fun launchPurchase(
         activity: Activity,

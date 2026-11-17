@@ -34,4 +34,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # Apply migrations, then serve. `alembic upgrade head` is idempotent and stamps the DB so
 # /healthz reports migrations=current.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
+# --no-access-log: the app already writes one JSON access line per request (core/logging_setup.py).
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --no-access-log"]

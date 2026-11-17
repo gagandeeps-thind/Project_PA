@@ -3,12 +3,15 @@
  *  flagged (replayed timing, low valid ratio, …). Approve to
  *  grant the set's capped XP, or reject. Each set is decided once.
  * ─────────────────────────────────────────────────────────── */
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { Dumbbell } from "lucide-react";
 import { apiErrorMessage, getExerciseSets, reviewExerciseSet } from "../api/client";
 import type { AdminExerciseSet } from "../api/types";
 import { TableSkeleton } from "../components/Skeleton";
+import ListFooter from "../components/ListFooter";
+import ReasonDialog from "../components/ReasonDialog";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { usePagedList } from "../hooks/useFetch";
 
 type Pending = { item: AdminExerciseSet; decision: "approve" | "reject" };
 
@@ -28,94 +31,17 @@ const REASONS: Record<string, string> = {
 const amount = (s: AdminExerciseSet) =>
   s.exercise_key === "plank" ? `${Math.round(s.hold_s)} s hold` : `${s.reps_valid} / ${s.reps_attempted} reps`;
 
-export default function ExerciseReviewPage() {
-  const [status, setStatus] = useState("review");
-  const [player, setPlayer] = useState("");
-  const [sets, setSets] = useState<AdminExerciseSet[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const playerFilter = useDebouncedValue(player);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setSets(await getExerciseSets(status, Number(playerFilter) || undefined));
-    } catch (err) {
-      setError(apiErrorMessage(err, "Failed to load"));
-    } finally {
-      setLoading(false);
-    }
-  }, [status, playerFilter]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const confirm = async () => {
-    if (!pending || note.trim().length < 3) return;
-    setBusy(true);
-    setError("");
-    try {
-      const res = await reviewExerciseSet(pending.item.id, pending.decision, note.trim());
-      setNotice(
-        `Set #${res.id} ${res.status}${res.status === "verified" ? ` (+${res.xp_awarded} XP)` : ""}.`
-      );
-      setPending(null);
-      setNote("");
-      await load();
-    } catch (err) {
-      setError(apiErrorMessage(err, "Action failed"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
+/* Memoised: typing in the player filter above it does not re-render the rows. */
+const SetsTable = memo(function SetsTable({
+  sets,
+  status,
+  onDecide,
+}: {
+  sets: AdminExerciseSet[];
+  status: string;
+  onDecide: (p: Pending) => void;
+}) {
   return (
-    <div className="fade-in">
-      <div className="page-header">
-        <h2>Exercise review</h2>
-        <p>Camera-verified sets flagged by the server re-check. No video exists: decide from timings and reasons.</p>
-      </div>
-
-      <div className="filter-tabs">
-        {["review", "rejected", "verified"].map((s) => (
-          <button
-            key={s}
-            className={`filter-tab ${status === s ? "active" : ""}`}
-            onClick={() => {
-              setStatus(s);
-              setNotice("");
-            }}
-          >
-            {s === "review" ? `Waiting${status === "review" && sets.length ? ` (${sets.length})` : ""}` : s}
-          </button>
-        ))}
-        <input
-          className="form-input"
-          style={{ maxWidth: 160, marginLeft: "auto" }}
-          placeholder="Player id"
-          inputMode="numeric"
-          value={player}
-          onChange={(e) => setPlayer(e.target.value.replace(/[^0-9]/g, ""))}
-        />
-      </div>
-
-      {error && <div className="error-message">{error}</div>}
-      {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
-
-      {loading ? (
-        <TableSkeleton />
-      ) : sets.length === 0 ? (
-        <div className="empty-state">
-          <Dumbbell size={48} />
-          <p>No {status === "review" ? "sets waiting for review" : `${status} sets`}.</p>
-        </div>
-      ) : (
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
@@ -173,10 +99,10 @@ export default function ExerciseReviewPage() {
                   {status === "review" && (
                     <td>
                       <div className="btn-actions">
-                        <button className="btn-sm btn-activate" onClick={() => setPending({ item: s, decision: "approve" })}>
+                        <button className="btn-sm btn-activate" onClick={() => onDecide({ item: s, decision: "approve" })}>
                           Approve (+{s.xp_if_approved} XP)
                         </button>
-                        <button className="btn-sm btn-deactivate" onClick={() => setPending({ item: s, decision: "reject" })}>
+                        <button className="btn-sm btn-deactivate" onClick={() => onDecide({ item: s, decision: "reject" })}>
                           Reject
                         </button>
                       </div>
@@ -187,38 +113,105 @@ export default function ExerciseReviewPage() {
             </tbody>
           </table>
         </div>
+  );
+});
+
+export default function ExerciseReviewPage() {
+  const [status, setStatus] = useState("review");
+  const [player, setPlayer] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [busy, setBusy] = useState(false);
+  const playerFilter = useDebouncedValue(player);
+
+  const list = usePagedList<AdminExerciseSet>(
+    useCallback(
+      (loaded, signal) => getExerciseSets(status, Number(playerFilter) || undefined, loaded.length, signal),
+      [status, playerFilter]
+    ),
+    "Failed to load"
+  );
+  const sets = list.rows;
+
+  const confirm = async (note: string) => {
+    if (!pending) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await reviewExerciseSet(pending.item.id, pending.decision, note);
+      setNotice(
+        `Set #${res.id} ${res.status}${res.status === "verified" ? ` (+${res.xp_awarded} XP)` : ""}.`
+      );
+      setPending(null);
+      await list.reload();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Action failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <h2>Exercise review</h2>
+        <p>Camera-verified sets flagged by the server re-check. No video exists: decide from timings and reasons.</p>
+      </div>
+
+      <div className="filter-tabs">
+        {["review", "rejected", "verified"].map((s) => (
+          <button
+            key={s}
+            className={`filter-tab ${status === s ? "active" : ""}`}
+            onClick={() => {
+              setStatus(s);
+              setNotice("");
+            }}
+          >
+            {s === "review" ? `Waiting${status === "review" && sets.length ? ` (${sets.length}${list.hasMore ? "+" : ""})` : ""}` : s}
+          </button>
+        ))}
+        <input
+          className="form-input"
+          style={{ maxWidth: 160, marginLeft: "auto" }}
+          placeholder="Player id"
+          inputMode="numeric"
+          value={player}
+          onChange={(e) => setPlayer(e.target.value.replace(/[^0-9]/g, ""))}
+        />
+      </div>
+
+      {(error || list.error) && <div className="error-message">{error || list.error}</div>}
+      {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
+
+      {list.loading ? (
+        <TableSkeleton />
+      ) : sets.length === 0 ? (
+        <div className="empty-state">
+          <Dumbbell size={48} />
+          <p>No {status === "review" ? "sets waiting for review" : `${status} sets`}.</p>
+        </div>
+      ) : (
+        <>
+          <SetsTable sets={sets} status={status} onDecide={setPending} />
+          <ListFooter shown={sets.length} hasMore={list.hasMore} loading={list.loadingMore} onMore={list.loadMore} />
+        </>
       )}
 
       {pending && (
-        <div className="dialog-overlay" onClick={() => !busy && setPending(null)}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              {pending.decision === "approve" ? "Approve" : "Reject"} set #{pending.item.id}
-            </h3>
-            <p>
-              {pending.decision === "approve"
-                ? `The set counts and ${pending.item.xp_if_approved} XP is granted (within the player's daily caps).`
-                : "The set stays without XP. Your note is stored in the audit log."}
-            </p>
-            <div className="form-group">
-              <label className="form-label">Note (required)</label>
-              <input className="form-input" autoFocus value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
-            </div>
-            <div className="dialog-actions">
-              <button className="btn-cancel" onClick={() => setPending(null)} disabled={busy}>
-                Cancel
-              </button>
-              <button
-                className="btn-sm btn-deactivate"
-                onClick={confirm}
-                disabled={busy || note.trim().length < 3}
-                style={{ padding: "10px 20px", fontSize: "0.85rem" }}
-              >
-                {busy ? "Processing…" : "Confirm"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReasonDialog
+          title={`${pending.decision === "approve" ? "Approve" : "Reject"} set #${pending.item.id}`}
+          body={
+            pending.decision === "approve"
+              ? `The set counts and ${pending.item.xp_if_approved} XP is granted (within the player's daily caps).`
+              : "The set stays without XP. Your note is stored in the audit log."
+          }
+          label="Note (required)"
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={confirm}
+        />
       )}
     </div>
   );

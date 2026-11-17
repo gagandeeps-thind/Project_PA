@@ -10,13 +10,12 @@ every request passed Cloudflare, which overwrites `CF-Connecting-IP`, so that he
 Without the lock the socket peer is used; behind a platform proxy (Render) that is the proxy,
 which puts every player in one bucket, so production must run with the lock on.
 """
-import json
 import logging
 import threading as _threading
 import time as _time
-import urllib.request
 import uuid
 
+import httpx
 from fastapi import HTTPException, Request
 
 import settings
@@ -29,6 +28,9 @@ UPSTASH_URL = (settings.secret("UPSTASH_REDIS_REST_URL") or "").rstrip("/") or N
 UPSTASH_TOKEN = settings.secret("UPSTASH_REDIS_REST_TOKEN")
 UPSTASH_TIMEOUT_S = 0.5
 _WARN_EVERY_S = 60.0
+
+# One pooled client for every Upstash call: keep-alive saves a TLS handshake on each limited request.
+_upstash = httpx.Client(timeout=UPSTASH_TIMEOUT_S)
 
 _rate_buckets: "dict[str, list[float]]" = {}
 _rate_lock = _threading.Lock()
@@ -78,15 +80,11 @@ def _shared_hit(key: str, max_requests: int, window_s: int) -> bool | None:
         ["ZCARD", redis_key],
         ["PEXPIRE", redis_key, str(window_ms)],
     ]
-    req = urllib.request.Request(
-        f"{UPSTASH_URL}/multi-exec",
-        data=json.dumps(commands).encode(),
-        headers={"Authorization": f"Bearer {UPSTASH_TOKEN}", "Content-Type": "application/json"},
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=UPSTASH_TIMEOUT_S) as resp:
-            results = json.loads(resp.read())
+        resp = _upstash.post(f"{UPSTASH_URL}/multi-exec", json=commands,
+                             headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"})
+        resp.raise_for_status()
+        results = resp.json()
         return int(results[2]["result"]) <= max_requests
     except Exception as exc:  # network, timeout, auth or shape: degrade to per-process counting
         global _last_warning
@@ -119,6 +117,8 @@ _rl_login = _rate_limit(10, 60, "login")
 _rl_onboard = _rate_limit(5, 60, "onboard")
 _rl_verify = _rate_limit(30, 60, "verify")
 _rl_webhook = _rate_limit(60, 60, "webhook")
+# Store purchase verification: every call costs a Google Play Developer API request.
+_rl_purchase = _rate_limit(30, 60, "purchase")
 # Security §2: route upload, challenge join/submit, and publish are abuse targets too.
 _rl_route = _rate_limit(120, 60, "route")
 _rl_challenge = _rate_limit(30, 60, "challenge")
@@ -126,3 +126,6 @@ _rl_challenge = _rate_limit(30, 60, "challenge")
 _rl_events = _rate_limit(60, 60, "events")
 # Social tab writes: posts and direct messages.
 _rl_social = _rate_limit(60, 60, "social")
+# Endpoints that check a secret a signed-in player types: current password, erase password, join code.
+_rl_password = _rate_limit(10, 60, "password")
+_rl_join = _rate_limit(10, 60, "join")

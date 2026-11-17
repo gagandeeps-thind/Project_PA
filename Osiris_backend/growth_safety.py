@@ -25,7 +25,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer
 
 import models
 from growth_api import (
@@ -37,10 +37,12 @@ from growth_api import (
 )
 from core.clock import _now_naive_utc
 from core.errors import _api_error
+from core.rate_limit import _rl_password
 from core.security import create_access_token, get_active_player, get_current_admin, get_password_hash, NewPassword, verify_password
 from database import get_db
 from services.audit import _audit
 from services.progression import get_rank
+from services import google_play
 from services import leaderboards as lb
 from services import player_safety
 from services import quests as quest_rules
@@ -84,10 +86,10 @@ def revoke_sessions(user: models.User) -> None:
 # --- schemas ---------------------------------------------------------------------
 
 class ReportCreate(BaseModel):
-    target_type: str
+    target_type: str = Field(max_length=32)
     target_id: Optional[int] = None          # challenge, post, comment or user id
     target_ref: Optional[str] = Field(default=None, max_length=64)  # user handle, community slug, share token
-    reason: str
+    reason: str = Field(max_length=32)
     details: Optional[str] = Field(default=None, max_length=500)
 
 
@@ -113,13 +115,13 @@ class BlockOut(BaseModel):
 
 
 class PasswordChange(BaseModel):
-    current_password: str
+    current_password: str = Field(max_length=256)
     new_password: NewPassword
 
 
 class EraseRequest(BaseModel):
-    password: str
-    confirm: str
+    password: str = Field(max_length=256)
+    confirm: str = Field(max_length=32)
 
 
 class TokenOut(BaseModel):
@@ -140,7 +142,7 @@ class AdminReportItem(BaseModel):
 
 
 class AdminReportResolve(BaseModel):
-    status: str
+    status: str = Field(max_length=32)
     note: str = Field(min_length=3, max_length=500)
     all_for_target: bool = True
 
@@ -314,7 +316,7 @@ def revoke_all_sessions(db: Session = Depends(get_db), token_data: dict = Depend
                     message="Signed out of every other device.")
 
 
-@router.post("/api/v2/me/password", response_model=TokenOut)
+@router.post("/api/v2/me/password", response_model=TokenOut, dependencies=[Depends(_rl_password)])
 def change_password(req: PasswordChange, db: Session = Depends(get_db),
                           token_data: dict = Depends(get_active_player)):
     user = db.query(models.User).filter(models.User.id == token_data["id"]).first()
@@ -397,7 +399,8 @@ def export_my_data(db: Session = Depends(get_db), token_data: dict = Depends(get
                 "id", "activity_key", "mode", "source", "started_at", "duration_s", "distance_m",
                 "elevation_gain_m", "reps", "hr_avg", "hr_max", "power_avg", "power_max", "speed_avg", "speed_max")},
              "series": json.loads(t.series_json or "{}"), "devices": json.loads(t.devices_json or "[]")}
-            for t in db.query(models.TrainingSession).filter(models.TrainingSession.user_id == uid)
+            for t in db.query(models.TrainingSession).options(undefer(models.TrainingSession.series_json))
+            .filter(models.TrainingSession.user_id == uid)
         ],
         "group_challenges": _rows(
             db.query(models.GroupChallengeMember).filter(models.GroupChallengeMember.user_id == uid),
@@ -446,6 +449,7 @@ def erase_player(db: Session, user: models.User, actor_type: str, actor_id: Opti
     db.query(models.Report).filter(models.Report.reporter_id == uid).update(
         {models.Report.reporter_id: None}, synchronize_session=False)
     db.query(models.ConsentRecord).filter(models.ConsentRecord.user_id == uid).delete(synchronize_session=False)
+    google_play.erase_store_purchases(db, uid)
     delete_growth_data(db, [uid])
     user.email = f"deleted-{uid}-{secrets.token_hex(4)}@deleted.invalid"
     user.hashed_password = get_password_hash(secrets.token_urlsafe(32))
@@ -458,7 +462,7 @@ def erase_player(db: Session, user: models.User, actor_type: str, actor_id: Opti
     _audit(db, actor_type=actor_type, actor_id=actor_id, action="player.erased", entity_type="user", entity_id=uid)
 
 
-@router.post("/api/v2/me/erase", status_code=202)
+@router.post("/api/v2/me/erase", status_code=202, dependencies=[Depends(_rl_password)])
 def erase_my_account(req: EraseRequest, db: Session = Depends(get_db),
                            token_data: dict = Depends(get_active_player)):
     """Permanently erase the account. Needs the password and the word DELETE."""

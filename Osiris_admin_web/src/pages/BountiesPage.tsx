@@ -1,7 +1,7 @@
 /* ───────────────────────────────────────────────────────────
  *  Bounties Page
  * ─────────────────────────────────────────────────────────── */
-import { useEffect, useState, type FormEvent } from "react";
+import { memo, useState, type FormEvent } from "react";
 import {
   MapPin,
   Plus,
@@ -10,9 +10,11 @@ import {
   Zap,
   Target,
 } from "lucide-react";
-import { apiErrorMessage, getNearbyBounties, createBounty } from "../api/client";
+import { apiErrorMessage, getNearbyBounties, createBounty, PAGE_SIZE } from "../api/client";
 import type { Bounty, CreateBountyPayload } from "../api/types";
 import { TableSkeleton } from "../components/Skeleton";
+import ListFooter from "../components/ListFooter";
+import { useFetch } from "../hooks/useFetch";
 
 /* Bedford, NS coordinates */
 const BEDFORD_LAT = 44.7309;
@@ -31,38 +33,106 @@ const emptyForm: CreateBountyPayload = {
   crystal_reward: 10,
 };
 
+const loadBounties = (signal: AbortSignal) =>
+  getNearbyBounties(BEDFORD_LAT, BEDFORD_LNG, SEARCH_RADIUS_KM, signal);
+const NO_BOUNTIES: Bounty[] = [];
+
+const typeBadge = (type: string) => {
+  switch (type) {
+    case "daily":
+      return <span className="badge badge-cyan">Daily</span>;
+    case "weekly":
+      return <span className="badge badge-purple">Weekly</span>;
+    case "special":
+      return <span className="badge badge-warning">Special</span>;
+    default:
+      return <span className="badge badge-cyan">{type}</span>;
+  }
+};
+
+/* Memoised: typing in the create form above it does not re-render the cards. */
+const BountyGrid = memo(function BountyGrid({ bounties, visible }: { bounties: Bounty[]; visible: number }) {
+  return (
+        <div className="bounty-grid">
+          {bounties.slice(0, visible).map((b, i) => (
+            <div
+              className="bounty-card"
+              key={b.id}
+              style={{ animationDelay: `${i * 0.05}s` }}
+            >
+              <div className="bounty-card-header">
+                <div className="bounty-card-title">{b.title}</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {typeBadge(b.bounty_type)}
+                  {b.is_active ? (
+                    <span className="badge badge-success">Active</span>
+                  ) : (
+                    <span className="badge badge-error">Inactive</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="bounty-card-desc">{b.description}</div>
+
+              <div className="bounty-card-stats">
+                <div className="bounty-stat">
+                  <div className="bounty-stat-label">
+                    <Target size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
+                    Completions
+                  </div>
+                  <div className="bounty-stat-value">
+                    {b.completions_count} / {b.completions_remaining + b.completions_count}
+                  </div>
+                </div>
+
+                <div className="bounty-stat">
+                  <div className="bounty-stat-label">
+                    <Crosshair size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
+                    Radius
+                  </div>
+                  <div className="bounty-stat-value">{b.radius_m}m</div>
+                </div>
+
+                <div className="bounty-stat">
+                  <div className="bounty-stat-label">
+                    <Zap size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
+                    XP Reward
+                  </div>
+                  <div className="bounty-stat-value" style={{ color: "var(--accent-cyan)" }}>
+                    {b.xp_reward}
+                  </div>
+                </div>
+
+                <div className="bounty-stat">
+                  <div className="bounty-stat-label">
+                    <Gem size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
+                    Crystals
+                  </div>
+                  <div className="bounty-stat-value" style={{ color: "var(--accent-purple)" }}>
+                    {b.crystal_reward}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+  );
+});
+
 export default function BountiesPage() {
-  const [bounties, setBounties] = useState<Bounty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error: loadError, reload: fetchBounties } = useFetch(loadBounties, "Failed to load bounties");
+  const bounties = data ?? NO_BOUNTIES;
+  /* The server sends every bounty in the radius, so paging here only limits how many are drawn. */
+  const [visible, setVisible] = useState(PAGE_SIZE);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateBountyPayload>({ ...emptyForm });
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchBounties = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await getNearbyBounties(
-        BEDFORD_LAT,
-        BEDFORD_LNG,
-        SEARCH_RADIUS_KM
-      );
-      setBounties(data);
-    } catch (err: unknown) {
-      setError(apiErrorMessage(err, "Failed to load bounties"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBounties();
-  }, []);
-
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setError("");
     try {
       await createBounty(form);
       setForm({ ...emptyForm });
@@ -80,19 +150,6 @@ export default function BountiesPage() {
     value: CreateBountyPayload[K]
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const typeBadge = (type: string) => {
-    switch (type) {
-      case "daily":
-        return <span className="badge badge-cyan">Daily</span>;
-      case "weekly":
-        return <span className="badge badge-purple">Weekly</span>;
-      case "special":
-        return <span className="badge badge-warning">Special</span>;
-      default:
-        return <span className="badge badge-cyan">{type}</span>;
-    }
   };
 
   return (
@@ -267,7 +324,7 @@ export default function BountiesPage() {
         </form>
       )}
 
-      {error && <div className="error-message">{error}</div>}
+      {(error || loadError) && <div className="error-message">{error || loadError}</div>}
 
       {loading ? (
         <TableSkeleton />
@@ -277,69 +334,15 @@ export default function BountiesPage() {
           <p>No bounties found in the area.</p>
         </div>
       ) : (
-        <div className="bounty-grid">
-          {bounties.map((b, i) => (
-            <div
-              className="bounty-card"
-              key={b.id}
-              style={{ animationDelay: `${i * 0.05}s` }}
-            >
-              <div className="bounty-card-header">
-                <div className="bounty-card-title">{b.title}</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {typeBadge(b.bounty_type)}
-                  {b.is_active ? (
-                    <span className="badge badge-success">Active</span>
-                  ) : (
-                    <span className="badge badge-error">Inactive</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="bounty-card-desc">{b.description}</div>
-
-              <div className="bounty-card-stats">
-                <div className="bounty-stat">
-                  <div className="bounty-stat-label">
-                    <Target size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
-                    Completions
-                  </div>
-                  <div className="bounty-stat-value">
-                    {b.completions_count} / {b.completions_remaining + b.completions_count}
-                  </div>
-                </div>
-
-                <div className="bounty-stat">
-                  <div className="bounty-stat-label">
-                    <Crosshair size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
-                    Radius
-                  </div>
-                  <div className="bounty-stat-value">{b.radius_m}m</div>
-                </div>
-
-                <div className="bounty-stat">
-                  <div className="bounty-stat-label">
-                    <Zap size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
-                    XP Reward
-                  </div>
-                  <div className="bounty-stat-value" style={{ color: "var(--accent-cyan)" }}>
-                    {b.xp_reward}
-                  </div>
-                </div>
-
-                <div className="bounty-stat">
-                  <div className="bounty-stat-label">
-                    <Gem size={12} style={{ marginRight: 4, verticalAlign: "middle" }} />
-                    Crystals
-                  </div>
-                  <div className="bounty-stat-value" style={{ color: "var(--accent-purple)" }}>
-                    {b.crystal_reward}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <>
+          <BountyGrid bounties={bounties} visible={visible} />
+          <ListFooter
+            shown={Math.min(visible, bounties.length)}
+            total={bounties.length}
+            hasMore={visible < bounties.length}
+            onMore={() => setVisible(visible + PAGE_SIZE)}
+          />
+        </>
       )}
     </div>
   );

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,7 +21,6 @@ import androidx.compose.material3.AlertDialog
 import osiris.fit.ui.design.KeyButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -44,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import osiris.fit.ui.common.OsirisScaffold
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.common.rememberShared
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.theme.OsirisColors
@@ -99,7 +98,7 @@ private fun LazyListScope.section(
 ) {
     item { Text(title, color = OsirisColors.Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
     when (state) {
-        Loadable.Loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        Loadable.Loading -> item { SkeletonRows() }
         is Loadable.Failed -> item { Text(state.message, color = OsirisColors.Error) }
         is Loadable.Ready -> {
             val list = filter(state.value)

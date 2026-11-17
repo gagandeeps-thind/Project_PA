@@ -34,6 +34,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Retries purchases the server has not confirmed yet; Play refunds them after 3 days unacknowledged.
+        (application as OsirisApplication).billing.refreshCatalogAndPurchases()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         link = intent.dataString

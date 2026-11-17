@@ -10,6 +10,10 @@ services:
     region: oregon
     healthCheckPath: /healthz
     autoDeploy: true
+    # Redeploy only for commits that touch the API (paths are relative to the repository root).
+    buildFilter:
+      paths:
+        - Osiris_backend/**
     # The database is Supabase PostgreSQL (OSIRIS_DATABASE_URL). The disk only keeps the retired SQLite file;
     # drop it once nothing there is needed.
     disk:
@@ -33,13 +37,22 @@ services:
         generateValue: true
       - key: OSIRIS_WEBHOOK_SECRET
         generateValue: true
-      - key: STRIPE_SECRET_KEY # production refuses to boot without both Stripe values
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-      - key: STRIPE_PUBLISHABLE_KEY
-        sync: false
       - key: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON # Play Developer API key (JSON); verify answers 503 without it
+        sync: false
+      - key: GOOGLE_PLAY_RTDN_TOKEN # goes in the Pub/Sub push URL (?token=); see docs/architecture/google-play-billing.md
+        generateValue: true
+      - key: GOOGLE_PLAY_ALLOW_TEST_PURCHASES # set to "false" at public launch: licence-test purchases then answer 403
+        value: "true"
+      # App Store billing stays closed (503) until this is set; see docs/architecture/app-store-billing.md
+      - key: APPLE_APP_STORE_ENVIRONMENT # "Production", or "Production,Sandbox" while TestFlight / App Review buy
+        sync: false
+      - key: APPLE_BUNDLE_ID
+        value: osiris.fit
+      - key: APPLE_ISSUER_ID # App Store Server API key; not read yet (future calls to Apple)
+        sync: false
+      - key: APPLE_KEY_ID
+        sync: false
+      - key: APPLE_PRIVATE_KEY
         sync: false
       - key: OSIRIS_ANDROID_CERT_SHA256 # Play Console > Setup > App signing; invite links open the app once set
         sync: false
@@ -49,6 +62,7 @@ services:
         sync: false
       # Origin lock: the value Cloudflare adds as X-Origin-Verify (a Transform Rule on api.<domain>).
       # Set it here only AFTER the Cloudflare rule is live, or every request is refused with 403.
+      # Required: OSIRIS_ENV=production refuses to boot without it (or OSIRIS_ALLOW_NO_CDN=1 for no CDN).
       # It also makes the rate limiter key on CF-Connecting-IP (the player's IP, not Render's proxy).
       - key: OSIRIS_ORIGIN_SECRET
         sync: false
@@ -70,6 +84,9 @@ services:
     schedule: "17 7 * * *" # 07:17 UTC, a quiet hour for North American players
     dockerContext: ./infrastructure/backup
     dockerfilePath: ./infrastructure/backup/Dockerfile
+    buildFilter:
+      paths:
+        - infrastructure/backup/**
     envVars:
       - key: OSIRIS_DATABASE_URL
         fromService:
@@ -94,8 +111,12 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     autoDeploy: true
+    buildFilter:
+      paths:
+        - Osiris_admin_web/**
+        - infrastructure/docker/admin*
     envVars:
-      - key: VITE_API_BASE_URL # the API's public URL, read at build time
+      - key: VITE_API_BASE_URL # the API's public URL, read at build time; must match connect-src in the CSP below
         sync: false
     headers:
       - path: /assets/*

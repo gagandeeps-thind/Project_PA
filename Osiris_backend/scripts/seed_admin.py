@@ -9,11 +9,12 @@ Two ways to call it:
     python scripts/seed_admin.py
 
     # Non-interactive (reads from env vars)
-    OSIRIS_ADMIN_EMAIL=you@example.com OSIRIS_ADMIN_PASSWORD=letmein \\
+    OSIRIS_ADMIN_EMAIL=you@example.com OSIRIS_ADMIN_PASSWORD='a long passphrase' \\
         OSIRIS_ADMIN_NAME="Gagan" python scripts/seed_admin.py
 
 Idempotent: re-running with the same email updates the password / name in place rather
-than creating a duplicate row. Passwords are bcrypt-hashed before storage."""
+than creating a duplicate row. Passwords are bcrypt-hashed before storage. Re-running with a new
+password signs out every session of that admin (tokens carry a fingerprint of the hash)."""
 import getpass
 import os
 import sys
@@ -28,6 +29,10 @@ import database  # noqa: E402
 import models   # noqa: E402
 
 models.Base.metadata.create_all(bind=database.engine)
+
+# The most privileged account: a long passphrase, within bcrypt's 72-byte input.
+ADMIN_PASSWORD_MIN = 12
+BCRYPT_MAX_BYTES = 72
 
 
 def hash_password(plain: str) -> str:
@@ -45,14 +50,15 @@ def prompt(label: str, fallback_env: str, hidden: bool = False) -> str:
 
 def main() -> None:
     email = prompt("Admin email", "OSIRIS_ADMIN_EMAIL")
-    password = prompt("Admin password (max 12 chars)", "OSIRIS_ADMIN_PASSWORD", hidden=True)
+    password = prompt(f"Admin password ({ADMIN_PASSWORD_MIN}+ characters)", "OSIRIS_ADMIN_PASSWORD", hidden=True)
     name = prompt("Display name", "OSIRIS_ADMIN_NAME") or email
 
     if not email or not password:
         print("Email and password are required.", file=sys.stderr)
         sys.exit(1)
-    if len(password) > 12:
-        print("Password must be 12 characters or fewer (matches the in-app cap).", file=sys.stderr)
+    if len(password) < ADMIN_PASSWORD_MIN or len(password.encode("utf-8")) > BCRYPT_MAX_BYTES:
+        print(f"Password must be {ADMIN_PASSWORD_MIN} to {BCRYPT_MAX_BYTES} characters "
+              f"(at most {BCRYPT_MAX_BYTES} bytes).", file=sys.stderr)
         sys.exit(1)
 
     db = database.SessionLocal()

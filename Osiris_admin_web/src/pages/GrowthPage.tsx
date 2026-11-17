@@ -2,11 +2,11 @@
  *  Growth – activation funnel and retention. Answers "where do
  *  new players drop off?" before any money goes into ads.
  * ─────────────────────────────────────────────────────────── */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
-import { apiErrorMessage, getFunnel } from "../api/client";
-import type { Funnel } from "../api/types";
+import { getFunnel } from "../api/client";
 import { CardsSkeleton } from "../components/Skeleton";
+import { useFetch } from "../hooks/useFetch";
 
 const STEP_LABELS: Record<string, string> = {
   account_created: "Account created",
@@ -20,25 +20,10 @@ const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%
 
 export default function GrowthPage() {
   const [days, setDays] = useState(30);
-  const [funnel, setFunnel] = useState<Funnel | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setFunnel(await getFunnel(days));
-    } catch (err) {
-      setError(apiErrorMessage(err, "Failed to load the funnel"));
-    } finally {
-      setLoading(false);
-    }
-  }, [days]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: funnel, loading, error } = useFetch(
+    useCallback((signal: AbortSignal) => getFunnel(days, signal), [days]),
+    "Failed to load the funnel"
+  );
 
   const top = funnel?.steps[0]?.users ?? 0;
 

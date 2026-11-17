@@ -3,7 +3,7 @@ import json
 from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 import models
@@ -52,9 +52,10 @@ def calculate_claim_xp(area_sqkm: float) -> int:
 
 @router.get("/api/v1/domains/nearby", response_model=List[DomainSummary])
 def get_nearby_domains(
-    lat: float,
-    lng: float,
-    radius_km: float = 5.0,
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    radius_km: float = Query(5.0, gt=0, le=50),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):
@@ -68,8 +69,13 @@ def get_nearby_domains(
     still exposes raw `owner_id` and full geometry to *authenticated* players; coarsening to an
     opaque handle + centroid-only for non-owners is a follow-up that changes the client
     contract and is deferred for a product decision. MVP uses an in-memory haversine sweep;
-    PostGIS `ST_DWithin` replaces this in Phase 4."""
-    candidates = db.query(models.Domain).all()
+    PostGIS `ST_DWithin` replaces this in Phase 4. Only domains inside the radius's bounding box
+    (stored centroid) are loaded; at most `limit` (default 100) nearest are returned."""
+    lats, lngs = spatial_utils.radius_box(lat, lng, radius_km)
+    q = db.query(models.Domain).filter(models.Domain.centroid_lat.between(*lats))
+    if lngs:
+        q = q.filter(models.Domain.centroid_lng.between(*lngs))
+    candidates = q.all()
     out: List[DomainSummary] = []
     for d in candidates:
         if not d.geometry_json:
@@ -101,7 +107,7 @@ def get_nearby_domains(
             distance_km=round(dist, 4),
         ))
     out.sort(key=lambda x: x.distance_km)
-    return out
+    return out[:limit]
 
 
 @router.post("/api/v1/domains", response_model=DomainResponse)
@@ -161,7 +167,14 @@ def submit_domain(domain_req: DomainCreate, db: Session = Depends(get_db), token
     )
 
     # 4.5 Siege Logic: Check if this new domain swallows any existing domains
-    all_domains = db.query(models.Domain).filter(models.Domain.owner_id != user.id).all()
+    # A swallowed domain has every vertex inside the new polygon, so its centroid is inside its bounding box.
+    all_domains = db.query(models.Domain).filter(
+        models.Domain.owner_id != user.id,
+        models.Domain.centroid_lat.between(min(c.lat for c in domain_req.coordinates),
+                                           max(c.lat for c in domain_req.coordinates)),
+        models.Domain.centroid_lng.between(min(c.lng for c in domain_req.coordinates),
+                                           max(c.lng for c in domain_req.coordinates)),
+    ).all()
     sieges_created = 0
     for existing_domain in all_domains:
         if existing_domain.geometry_json:
@@ -486,7 +499,7 @@ def resolve_siege(siege_id: int, req: SiegeResolveRequest, db: Session = Depends
 @router.get("/api/v1/users/{user_id}/party-role", response_model=PartyRoleResponse)
 def get_user_party_role(
     user_id: int,
-    window_days: Optional[int] = None,
+    window_days: Optional[int] = Query(None, le=3650),  # a huge value overflowed timedelta (500)
     db: Session = Depends(get_db),
     token_data: dict = Depends(get_active_player),
 ):

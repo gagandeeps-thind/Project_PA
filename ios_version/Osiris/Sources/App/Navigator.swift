@@ -12,6 +12,7 @@ enum Route: Hashable {
     case rankings
     case settings
     case support
+    case store
     case exercises
     case exercise(String)
     case exercisePlan(key: String, sets: Int32, reps: Int32, holdS: Int32)
@@ -41,6 +42,7 @@ func destination(_ route: Route, graph: AppGraph) -> some View {
     case .rankings: RankingsView(graph: graph)
     case .settings: SettingsView(graph: graph)
     case .support: SupportChatView(graph: graph)
+    case .store: CrystalStoreView(graph: graph)
     case .exercises: ExerciseHubView(graph: graph)
     case .exercise(let key): ExerciseCameraView(graph: graph, key: key)
     case .exercisePlan(let key, let sets, let reps, let holdS):

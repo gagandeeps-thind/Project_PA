@@ -65,9 +65,6 @@ jobs:
       - name: Tests — Phase 2 security suite (webhook/CORS/nearby-auth)
         run: python tests/test_phase2_security.py
 
-      - name: Tests — Phase 3 Stripe payments suite (price authority / no-double-mint / sig)
-        run: python tests/test_phase3_stripe.py
-
       - name: Tests — crystal ledger suite
         run: python tests/test_phase2_ledger.py
 
@@ -119,6 +116,9 @@ jobs:
       - name: Tests — Google Play billing suite
         run: python tests/test_google_play_billing.py
 
+      - name: Tests — App Store billing suite
+        run: python tests/test_app_store_billing.py
+
       - name: Tests — home social feed suite
         run: python tests/test_home_social_feed.py
 
@@ -127,6 +127,15 @@ jobs:
 
       - name: Tests — Start tab training sessions and group challenges
         run: python tests/test_training.py
+
+      - name: Tests — security hardening suite (SQLi payloads, revocation, caps, headers, boot checks)
+        run: python tests/test_security_hardening.py
+
+      - name: Tests — GDPR export/erasure and cross-role email uniqueness
+        run: python tests/test_mvp_gdpr_and_email_uniqueness.py
+
+      - name: Tests — query budget for hot read endpoints (N+1 guard)
+        run: python tests/test_query_budget.py
 
       - name: Crystal ledger reconciliation after suites (challenges must not touch crystals)
         run: python scripts/reconcile_ledger.py --check
@@ -151,8 +160,6 @@ jobs:
           docker run -d --name osiris_ci -p 8000:8000 \
             -e OSIRIS_JWT_SECRET=ci-fixed-secret-not-for-production-use-only \
             -e OSIRIS_WEBHOOK_SECRET=ci-fixed-webhook-secret \
-            -e STRIPE_SECRET_KEY=sk_test_ci_dummy \
-            -e STRIPE_WEBHOOK_SECRET=whsec_ci_dummy \
             osiris-backend:ci
           for i in $(seq 1 20); do
             if curl -fs http://127.0.0.1:8000/healthz; then echo "healthz OK"; exit 0; fi

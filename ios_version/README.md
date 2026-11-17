@@ -18,7 +18,8 @@ open Osiris.xcodeproj               # Run builds OsirisShared through Gradle fir
 ```
 
 The dev environment points the simulator at `http://localhost:8000`. Choose another with
-`-Posiris.env=staging` (see `config/environments/`).
+`-Posiris.env=staging` (see `config/environments/`). Release builds (Archive, TestFlight, App Store)
+always compile `prod`: the build phase in `project.yml` passes `-Posiris.env=prod` for them.
 
 ## Design system
 
@@ -55,6 +56,7 @@ bundle by `project.yml` and registered with `UIAppFonts`): `FrostFont` sets each
 | Discover: live, upcoming, community, finished; create button | `DiscoverViewModel` | `Discover/DiscoverView.swift` |
 | Social: global distance, Pace Index, reps, rewards boards | `GlobalBoardsViewModel` | `Social/SocialView.swift` |
 | Wallet (demo builds only, mock adapters) | `WalletViewModel` | `Wallet/WalletView.swift` |
+| Mana Crystal Store (StoreKit 2; from Profile) | `StoreSupport` (`graph.store()`) | `Store/*.swift`, see `docs/architecture/app-store-billing-ios.md` |
 | Profile: rank, XP gauge, metrics, badges | `ProfileViewModel` | `Profile/ProfileView.swift` |
 | Live support chat (WebSocket stub) | `SupportChatViewModel` | `Support/SupportChatView.swift` |
 | Settings (incl. two-step erase) | `SettingsViewModel` | `Settings/SettingsView.swift` |

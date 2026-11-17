@@ -1,0 +1,136 @@
+{
+  "identifier" : "7B3C2A41",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "6740000001",
+      "localizations" : [
+        {
+          "description" : "500 Mana Crystals",
+          "displayName" : "Starter Pouch",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "osiris_crystals_starter",
+      "referenceName" : "Starter Pouch",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "6740000002",
+      "localizations" : [
+        {
+          "description" : "1,200 Mana Crystals",
+          "displayName" : "Adventurer's Cache",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "osiris_crystals_adventurer",
+      "referenceName" : "Adventurer's Cache",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : false,
+      "internalID" : "6740000003",
+      "localizations" : [
+        {
+          "description" : "2,600 Mana Crystals",
+          "displayName" : "Champion's Hoard",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "osiris_crystals_champion",
+      "referenceName" : "Champion's Hoard",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "14.99",
+      "familyShareable" : false,
+      "internalID" : "6740000004",
+      "localizations" : [
+        {
+          "description" : "Founder's Emblem and a permanent course slot",
+          "displayName" : "Founder Pack",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "osiris_founder_pack",
+      "referenceName" : "Founder Pack",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21740001",
+      "localizations" : [
+
+      ],
+      "name" : "Osiris Pass",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6740000005",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Osiris Pass, billed monthly",
+              "displayName" : "Osiris Pass Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "osiris_pass_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Osiris Pass Monthly",
+          "subscriptionGroupID" : "21740001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "39.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6740000006",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Osiris Pass, billed yearly",
+              "displayName" : "Osiris Pass Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "osiris_pass_annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Osiris Pass Annual",
+          "subscriptionGroupID" : "21740001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

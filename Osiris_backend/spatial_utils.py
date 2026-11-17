@@ -10,6 +10,22 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+
+KM_PER_DEG_LAT = 111.195  # 6371 km * pi / 180
+
+
+def radius_box(lat: float, lng: float, radius_km: float):
+    """((min_lat, max_lat), (min_lng, max_lng) or None): a box holding every point within `radius_km`,
+    for a cheap SQL prefilter before haversine_distance. The longitude range is None (do not filter
+    on it) where the box would cross the antimeridian or reach a pole."""
+    span = radius_km / KM_PER_DEG_LAT
+    # 5% margin: on a sphere the circle's widest longitude is a little more than the flat estimate.
+    lng_span = 1.05 * radius_km / (KM_PER_DEG_LAT * max(math.cos(math.radians(lat)), 0.01))
+    lngs = (lng - lng_span, lng + lng_span)
+    if lngs[0] < -180 or lngs[1] > 180 or abs(lat) + span >= 90:
+        lngs = None
+    return (lat - span, lat + span), lngs
+
 def calculate_polygon_area_sqkm(coords: list) -> float:
     """
     Approximate area of a polygon using the Shoelace formula.

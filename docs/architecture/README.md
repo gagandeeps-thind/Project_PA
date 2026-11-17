@@ -45,6 +45,10 @@ with local state and return `Outcome`:
 - Exercise sets are stored in SQLDelight first and synced later; permanent rejections stop
   retrying, transient ones retry.
 - The signed-in profile is cached so the app opens offline.
+- GET responses are kept in a bounded in-memory HTTP cache (`BoundedCacheStorage`, 2 MB) and
+  revalidated by ETag; the cache is emptied at every account change. A GET that fails on the way
+  (connection error, 502/503/504) is retried twice with a short backoff. Other methods and timeouts
+  are never retried.
 `DataGraph` wires everything by constructor injection from `PlatformDependencies`
 (`AndroidPlatform.create`, `IosPlatform.create`, `JvmPlatform.create` for tests).
 
@@ -53,6 +57,10 @@ with local state and return `Outcome`:
 navigation requests are part of the state, not one-shot events, so nothing is lost on rotation
 or when SwiftUI re-renders. `Loadable<T>` (`Loading`, `Ready`, `Failed(message, canRetry)`) is
 the shape of every loaded screen. `AppGraph` is the composition root both apps create once.
+An exception nothing caught in a view model's scope is logged and shown as an error message
+instead of ending the process. A view model that polls or holds a socket (`ChatViewModel`,
+`SupportChatViewModel`) has `pause()` and `resume()`; the screen calls them as it leaves and
+returns to the foreground.
 
 **Navigation and design.** `AppNavigatorViewModel` is the route guard at the app root:
 `RootState` is the permission primer on first launch, sign-in, or the tabbed app, and a restored
@@ -64,10 +72,28 @@ SwiftUI (system materials) draw from one set of values. The tabs are Home, Disco
 in builds with `features.walletDemo` (dev, staging), backed by `MockWalletRepository`: card and bank
 entry stand in for the payment provider's own sheet, so no card number ever reaches the app.
 
+**Store billing.** Crystal packs are sold through Google Play (Android) and the App Store (iOS); the
+server alone grants them. `PaymentsRepository` is store-neutral: `verifyGooglePlay`, `verifyAppStore`
+(StoreKit 2 `jwsRepresentation`) and `entitlements()` (`GET /api/v2/payments/entitlements`), all
+answering with the server's figures. `graph.store()` (`StoreSupport`) gives both apps the account
+binding for the signed-in player (Play `obfuscatedAccountId` = SHA-256 of `osiris:<id>`, StoreKit
+`appAccountToken` = UUIDv5(NAMESPACE_URL, `osiris:<id>`)) and, for Swift, `verifyAppStore` with a
+`finish` answer. Osiris Pass and the Founder Pack stay hidden while `features.passProducts` is off.
+Server side: [google-play-billing.md](google-play-billing.md), [app-store-billing.md](app-store-billing.md).
+
 **Android.** `rememberShared { graph.today() }` keeps a view model in an androidx `ViewModel`
 and clears it with the screen. Screens collect `state` with `collectAsStateWithLifecycle`.
 Platform adapters live in `platform/`: fused location and the run foreground service, CameraX +
 ML Kit pose, permissions, share sheet.
+- `RunTrackingService` records the run: it collects the GPS fixes and adds them to `RunRepository`,
+  so recording continues when the run screen or the activity goes away, and it stops itself when
+  the run is finished or discarded. The run screen only shows positions; it adds fixes itself only
+  while the service is not recording (`RunTrackingService.recording`).
+- `platform/image/RemoteImages` loads every remote picture: timeouts, a byte-sized memory cache
+  (an eighth of the heap), a 24 MB disk cache in `cacheDir/images`, and decoding at display size.
+- `platform/crash/CrashLog` writes a short record of each crash to the private file
+  `files/crashes.log` before the system handles it. Nothing is uploaded; read it with
+  `adb shell run-as osiris.fit cat files/crashes.log`. There is no crash reporting service yet.
 
 **iOS.** `Observed<VM, State>` wraps a view model as an `ObservableObject` using
 `StateFlow.watch` from `presentation/src/iosMain`. See `ios_version/README.md`.
@@ -76,8 +102,8 @@ ML Kit pose, permissions, share sheet.
 
 `config/environments/<env>.properties` holds the API base URL per platform, timeouts, logging
 and feature flags. The build reads the file chosen by `-Posiris.env=dev|staging|prod` (default
-`dev`) and generates `GeneratedEnv`. Machine-specific overrides go in
-`config/environments/local.properties` (git-ignored). No secrets belong in these files: the
+`dev`, or `prod` for release tasks) and generates `GeneratedEnv`. Machine-specific overrides go in
+`config/environments/local.properties` (git-ignored, ignored by prod builds). No secrets belong in these files: the
 apps hold none, and the backend keeps its own in `Osiris_backend/.env`.
 
 ## Testing

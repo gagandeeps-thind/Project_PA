@@ -140,8 +140,9 @@ def test_peoples_posts_create_react_comment_share() -> None:
     post = r_post.json()
     post_id = post["id"]
     assert "Push-up - 10 x 3 (30 reps)" in post["summary"]["measure_label"]
-    assert post["summary"]["domain_area_sqkm"] == 0.45
-    assert post["summary"]["crystals_earned"] == 25
+    # Client-asserted achievements are not trusted: no related domain or session, so nothing is shown.
+    assert post["summary"]["domain_area_sqkm"] == 0.0
+    assert post["summary"]["crystals_earned"] == 0 and post["summary"]["xp_earned"] == 0
 
     # Fan sees the post in People's Posts feed
     feed = client.get("/api/v2/feed/posts", headers=h_fan).json()["items"]

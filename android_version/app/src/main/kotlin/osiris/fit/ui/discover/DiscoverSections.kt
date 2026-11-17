@@ -14,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import osiris.fit.ui.common.SectionHeader
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.theme.OsirisColors
 import com.osiris.shared.domain.model.HubSection
@@ -58,7 +58,7 @@ fun DiscoverActions(onCreate: () -> Unit, onNearby: () -> Unit) {
 private fun Section(section: HubSection, cards: Loadable<List<DiscoverCard>>, onOpen: (Int) -> Unit, onRetry: () -> Unit) {
     SectionHeader(section.title)
     when (cards) {
-        Loadable.Loading -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+        Loadable.Loading -> SkeletonRows(Modifier.padding(horizontal = 16.dp), rows = 2)
         is Loadable.Failed -> TextButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 8.dp)) {
             Text("${cards.message} Tap to retry.", color = OsirisColors.Error)
         }

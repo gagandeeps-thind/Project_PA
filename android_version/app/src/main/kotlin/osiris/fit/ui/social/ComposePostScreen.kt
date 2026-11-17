@@ -59,6 +59,7 @@ import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.SectionHeader
 import osiris.fit.ui.common.localMinute
 import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
@@ -134,7 +135,7 @@ fun ComposePostScreen(graph: AppGraph, onDone: () -> Unit) {
                 )
             }
             when (val sessions = s.sessions) {
-                Loadable.Loading -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+                Loadable.Loading -> item { SkeletonRows() }
                 is Loadable.Failed -> item { Text(sessions.message, color = OsirisColors.Error) }
                 is Loadable.Ready -> {
                     if (sessions.value.isEmpty()) {

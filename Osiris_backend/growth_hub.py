@@ -198,8 +198,9 @@ def _period_start(period: Period, now: datetime) -> Optional[datetime]:
     return _week_window(now)[0] if period == "week" else None
 
 
-def _active_players(db: Session) -> set[int]:
-    return {u for (u,) in db.query(models.User.id).filter(models.User.suspended_at.is_(None)).all()}
+def _suspended_players(db: Session) -> set[int]:
+    """Few rows, unlike the set of every active player."""
+    return {u for (u,) in db.query(models.User.id).filter(models.User.suspended_at.isnot(None)).all()}
 
 
 def _board_values(db: Session, board: Board, start: Optional[datetime], exercise: str,
@@ -246,8 +247,8 @@ def _board_values(db: Session, board: Board, start: Optional[datetime], exercise
 
 
 def _active_board_values(db: Session, board: Board, start: Optional[datetime], exercise: str) -> dict[int, float]:
-    allowed = _active_players(db)
-    return {u: v for u, v in _board_values(db, board, start, exercise).items() if u in allowed}
+    suspended = _suspended_players(db)
+    return {u: v for u, v in _board_values(db, board, start, exercise).items() if u not in suspended}
 
 
 BOARD_META = {

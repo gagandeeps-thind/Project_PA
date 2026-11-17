@@ -2,7 +2,7 @@
  *  Community – player reports, clubs and groups (verify or
  *  suspend), and city seasons. Every action needs a reason.
  * ─────────────────────────────────────────────────────────── */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Users } from "lucide-react";
 import {
   apiErrorMessage,
@@ -15,6 +15,9 @@ import {
 } from "../api/client";
 import type { AdminCommunity, AdminReport } from "../api/types";
 import { TableSkeleton } from "../components/Skeleton";
+import ListFooter from "../components/ListFooter";
+import ReasonDialog from "../components/ReasonDialog";
+import { usePagedList } from "../hooks/useFetch";
 
 type Tab = "reports" | "communities" | "seasons";
 
@@ -39,51 +42,43 @@ const REASON_LABELS: Record<string, string> = {
 export default function CommunityPage() {
   const [tab, setTab] = useState<Tab>("reports");
   const [reportStatus, setReportStatus] = useState("open");
-  const [reports, setReports] = useState<AdminReport[]>([]);
-  const [communities, setCommunities] = useState<AdminCommunity[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [season, setSeason] = useState({ name: "", city: "", description: "", starts_at: "", ends_at: "" });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      if (tab === "reports") setReports(await getReports(reportStatus));
-      if (tab === "communities") setCommunities(await getAdminCommunities());
-    } catch (err) {
-      setError(apiErrorMessage(err, "Failed to load"));
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, reportStatus]);
+  /* One paged list per tab; only the open tab's list fetches. */
+  const reports = usePagedList<AdminReport>(
+    useCallback((loaded, signal) => getReports(reportStatus, loaded.length, signal), [reportStatus]),
+    "Failed to load",
+    tab === "reports"
+  );
+  const communities = usePagedList<AdminCommunity>(
+    useCallback((loaded, signal) => getAdminCommunities(loaded.length, signal), []),
+    "Failed to load",
+    tab === "communities"
+  );
+  const active = tab === "reports" ? reports : tab === "communities" ? communities : null;
+  const loading = active?.loading ?? false;
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const confirm = async () => {
-    if (!pending || reason.trim().length < 3) return;
+  const confirm = async (reason: string) => {
+    if (!pending) return;
     setBusy(true);
     setError("");
     try {
       if (pending.kind === "report") {
-        const res = await resolveReport(pending.item.id, pending.status, reason.trim());
+        const res = await resolveReport(pending.item.id, pending.status, reason);
         setNotice(`${res.resolved} report(s) marked ${pending.status}.`);
       } else if (pending.kind === "community") {
-        await setCommunityStatus(pending.item.id, pending.change, reason.trim());
+        await setCommunityStatus(pending.item.id, pending.change, reason);
         setNotice(`${pending.item.name}: ${pending.label.toLowerCase()} done.`);
       } else {
-        await resetDisplayName(pending.userId, reason.trim());
+        await resetDisplayName(pending.userId, reason);
         setNotice(`Player #${pending.userId} display name reset.`);
       }
       setPending(null);
-      setReason("");
-      await load();
+      await active?.reload();
     } catch (err) {
       setError(apiErrorMessage(err, "Action failed"));
     } finally {
@@ -144,7 +139,7 @@ export default function CommunityPage() {
         ))}
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {(error || active?.error) && <div className="error-message">{error || active?.error}</div>}
       {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
       {loading && (
         <TableSkeleton />
@@ -159,12 +154,13 @@ export default function CommunityPage() {
               </button>
             ))}
           </div>
-          {reports.length === 0 ? (
+          {reports.rows.length === 0 ? (
             <div className="empty-state">
               <Users size={48} />
               <p>No {reportStatus} reports.</p>
             </div>
           ) : (
+            <>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
@@ -179,7 +175,7 @@ export default function CommunityPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reports.map((r) => (
+                  {reports.rows.map((r) => (
                     <tr key={r.id}>
                       <td>#{r.id}</td>
                       <td style={{ fontWeight: 600 }}>{r.target_summary}</td>
@@ -215,6 +211,8 @@ export default function CommunityPage() {
                 </tbody>
               </table>
             </div>
+            <ListFooter shown={reports.rows.length} hasMore={reports.hasMore} loading={reports.loadingMore} onMore={reports.loadMore} />
+            </>
           )}
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: 12 }}>
             Resolving one report closes every open report on the same target. To suspend a player or a
@@ -224,12 +222,13 @@ export default function CommunityPage() {
       )}
 
       {!loading && tab === "communities" && (
-        communities.length === 0 ? (
+        communities.rows.length === 0 ? (
           <div className="empty-state">
             <Users size={48} />
             <p>No clubs or groups yet.</p>
           </div>
         ) : (
+          <>
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
@@ -243,7 +242,7 @@ export default function CommunityPage() {
                 </tr>
               </thead>
               <tbody>
-                {communities.map((c) => (
+                {communities.rows.map((c) => (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>
                       {c.name} {c.verified && <span className="badge badge-cyan">verified</span>}
@@ -281,6 +280,8 @@ export default function CommunityPage() {
               </tbody>
             </table>
           </div>
+          <ListFooter shown={communities.rows.length} hasMore={communities.hasMore} loading={communities.loadingMore} onMore={communities.loadMore} />
+          </>
         )
       )}
 
@@ -329,24 +330,14 @@ export default function CommunityPage() {
       )}
 
       {pending && (
-        <div className="dialog-overlay">
-          <div className="dialog">
-            <h3>{dialogTitle}</h3>
-            <p>Your reason is stored in the audit log{pending.kind === "report" ? " and shown to the reporters" : ""}.</p>
-            <div className="form-group">
-              <label className="form-label">Reason (required)</label>
-              <input className="form-input" autoFocus value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
-            </div>
-            <div className="dialog-actions">
-              <button className="btn-cancel" onClick={() => { setPending(null); setReason(""); }}>
-                Cancel
-              </button>
-              <button className="btn-sm btn-activate" disabled={busy || reason.trim().length < 3} onClick={confirm}>
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReasonDialog
+          title={dialogTitle}
+          body={`Your reason is stored in the audit log${pending.kind === "report" ? " and shown to the reporters" : ""}.`}
+          label="Reason (required)"
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={confirm}
+        />
       )}
     </div>
   );

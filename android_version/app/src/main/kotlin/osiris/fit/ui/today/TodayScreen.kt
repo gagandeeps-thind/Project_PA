@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -61,6 +62,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,6 +96,7 @@ import osiris.fit.ui.social.PostMedia
 import osiris.fit.ui.social.PostSafetyMenu
 import osiris.fit.ui.social.rememberFeedSafety
 import osiris.fit.ui.common.OsirisScaffold
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.common.rememberShared
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.design.EnergyRing
@@ -121,6 +124,12 @@ import com.osiris.shared.presentation.today.HomeScreenState
 import com.osiris.shared.presentation.today.TodayViewModel
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val POSITION_TIMEOUT_MS = 10_000L
+
+/** Ask for the next page of posts this many items before the end of the list. */
+private const val LOAD_AHEAD = 4
 
 @Suppress("CyclomaticComplexMethod")
 @Composable
@@ -132,7 +141,12 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
     val location = remember { LocationClient(context) }
 
     LaunchedEffect(Unit) {
-        val fix = if (location.hasPermission()) runCatching { location.fixes().firstOrNull() }.getOrNull() else null
+        // Bounded: indoors a fix may never come, and waiting for one keeps high-accuracy GPS on.
+        val fix = if (location.hasPermission()) {
+            runCatching { withTimeoutOrNull(POSITION_TIMEOUT_MS) { location.fixes().firstOrNull() } }.getOrNull()
+        } else {
+            null
+        }
         if (fix != null) vm.onPosition(fix.position) else vm.onNoPosition()
     }
 
@@ -161,7 +175,7 @@ fun TodayScreen(graph: AppGraph, nav: NavHostController) {
         },
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = false,
+            isRefreshing = home.refreshing,
             onRefresh = vm::refresh,
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
@@ -295,7 +309,18 @@ private fun TodayHomeContent(
     baseUrl: String,
     safety: FeedSafety,
 ) {
+    val listState = rememberLazyListState()
+    val nearEnd by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - LOAD_AHEAD
+        }
+    }
+    val canLoadMore = !home.feedLoadingMore && !home.feedEnd
+    LaunchedEffect(nearEnd, canLoadMore) { if (nearEnd && canLoadMore) vm.loadMoreFeed() }
     LazyColumn(
+        state = listState,
         modifier = Modifier.softEdges(),
         contentPadding = PaddingValues(20.dp, 24.dp, 20.dp, 36.dp + LocalTabBarInset.current),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -398,6 +423,7 @@ private fun TodayHomeContent(
                     },
                 )
             }
+            if (home.feedLoadingMore) item { SkeletonRows(rows = 2) }
         }
 
         item {

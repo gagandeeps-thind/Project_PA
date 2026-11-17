@@ -1,5 +1,5 @@
 """Background jobs run by the scheduler in main.py: XP decay, telemetry and route-point
-retention, and challenge settlement."""
+retention, challenge settlement and Google Play refund reconciliation."""
 import logging
 import os
 from datetime import timedelta
@@ -9,6 +9,7 @@ from sqlalchemy import case, func, update
 import database
 import models
 from core.clock import _now_naive_utc
+from services import google_play
 from services.challenge_store import _refresh_challenge_status
 from services.progression import get_rank
 
@@ -136,5 +137,42 @@ def process_challenge_settlement():
             changed |= _refresh_challenge_status(db, ch, now)
         if changed:
             db.commit()
+    finally:
+        db.close()
+
+
+def process_play_voided_purchases() -> int:
+    """Every 6 hours: fetch the purchases Google voided in the last 30 days (refund, chargeback,
+    revocation) and apply each one to its stored purchase. This is the safety net behind the
+    real-time notifications, and works without them. Repeats are harmless: a purchase is voided
+    once. Does nothing when the Play credentials are not set. Returns the purchases changed."""
+    try:
+        voided = google_play.list_voided_purchases()
+    except google_play.GooglePlayNotConfiguredError:
+        return 0
+    except (google_play.GooglePlayError, google_play.InvalidPurchaseError) as exc:
+        logger.warning("play-voided-purchases: list failed: %s", exc)
+        return 0
+    tokens = [v["purchaseToken"] for v in voided if v.get("purchaseToken")]
+    if not tokens:
+        return 0
+    purchases = models.GooglePlayPurchase
+    db = database.SessionLocal()
+    try:
+        rows = db.query(purchases).filter(purchases.purchase_token.in_(tokens), purchases.state != "refunded").all()
+        changed = 0
+        for row in rows:
+            before = row.state
+            try:
+                google_play.void_purchase(db, row)
+                db.commit()
+            except Exception:  # one bad purchase must not stop the rest; the next run retries it
+                db.rollback()
+                logger.exception("play-voided-purchases: purchase %s failed", row.id)
+                continue
+            changed += row.state != before
+        if changed:
+            logger.info("play-voided-purchases", extra={"ctx": {"changed": changed}})
+        return changed
     finally:
         db.close()

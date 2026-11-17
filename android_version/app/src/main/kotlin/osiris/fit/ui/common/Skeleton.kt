@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -30,13 +31,7 @@ import osiris.fit.ui.theme.OsirisColors
  */
 @Composable
 fun LoadingSkeleton(modifier: Modifier = Modifier, rows: Int = 5) {
-    val pulse = rememberInfiniteTransition(label = "skeleton")
-    val alpha by pulse.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 800), RepeatMode.Reverse),
-        label = "skeletonAlpha",
-    )
+    val alpha by skeletonPulse()
     Column(
         modifier.fillMaxSize().padding(16.dp).semantics { contentDescription = "Loading" },
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -52,3 +47,34 @@ fun LoadingSkeleton(modifier: Modifier = Modifier, rows: Int = 5) {
         }
     }
 }
+
+/**
+ * The same placeholders for one section of a screen that is already showing (a list inside a scrolling
+ * page, a sheet): [rows] list rows, as tall as their content, with no padding of their own.
+ */
+@Composable
+fun SkeletonRows(modifier: Modifier = Modifier, rows: Int = 3) {
+    val alpha by skeletonPulse()
+    Column(
+        modifier.fillMaxWidth().semantics { contentDescription = "Loading" },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeat(rows) { i ->
+            Box(
+                Modifier
+                    .fillMaxWidth(if (i % 2 == 0) 1f else 0.85f)
+                    .height(56.dp)
+                    .graphicsLayer { this.alpha = alpha }
+                    .background(OsirisColors.Surface, RoundedCornerShape(16.dp)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun skeletonPulse(): State<Float> = rememberInfiniteTransition(label = "skeleton").animateFloat(
+    initialValue = 0.35f,
+    targetValue = 0.8f,
+    animationSpec = infiniteRepeatable(tween(durationMillis = 800), RepeatMode.Reverse),
+    label = "skeletonAlpha",
+)

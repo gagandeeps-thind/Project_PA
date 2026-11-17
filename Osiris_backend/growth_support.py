@@ -10,6 +10,7 @@ Protocol (JSON text frames): the client sends `{"text": "..."}`; the server send
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 
@@ -24,6 +25,7 @@ router = APIRouter()
 
 MAX_TEXT = 1000
 MAX_MESSAGES = 30
+IDLE_TIMEOUT_S = 120  # a silent socket is closed, so idle connections cannot pile up
 GREETING = "Hi, this is Osiris support. Tell us what happened and we'll get back to you."
 RECEIVED = (
     "Thanks. Live chat isn't staffed yet, so this message was not saved or read by a person. "
@@ -58,7 +60,10 @@ def _say(text: str) -> dict:
 
 @router.websocket("/api/v2/support/ws")
 async def support_chat(websocket: WebSocket, db: Session = Depends(get_db)) -> None:
-    if _player_id(websocket, db) is None:
+    player_id = _player_id(websocket, db)
+    # Hand the pooled connection back now: the socket can stay open for minutes and needs no database.
+    db.close()
+    if player_id is None:
         # Before accept, so the handshake fails with 403 and the app treats it as signed out.
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -67,7 +72,8 @@ async def support_chat(websocket: WebSocket, db: Session = Depends(get_db)) -> N
     try:
         for _ in range(MAX_MESSAGES):
             try:
-                text = str(json.loads(await websocket.receive_text()).get("text", "")).strip()
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=IDLE_TIMEOUT_S)
+                text = str(json.loads(raw).get("text", "")).strip()
             except (ValueError, AttributeError):
                 await websocket.send_json(_say("That message could not be read. Send it as text."))
                 continue
@@ -76,5 +82,7 @@ async def support_chat(websocket: WebSocket, db: Session = Depends(get_db)) -> N
                 continue
             await websocket.send_json(_say(RECEIVED))
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Message limit reached")
+    except asyncio.TimeoutError:
+        await websocket.close(code=status.WS_1000_NORMAL_CLOSURE, reason="Idle timeout")
     except WebSocketDisconnect:
         return

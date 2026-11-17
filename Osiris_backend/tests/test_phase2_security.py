@@ -41,6 +41,8 @@ def test_webhook_fail_closed_boot():
     # The repository may contain a developer-only .env. Disable dotenv loading in this
     # subprocess so the test genuinely exercises the missing-secret boot path.
     env["PYTHON_DOTENV_DISABLED"] = "1"
+    # A valid JWT secret, so the webhook check is the one that fails (the JWT check also fails closed).
+    env.setdefault("OSIRIS_JWT_SECRET", "phase2-test-jwt-secret-aaaaaaaaaaaaaaaaaaaa")
     proc = subprocess.run(
         [sys.executable, "-c", "import main"],
         cwd=BACKEND, env=env, capture_output=True, text=True,
@@ -54,11 +56,9 @@ def test_webhook_fail_closed_boot():
 # Configure a correct prod-like env, THEN import main for the in-process tests.
 os.environ["OSIRIS_ENV"] = "production"
 os.environ["OSIRIS_WEBHOOK_SECRET"] = "phase2-test-webhook-secret"
+os.environ.setdefault("OSIRIS_ALLOW_NO_CDN", "1")  # production otherwise needs the origin lock
+os.environ.setdefault("OSIRIS_CORS_ORIGINS", "http://localhost:5173")  # no localhost default outside dev
 os.environ.setdefault("OSIRIS_JWT_SECRET", "phase2-test-jwt-secret-aaaaaaaaaaaaaaaaaaaa")
-# Production also requires Stripe config (fail-closed), so a
-# correct prod-like env must supply these too — same pattern as the secrets above.
-os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_phase2_dummy")
-os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_phase2_dummy")
 
 
 def _client_and_models():
@@ -174,8 +174,9 @@ def test_suspended_player_blocked_on_v1_routes():
             "GET /api/v1/bounties/nearby": client.get("/api/v1/bounties/nearby", params={"lat": 44.6, "lng": -63.6},
                                                       headers=headers),
             "GET /api/v1/users/{id}/party-role": client.get(f"/api/v1/users/{uid}/party-role", headers=headers),
-            "POST /api/v1/payments/crystals/intent": client.post("/api/v1/payments/crystals/intent",
-                                                                 json={"pack_id": "starter"}, headers=headers),
+            "POST /api/v2/payments/google-play/verify": client.post(
+                "/api/v2/payments/google-play/verify",
+                json={"product_id": "osiris_crystals_starter", "purchase_token": "x"}, headers=headers),
         }
         for name, resp in calls.items():
             _check(f"audit: suspended player gets 403 on {name}", resp.status_code == 403)
@@ -190,9 +191,18 @@ def test_admin_can_list_nearby_bounties_and_merchants_cannot():
     """The suspension fix (2026-10-12) made /bounties/nearby player-only, so the admin Bounties page
     showed "Not enough permissions". Admins may list; players keep the suspension check."""
     from core import security
-    client, _models, _db = _client_and_models()
+    client, models, database = _client_and_models()
     params = {"lat": 44.6, "lng": -63.6}
-    admin = {"Authorization": f"Bearer {security.create_access_token({'sub': '1', 'role': 'admin'})}"}
+    db = database.SessionLocal()
+    # Admin tokens are honoured only while the admin row exists.
+    row = db.query(models.Admin).filter(models.Admin.email == "ph2_admin@example.com").first()
+    if row is None:
+        row = models.Admin(email="ph2_admin@example.com", hashed_password="x", name="ph2 admin")
+        db.add(row)
+        db.commit()
+    admin_id = row.id
+    db.close()
+    admin = {"Authorization": f"Bearer {security.create_access_token({'sub': str(admin_id), 'role': 'admin'})}"}
     merchant = {"Authorization": f"Bearer {security.create_access_token({'sub': '1', 'role': 'merchant'})}"}
     _check("admin console: admin lists nearby bounties",
            client.get("/api/v1/bounties/nearby", params=params, headers=admin).status_code == 200)

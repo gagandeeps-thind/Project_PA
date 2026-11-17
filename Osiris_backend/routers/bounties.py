@@ -1,14 +1,18 @@
 """Bounty board and merchant coupon redemption (legacy v1 game)."""
 import secrets
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
 import spatial_utils
 from core.clock import _now_naive_utc, _to_naive_utc
-from core.security import get_active_player, get_active_player_or_admin, get_current_admin_or_merchant, get_current_user_token
+from core.security import (
+    get_active_player, get_active_player_or_admin, get_current_admin_or_merchant, get_current_user_token,
+    require_valid_session,
+)
 from database import get_db
 from schemas import (
     BountyCompleteRequest,
@@ -25,6 +29,10 @@ from services.proofs import _consume_proof_or_409, _enforce_proof, _enforce_proo
 
 router = APIRouter()
 
+# A merchant is semi-trusted: their chest's crystals are minted by the platform, so its budget is small.
+MERCHANT_MAX_CRYSTAL_REWARD = 25
+MERCHANT_MAX_COMPLETIONS = 1000
+
 
 @router.post("/api/v1/bounties", response_model=BountySummary)
 def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_admin_or_merchant)):
@@ -39,6 +47,12 @@ def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_dat
             raise HTTPException(status_code=403, detail="Merchants can only create merchant_chest bounties")
         if token_data["id"] != bounty.merchant_id:
             raise HTTPException(status_code=403, detail="Merchant can only create bounties keyed to their own merchant_id")
+        if bounty.crystal_reward > MERCHANT_MAX_CRYSTAL_REWARD or bounty.max_completions > MERCHANT_MAX_COMPLETIONS:
+            raise HTTPException(
+                status_code=422,
+                detail=(f"Merchant bounties allow at most {MERCHANT_MAX_CRYSTAL_REWARD} crystals and "
+                        f"{MERCHANT_MAX_COMPLETIONS} completions"),
+            )
     # Daily bounties are admin-only; this also lets admins seed merchant_chest bounties for any merchant.
     if bounty.bounty_type == "daily" and role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can create daily bounties")
@@ -99,18 +113,31 @@ def create_bounty(bounty: BountyCreate, db: Session = Depends(get_db), token_dat
 
 
 @router.get("/api/v1/bounties/nearby", response_model=List[BountySummary])
-def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Session = Depends(get_db),
-                        token_data: dict = Depends(get_active_player_or_admin)):
+def get_nearby_bounties(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    radius_km: float = Query(5.0, gt=0, le=1000),  # the admin console searches 500 km
+    limit: Optional[int] = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    token_data: dict = Depends(get_active_player_or_admin),
+):
     """Returns active, non-expired, non-full bounties within `radius_km` of (lat, lng), sorted
-    nearest-first. MVP uses an in-memory haversine sweep; PostGIS will replace this with
-    `ST_DWithin` in Phase 2."""
+    nearest-first. Only bounties in the radius's bounding box are loaded, then measured exactly;
+    PostGIS will replace this with `ST_DWithin`. `limit`/`offset` page the sorted list; without
+    `limit` every match is returned, as before."""
     now = _now_naive_utc()
-    candidates = (
+    lats, lngs = spatial_utils.radius_box(lat, lng, radius_km)
+    q = (
         db.query(models.Bounty)
         .filter(models.Bounty.is_active == 1)
         .filter(models.Bounty.completions_count < models.Bounty.max_completions)
-        .all()
+        .filter(or_(models.Bounty.expires_at.is_(None), models.Bounty.expires_at > now))
+        .filter(models.Bounty.target_lat.between(*lats))
     )
+    if lngs:
+        q = q.filter(models.Bounty.target_lng.between(*lngs))
+    candidates = q.all()
 
     nearby: List[BountySummary] = []
     for b in candidates:
@@ -137,7 +164,7 @@ def get_nearby_bounties(lat: float, lng: float, radius_km: float = 5.0, db: Sess
         ))
 
     nearby.sort(key=lambda x: x.distance_km)
-    return nearby
+    return nearby[offset:offset + limit] if limit is not None else nearby[offset:]
 
 
 @router.post("/api/v1/bounties/{bounty_id}/complete", response_model=BountyCompleteResponse)
@@ -299,6 +326,7 @@ def lookup_coupon(
 ):
     """Pre-redemption check. Use this to validate a code shown at the till before tapping
     the redeem button — surfaces 'already redeemed' and 'wrong merchant' before a write."""
+    require_valid_session(token_data, db)
     completion, bounty = _load_coupon_for_merchant(db, code, token_data)
     return CouponLookupResponse(
         coupon_code=code,
@@ -323,6 +351,7 @@ def redeem_coupon(
     """Stamps a coupon as redeemed at the till. RBAC: only the merchant who owns the
     bounty (or an admin) can redeem; a re-redeem returns 409 so the customer can't
     re-use the code at another visit."""
+    require_valid_session(token_data, db)
     completion, bounty = _load_coupon_for_merchant(db, code, token_data)
 
     if completion.coupon_redeemed_at is not None:

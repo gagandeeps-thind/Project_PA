@@ -4,16 +4,27 @@
 // to the shared code.
 //
 // Build:   ./gradlew :android_version:app:assembleDebug                  (dev backend, 10.0.2.2)
-//          ./gradlew :android_version:app:assembleRelease -Posiris.env=prod
-//          ./gradlew :android_version:app:bundleRelease -Posiris.env=prod
+//          ./gradlew :android_version:app:assembleRelease                (always prod, signed)
+//          scripts/build_android_release.sh <versionCode> [versionName]  (the Play bundle)
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // The same environment file the shared core compiles in (see :shared:core:generateEnv).
+val osirisEnvName = rootProject.extra["osirisEnvName"] as String
 val osirisEnv = java.util.Properties().apply {
-    val name = providers.gradleProperty("osiris.env").getOrElse("dev")
-    rootProject.file("config/environments/$name.properties").inputStream().use { load(it) }
-    rootProject.file("config/environments/local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    rootProject.file("config/environments/$osirisEnvName.properties").inputStream().use { load(it) }
+    val local = java.util.Properties()
+    rootProject.file("config/environments/local.properties").takeIf { it.exists() }?.inputStream()?.use { local.load(it) }
+    // A developer's local overrides never reach a prod build; only the Mapbox token (not in git) is taken.
+    if (osirisEnvName == "prod") local.keys.retainAll(setOf("MAPBOX_ACCESS_TOKEN"))
+    putAll(local)
 }
+// Mapbox public token: CI passes it as a Gradle property or env var, a workstation keeps it in local.properties.
+val mapboxAccessToken = (
+    providers.gradleProperty("osiris.mapboxAccessToken").orNull
+        ?: System.getenv("OSIRIS_MAPBOX_ACCESS_TOKEN")
+        ?: osirisEnv.getProperty("MAPBOX_ACCESS_TOKEN")
+        ?: ""
+    ).trim()
 
 // Release signing credentials loaded from keystore.properties / key.properties (git-ignored)
 // or CI/CD environment variables (see keystore.properties.template).
@@ -46,9 +57,9 @@ val hasReleaseSigning = releaseStoreFile != null &&
     !releaseKeyAlias.isNullOrBlank() &&
     !releaseKeyPassword.isNullOrBlank()
 
-val resolvedVersionCode = providers.gradleProperty("osiris.versionCode").orNull?.toIntOrNull()
+val explicitVersionCode = providers.gradleProperty("osiris.versionCode").orNull?.toIntOrNull()
     ?: System.getenv("OSIRIS_VERSION_CODE")?.toIntOrNull()
-    ?: 1
+val resolvedVersionCode = explicitVersionCode ?: 1
 val resolvedVersionName = providers.gradleProperty("osiris.versionName").orNull
     ?: System.getenv("OSIRIS_VERSION_NAME")?.takeIf { it.isNotBlank() }
     ?: "1.0.0"
@@ -57,6 +68,34 @@ val playBillingPublicKey = (
         ?: System.getenv("OSIRIS_PLAY_BILLING_PUBLIC_KEY")
         ?: ""
     ).replace("\\", "\\\\").replace("\"", "\\\"")
+
+// A release artifact that points at a dev server, is unsigned, or reuses a version code is useless
+// and easy to upload by mistake, so those builds stop here instead of succeeding.
+gradle.taskGraph.whenReady {
+    val names = allTasks.filter { it.project == project }.map { it.name }
+    val bundle = "packageReleaseBundle" in names
+    if (bundle || "packageRelease" in names) {
+        val problems = listOfNotNull(
+            (
+                "the environment is '$osirisEnvName'; release builds are prod only " +
+                    "(pass -Posiris.env=prod, or name the release task in full without -Posiris.env)"
+                ).takeIf { osirisEnvName != "prod" },
+            "signing credentials are missing (keystore.properties or OSIRIS_KEYSTORE_*; see keystore.properties.template)"
+                .takeIf { !hasReleaseSigning },
+            "a positive whole-number version code is required for a bundle (-Posiris.versionCode=<N> or OSIRIS_VERSION_CODE)"
+                .takeIf { bundle && (explicitVersionCode == null || explicitVersionCode < 1) },
+        )
+        if (problems.isNotEmpty()) {
+            throw GradleException("Cannot build the Android release:\n - " + problems.joinToString("\n - "))
+        }
+        if (mapboxAccessToken.isEmpty()) {
+            logger.warn(
+                "WARNING: no Mapbox token (osiris.mapboxAccessToken, OSIRIS_MAPBOX_ACCESS_TOKEN or " +
+                    "config/environments/local.properties); this release ships with the Arise map disabled.",
+            )
+        }
+    }
+}
 
 apply(plugin = "com.android.application")
 apply(plugin = "org.jetbrains.kotlin.android")
@@ -74,8 +113,8 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
         versionCode = resolvedVersionCode
         versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Mapbox public token from config/environments/local.properties (git-ignored); empty disables the map.
-        resValue("string", "mapbox_access_token", osirisEnv.getProperty("MAPBOX_ACCESS_TOKEN").orEmpty())
+        // Empty disables the map.
+        resValue("string", "mapbox_access_token", mapboxAccessToken)
         manifestPlaceholders["webLinkHost"] = osirisEnv.getProperty("links.webHost")
         buildConfigField("String", "PLAY_BILLING_PUBLIC_KEY", "\"$playBillingPublicKey\"")
     }

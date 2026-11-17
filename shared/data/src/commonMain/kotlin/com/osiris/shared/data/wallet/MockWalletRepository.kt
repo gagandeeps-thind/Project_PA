@@ -22,8 +22,8 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * In-memory wallet for demo builds (`features.walletDemo`). Nothing leaves the phone and nothing
- * touches the crystal ledger. "Adding a card" stands in for the provider's sheet by returning
- * Stripe's public test card, the same shape a real adapter gets back.
+ * touches the crystal ledger. "Adding a card" returns a fixed sample card (Visa ending 4242); real
+ * crystal purchases go through Google Play or the App Store, never through this wallet.
  */
 class MockWalletRepository(private val clock: Clock = Clock.System) : WalletRepository {
     override val isDemo: Boolean = true

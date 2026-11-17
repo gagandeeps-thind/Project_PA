@@ -8,7 +8,10 @@ Osiris_backend/
   main.py            app assembly only: middleware, background scheduler, router mounting
   core/              cross-cutting plumbing, no endpoints
     security.py        JWT issue/verify, role dependencies (player/admin/merchant), get_active_player
-                       (suspension and sign-out-everywhere), bcrypt, webhook HMAC, fail-closed secret checks
+                       (suspension and sign-out-everywhere), admin/merchant token revocation, bcrypt,
+                       webhook HMAC, fail-closed secret checks
+    security_headers.py nosniff, frame and referrer headers, CSP and HSTS on every response
+    origin_guard.py    CDN origin lock (HTTP and WebSocket); required in production
     rate_limit.py      in-memory per-IP limits as dependencies (off in dev/test)
     logging_setup.py   JSON logs (OSIRIS_LOG_JSON=1), access log with X-Request-ID, route metrics
     clock.py           naive-UTC "now" (SQLite has no time zones)
@@ -31,9 +34,10 @@ Osiris_backend/
     progression.py     rank, title, XP, badges, attribute stats, activity log
     challenge_store.py challenge status, settlement, batched read models
     proofs.py          ML Referee proof checks and replay protection
-    jobs.py            scheduled jobs: XP decay, telemetry and route-point retention, settlement
+    jobs.py            scheduled jobs: XP decay, telemetry and route-point retention, settlement,
+                       Google Play refund reconciliation
     challenges.py, quests.py, leaderboards.py, exercises.py   pure rules
-    stripe_gateway.py, metrics.py, ttl_cache.py, player_safety.py
+    google_play.py, app_store.py, metrics.py, ttl_cache.py, player_safety.py
   models.py          database tables
   database.py        engine, pool settings, SQLite pragmas, get_db
   settings.py        configuration; secrets via settings.secret("NAME") or NAME_FILE
@@ -44,7 +48,7 @@ Osiris_backend/
 ## Rules
 
 - **Dependencies point down.** Routers use `core/`, `schemas`, `services/` and `models`. Services never
-  import routers. `core/` never imports routers and uses only leaf services (`metrics`, `stripe_gateway`). The growth modules import from the same places, never from `main`.
+  import routers. `core/` never imports routers and uses only leaf services (`metrics`). The growth modules import from the same places, never from `main`.
 - **One router per area.** A new endpoint goes into the router of its area, its models into `schemas.py`
   (or next to a growth router), and its logic into `services/` when a job or another router needs it too.
 - **Route order matters.** FastAPI matches in registration order, so `/challenges/nearby` must be
@@ -70,3 +74,12 @@ Gzip for bodies of 1 KB and more, weak ETags with `304 Not Modified`, a 60 s cac
 leaderboard, fixed query counts on list endpoints (asserted in `tests/test_growth_hub.py`),
 `limit`/`offset` paging, a PostgreSQL connection pool (`OSIRIS_DB_POOL_*`), SQLite WAL and planner
 statistics. Measurements: `Documentation/Enterprise/17_Performance_Pass_and_Audit_2026-10-19.md`.
+
+Radius searches (Arise domains and routes, v1 nearby domains, bounties) prefilter on a bounding box in SQL
+(`spatial_utils.radius_box`; domains keep `centroid_lat`/`centroid_lng` in step with `geometry_json` through
+a model validator) and only then measure exactly. `TrainingSession.series_json` and the photo `jpeg` columns
+are deferred: load them with `undefer` when a query needs them for many rows. Endpoint pages are hydrated
+with batched or aggregate queries (`IN (...)`, `GROUP BY`, a `ROW_NUMBER()` window for the newest
+comments), never one query per row. `python scripts/perf_audit.py [players]` prints statements per hot
+endpoint; `tests/test_query_budget.py` asserts a budget for each and that the count does not grow with the
+data. Add an endpoint there when you add a list endpoint.

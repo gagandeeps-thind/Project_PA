@@ -19,12 +19,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import osiris.fit.platform.billing.BillingConnectionState
 import osiris.fit.platform.billing.BillingFeedback
 import osiris.fit.platform.billing.BillingProduct
 import osiris.fit.platform.billing.BillingService
 import osiris.fit.platform.billing.BillingState
+import osiris.fit.platform.billing.PlayBillingCatalog
 import osiris.fit.platform.billing.ProductKind
 import osiris.fit.platform.billing.SubscriptionOffer
 import osiris.fit.platform.billing.SubscriptionStatus
@@ -42,7 +45,7 @@ fun LazyListScope.playStoreBillingItems(
     activity: Activity?,
 ) {
     item(key = "play_billing_header") {
-        SectionHeader("Google Play Store & Osiris Pass")
+        SectionHeader(if (state.sellsPass) "Google Play Store & Osiris Pass" else "Mana Crystal Store")
     }
     state.feedback?.let { feedback ->
         item(key = "play_billing_feedback") {
@@ -50,7 +53,7 @@ fun LazyListScope.playStoreBillingItems(
         }
     }
     item(key = "play_subscription_status") {
-        SubscriptionStatusCard(state = state, onRefresh = billing::refreshCatalogAndPurchases)
+        StoreStatusCard(state = state, onRefresh = billing::refreshCatalogAndPurchases)
     }
     subscriptionProductItems(state = state, billing = billing, activity = activity)
     oneTimeProductItems(state = state, billing = billing, activity = activity)
@@ -66,11 +69,13 @@ private fun LazyListScope.subscriptionProductItems(
         SectionHeader("Subscriptions")
     }
     items(state.subscriptions, key = { "sub_${it.productId}" }) { product ->
+        // One pass at a time: while any pass is active, neither plan can be bought again here.
         val hasActiveSub = state.subscriptionStatus == SubscriptionStatus.ACTIVE ||
             state.subscriptionStatus == SubscriptionStatus.IN_GRACE_PERIOD
         SubscriptionProductCard(
             product = product,
             isSubscribed = state.activeSubscriptionProductId == product.productId && hasActiveSub,
+            canBuy = !hasActiveSub && !state.purchasesUnavailable,
             onSelectOffer = { offer ->
                 activity?.let { act ->
                     billing.launchPurchase(
@@ -92,7 +97,7 @@ private fun LazyListScope.oneTimeProductItems(
 ) {
     if (state.oneTimeProducts.isEmpty()) return
     item(key = "play_inapp_header") {
-        SectionHeader("Mana Crystals & Unlocks")
+        SectionHeader(if (state.sellsPass) "Mana Crystals & Unlocks" else "Mana Crystals")
     }
     items(state.oneTimeProducts, key = { "inapp_${it.productId}" }) { product ->
         val alreadyOwned = product.kind == ProductKind.NON_CONSUMABLE_INAPP &&
@@ -100,6 +105,7 @@ private fun LazyListScope.oneTimeProductItems(
         OneTimeProductCard(
             product = product,
             alreadyOwned = alreadyOwned,
+            enabled = !alreadyOwned && !state.purchasesUnavailable,
             onBuy = {
                 activity?.let { act ->
                     billing.launchPurchase(activity = act, productId = product.productId)
@@ -135,26 +141,46 @@ private fun BillingFeedbackBanner(
 }
 
 @Composable
-private fun SubscriptionStatusCard(
+private fun StoreStatusCard(
     state: BillingState,
     onRefresh: () -> Unit,
 ) {
+    val links = LocalUriHandler.current
+    val packageName = LocalContext.current.packageName
+    val activePass = state.activeSubscriptionProductId?.takeIf {
+        state.sellsPass && state.subscriptionStatus.let { s -> s == SubscriptionStatus.ACTIVE || s == SubscriptionStatus.IN_GRACE_PERIOD }
+    }
     FrostCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column {
             Text(
-                text = subscriptionLabel(state.subscriptionStatus),
-                color = subscriptionColor(state.subscriptionStatus),
+                text = when {
+                    state.purchasesUnavailable -> "PURCHASES TEMPORARILY UNAVAILABLE"
+                    state.sellsPass -> subscriptionLabel(state.subscriptionStatus)
+                    else -> "MANA CRYSTALS"
+                },
+                color = if (state.purchasesUnavailable) OsirisColors.Warning else subscriptionColor(state.subscriptionStatus),
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = subscriptionDetail(state),
+                text = when {
+                    state.purchasesUnavailable ->
+                        "Buying is paused while we can't confirm purchases. Nothing was added to your account, " +
+                            "and Google Play refunds a purchase we can't confirm within 3 days."
+                    state.sellsPass -> subscriptionDetail(state)
+                    else -> connectionDetail(state.connectionState)
+                },
                 color = OsirisColors.Muted,
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onRefresh, enabled = !state.isLoading) {
                 Text(if (state.isLoading) "SYNCING..." else "RESTORE / REFRESH PLAY PURCHASES")
+            }
+            if (activePass != null) {
+                TextButton(onClick = { links.openUri(PlayBillingCatalog.manageSubscriptionUrl(activePass, packageName)) }) {
+                    Text("MANAGE SUBSCRIPTION IN GOOGLE PLAY")
+                }
             }
         }
     }
@@ -176,7 +202,7 @@ private fun subscriptionColor(status: SubscriptionStatus): Color = when (status)
 
 private fun subscriptionDetail(state: BillingState): String = when (state.subscriptionStatus) {
     SubscriptionStatus.ACTIVE ->
-        "Your subscription is verified and active (${state.activeSubscriptionProductId.orEmpty()})."
+        "Your subscription is verified and active."
     SubscriptionStatus.IN_GRACE_PERIOD ->
         "A renewal charge failed. Update your payment method in Google Play to keep uninterrupted access."
     SubscriptionStatus.EXPIRED ->
@@ -197,6 +223,7 @@ private fun connectionDetail(connectionState: BillingConnectionState): String = 
 private fun SubscriptionProductCard(
     product: BillingProduct,
     isSubscribed: Boolean,
+    canBuy: Boolean,
     onSelectOffer: (SubscriptionOffer) -> Unit,
 ) {
     FrostCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -213,12 +240,12 @@ private fun SubscriptionProductCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "${offer.basePlanId} • ${offer.formattedPrice} (${offer.billingPeriod})",
+                        text = "${PlayBillingCatalog.planLabel(offer.billingPeriod)} • ${offer.formattedPrice}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(
                         onClick = { onSelectOffer(offer) },
-                        enabled = !isSubscribed,
+                        enabled = canBuy,
                     ) {
                         Text(if (isSubscribed) "ACTIVE" else "SUBSCRIBE")
                     }
@@ -232,6 +259,7 @@ private fun SubscriptionProductCard(
 private fun OneTimeProductCard(
     product: BillingProduct,
     alreadyOwned: Boolean,
+    enabled: Boolean,
     onBuy: () -> Unit,
 ) {
     FrostCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -248,7 +276,7 @@ private fun OneTimeProductCard(
             }
             Button(
                 onClick = onBuy,
-                enabled = !alreadyOwned,
+                enabled = enabled,
             ) {
                 Text(if (alreadyOwned) "OWNED" else product.formattedPrice)
             }

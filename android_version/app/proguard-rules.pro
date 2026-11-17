@@ -35,6 +35,13 @@
 # Keep Osiris Billing domain models, callbacks, and verification contracts.
 -keep class osiris.fit.platform.billing.** { *; }
 
+# Debug, verbose and info logs (the shared Logger's debug/info) are removed from release builds.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
+
 # Ktor and OkHttp reference optional platform classes.
 -dontwarn org.slf4j.**
 -dontwarn org.conscrypt.**

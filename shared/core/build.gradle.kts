@@ -3,7 +3,7 @@ import java.util.Properties
 // Platform-neutral building blocks: configuration, errors, results, logging, ids.
 // No dependency on other Osiris modules.
 
-val envName = providers.gradleProperty("osiris.env").getOrElse("dev")
+val envName = rootProject.extra["osirisEnvName"] as String
 val envDir = rootProject.layout.projectDirectory.dir("config/environments")
 val generatedDir = layout.buildDirectory.dir("generated/osirisEnv/commonMain/kotlin")
 
@@ -11,8 +11,10 @@ val generateEnv by tasks.registering {
     description = "Compiles config/environments/<osiris.env>.properties (+ local.properties) into GeneratedEnv.kt"
     val envFile = envDir.file("$envName.properties")
     val localFile = envDir.file("local.properties")
+    // A developer's local overrides never reach a prod build.
+    val useLocal = envName != "prod" && localFile.asFile.exists()
     inputs.file(envFile)
-    inputs.files(localFile.asFile.takeIf { it.exists() } ?: files())
+    inputs.files(if (useLocal) files(localFile) else files())
     inputs.property("env", envName)
     outputs.dir(generatedDir)
     doLast {
@@ -20,11 +22,11 @@ val generateEnv by tasks.registering {
         val selected = envFile.asFile
         require(selected.exists()) { "Unknown osiris.env '$envName': ${selected.path} does not exist" }
         selected.inputStream().use(props::load)
-        localFile.asFile.takeIf { it.exists() }?.inputStream()?.use(props::load)
+        if (useLocal) localFile.asFile.inputStream().use(props::load)
         val required = listOf(
             "environment", "api.baseUrl.android", "api.baseUrl.ios", "api.baseUrl.jvm",
-            "api.connectTimeoutMs", "api.requestTimeoutMs", "http.logging", "features.legacy", "features.poseRecording",
-            "features.walletDemo", "links.webHost",
+            "api.connectTimeoutMs", "api.requestTimeoutMs", "http.logging", "features.poseRecording",
+            "features.walletDemo", "features.passProducts", "links.webHost",
         )
         val missing = required.filter { props.getProperty(it).isNullOrBlank() }
         require(missing.isEmpty()) { "${selected.name} is missing: ${missing.joinToString()}" }
@@ -46,9 +48,9 @@ val generateEnv by tasks.registering {
             |    const val API_CONNECT_TIMEOUT_MS: Long = ${l("api.connectTimeoutMs")}
             |    const val API_REQUEST_TIMEOUT_MS: Long = ${l("api.requestTimeoutMs")}
             |    const val HTTP_LOGGING: Boolean = ${b("http.logging")}
-            |    const val FEATURE_LEGACY: Boolean = ${b("features.legacy")}
             |    const val FEATURE_POSE_RECORDING: Boolean = ${b("features.poseRecording")}
             |    const val FEATURE_WALLET_DEMO: Boolean = ${b("features.walletDemo")}
+            |    const val FEATURE_PASS_PRODUCTS: Boolean = ${b("features.passProducts")}
             |    const val LINKS_WEB_HOST: String = ${s("links.webHost")}
             |}
             |""".trimMargin(),

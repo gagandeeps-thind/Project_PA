@@ -27,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -97,21 +96,22 @@ fun RunScreen(
     val notifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
     val permission = rememberPermission(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, *notifications)
 
-    // GPS runs while this screen is open, recording or not; the service keeps it alive with the screen off.
+    // Positions for the map and the route line while this screen is open. The run itself is recorded by
+    // RunTrackingService, which keeps going when this screen or the whole activity goes away.
     LaunchedEffect(permission) {
         when (permission) {
             PermissionStatus.UNKNOWN -> Unit
             PermissionStatus.REFUSED -> vm.onLocationUnavailable(LocationClient.permissionError())
             PermissionStatus.GRANTED -> location.fixes()
                 .catch { e -> vm.onLocationUnavailable((e as? LocationUnavailable)?.error ?: AppError.Unexpected(e)) }
-                .collect(vm::onLocation)
+                // Each fix is recorded once: by the service, or here in the moments before it is up and
+                // when Android refused to start it.
+                .collect { fix -> if (RunTrackingService.recording.value) vm.onPosition(fix) else vm.onLocation(fix) }
         }
     }
-    LaunchedEffect(s.recording) {
-        if (s.recording) RunTrackingService.start(context) else RunTrackingService.stop(context)
-    }
-    DisposableEffect(Unit) { onDispose { RunTrackingService.stop(context) } }
-    // Like GPS above, this keeps collecting with the screen off, so cues reach a phone in a pocket.
+    // Started here, stopped by the service itself once the run is finished or discarded.
+    LaunchedEffect(s.recording) { if (s.recording) RunTrackingService.start(context) }
+    // This keeps collecting with the screen off, so cues reach a phone in a pocket.
     val speak = rememberSpeech()
     LaunchedEffect(Unit) { vm.cues.collect(speak) }
 

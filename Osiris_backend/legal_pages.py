@@ -33,7 +33,8 @@ rate, speed, power and distance. It reads nothing in the background and never wr
 <li><b>Bluetooth sensors:</b> heart rate, power and speed from sensors you connect during a session.</li>
 <li><b>Content you share:</b> posts, photos, captions, comments, reactions, direct messages, follows, blocks and
 reports.</li>
-<li><b>Purchases:</b> the product bought and the purchase token from Google Play. We never receive your card details.</li>
+<li><b>Purchases:</b> the product bought and the purchase token from the store. Payments are processed by Google Play
+on Android and the App Store on iOS. No card data reaches Osiris.</li>
 <li><b>Technical:</b> IP address, device and app information and usage events, used for security and to fix problems.</li>
 </ul></div>
 <div class="card"><h2>How we use it</h2><ul>
@@ -52,7 +53,7 @@ recipient, and our team when a message is reported or investigated.</li>
 becomes a course.</li></ul></div>
 <div class="card"><h2>Service providers</h2>
 <p>We share data only as needed to operate Osiris: Render (hosting), Supabase (database), Cloudflare (network
-security and encrypted backups), Upstash (rate limiting), Google Play (purchases), Stripe (payments, where offered),
+security and encrypted backups), Upstash (rate limiting), Google Play and the App Store (purchases and payments),
 and Mapbox and OpenStreetMap (map display, which receive your map area and IP address). We may disclose data when the
 law requires it or to protect players' safety.</p></div>
 <div class="card"><h2>Retention</h2><ul>
@@ -62,7 +63,8 @@ law requires it or to protect players' safety.</p></div>
 <div class="card"><h2>Your choices and rights</h2><ul>
 <li>Change location, leaderboard, public page and camera settings at any time in Settings.</li>
 <li>Download a copy of your data in Settings &gt; Download my data.</li>
-<li>Erase your account in Settings &gt; Erase my account, or see <a href="/account-deletion">account deletion</a>.</li>
+<li>Erase your account in Settings &gt; Erase my account, or see <a href="/account-deletion">account deletion</a>.
+Erasing the account does not cancel a store subscription; cancel it in Google Play or the App Store.</li>
 <li>Depending on where you live, you may have further rights, including access, correction, objection and complaint
 to a data protection authority. Contact us to use them.</li></ul></div>
 <div class="card"><h2>Age, security and changes</h2>
@@ -87,9 +89,10 @@ and remove violating content, and may suspend or close accounts that break these
 royalty-free licence to host and display it within the service, according to your settings, until you delete it or
 erase your account.</p></div>
 <div class="card"><h2>Mana Crystals, XP and purchases</h2><p>XP, rank, badges and Mana Crystals are game features. They
-have no cash value and cannot be exchanged for money. Purchases through Google Play are subject to Google Play's terms
-and refund policies. Subscriptions renew until cancelled in Google Play. XP or rewards obtained by breaking the rules
-may be removed.</p></div>
+have no cash value and cannot be exchanged for money. Purchases are made through Google Play on Android and the
+App Store on iOS and are subject to that store's terms and refund policies. Subscriptions renew until cancelled in the
+store you bought them from. Erasing your Osiris account does not cancel a subscription: cancel it in Google Play or
+the App Store first. XP or rewards obtained by breaking the rules may be removed.</p></div>
 <div class="card"><h2>The service</h2><p>Osiris is provided "as is" and may change or be interrupted. To the extent
 the law allows, we are not liable for indirect or consequential losses. Nothing here limits rights that cannot be
 limited by law. You can stop at any time by erasing your account. We will post changes to these terms on this
@@ -99,7 +102,10 @@ page.</p></div>
 _DELETION = f"""<h1>Delete your Osiris account</h1><p class="sub">How to erase your account and data</p>
 <div class="card"><h2>In the app</h2><ol><li>Open Osiris and go to Profile, then Settings.</li>
 <li>Scroll to Account and tap <b>Erase my account</b>.</li><li>Confirm and enter your password.</li></ol>
-<p>Erasure happens immediately and cannot be undone.</p></div>
+<p>Erasure happens immediately and cannot be undone.</p>
+<p><b>Subscriptions:</b> erasing your account does not cancel an Osiris Pass subscription. Cancel it first in
+Google Play (Payments &amp; subscriptions) or on iPhone in Settings &gt; your name &gt; Subscriptions, or it keeps
+renewing.</p></div>
 <div class="card"><h2>Without the app</h2><p>Email {_MAILTO} from the address on your account with the subject
 "Delete my account". We will verify the request and erase the account within 30 days.</p></div>
 <div class="card"><h2>What is deleted</h2><ul><li>Email, password, profile, display name and invite code</li>
@@ -107,14 +113,22 @@ _DELETION = f"""<h1>Delete your Osiris account</h1><p class="sub">How to erase y
 <li>Posts, photos, comments, reactions, messages, follows, blocks and badges</li></ul></div>
 <div class="card"><h2>What is kept</h2><ul>
 <li>An anonymous account placeholder, so other players' results and challenges stay correct</li>
-<li>Crystal ledger and purchase records with no name or email attached, kept as long as accounting law requires</li>
+<li>Crystal ledger and purchase records with no name or email attached, kept as long as accounting law requires.
+The store's purchase token and order number are replaced by a one-way code, which only stops the same purchase
+from being credited twice</li>
 <li>Reports you filed, with your identity removed, and security audit entries</li>
 <li>Encrypted backups, which expire within 35 days</li></ul></div>"""
 
 
+# Same for every visitor and changes only on deploy, so a CDN may cache it (see docs/deployment/production.md).
+LEGAL_CACHE_CONTROL = "public, max-age=3600"
+
+
 def _legal(path: str, title: str, description: str, body: str):
     base = settings.public_base_url() or ""
-    return _page(title=f"{title} · Osiris", description=description, url=f"{base}{path}", body=body, index=True)
+    page = _page(title=f"{title} · Osiris", description=description, url=f"{base}{path}", body=body, index=True)
+    page.headers["Cache-Control"] = LEGAL_CACHE_CONTROL
+    return page
 
 
 @router.get("/privacy", include_in_schema=False)

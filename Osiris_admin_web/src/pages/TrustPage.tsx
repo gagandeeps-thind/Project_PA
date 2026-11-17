@@ -2,7 +2,7 @@
  *  Trust & Safety – review queue, challenge controls, user
  *  suspension, and audit search (PRD-008 / PRD-010)
  * ─────────────────────────────────────────────────────────── */
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import {
   apiErrorMessage,
@@ -17,7 +17,10 @@ import {
 } from "../api/client";
 import type { AdminChallenge, AuditEvent, ReviewQueueItem } from "../api/types";
 import { TableSkeleton } from "../components/Skeleton";
+import ListFooter from "../components/ListFooter";
+import ReasonDialog from "../components/ReasonDialog";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { usePagedList } from "../hooks/useFetch";
 
 type Tab = "review" | "challenges" | "users" | "audit";
 
@@ -44,70 +47,113 @@ const statusBadge = (status: string) => {
   return <span className={`badge ${cls}`}>{status}</span>;
 };
 
+/* Memoised: typing in the entity-id filter above it does not re-render the rows. */
+const AuditTable = memo(function AuditTable({ events }: { events: AuditEvent[] }) {
+  return (
+    <div className="data-table-wrapper">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Entity</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.map((e) => (
+            <tr key={e.id}>
+              <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                {new Date(e.created_at + "Z").toLocaleString()}
+              </td>
+              <td>
+                {e.actor_type}
+                {e.actor_id !== null ? ` ${e.actor_id}` : ""}
+              </td>
+              <td>
+                <span className="badge badge-purple">{e.action}</span>
+              </td>
+              <td>
+                {e.entity_type} {e.entity_id ?? ""}
+              </td>
+              <td>
+                <code style={{ fontSize: "0.75rem", whiteSpace: "pre-wrap" }}>{JSON.stringify(e.details)}</code>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+});
+
 export default function TrustPage() {
   const [tab, setTab] = useState<Tab>("review");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const [queue, setQueue] = useState<ReviewQueueItem[]>([]);
-  const [challenges, setChallenges] = useState<AdminChallenge[]>([]);
   const [challengeFilter, setChallengeFilter] = useState("open");
-  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [auditType, setAuditType] = useState("");
   const [auditId, setAuditId] = useState("");
-  const [loading, setLoading] = useState(false);
   const auditIdFilter = useDebouncedValue(auditId);
 
   const [userId, setUserId] = useState("");
   const [userReason, setUserReason] = useState("");
 
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      if (tab === "review") setQueue(await getReviewQueue());
-      if (tab === "challenges") setChallenges(await getAdminChallenges(challengeFilter || undefined));
-      if (tab === "audit") {
-        setEvents(
-          await getAuditEvents({
+  /* One paged list per tab; only the open tab's list fetches. */
+  const queue = usePagedList<ReviewQueueItem>(
+    useCallback((loaded, signal) => getReviewQueue(loaded.length, signal), []),
+    "Failed to load",
+    tab === "review"
+  );
+  const challenges = usePagedList<AdminChallenge>(
+    useCallback(
+      (loaded, signal) => getAdminChallenges(challengeFilter || undefined, loaded.length, signal),
+      [challengeFilter]
+    ),
+    "Failed to load",
+    tab === "challenges"
+  );
+  const audit = usePagedList<AuditEvent>(
+    useCallback(
+      (loaded, signal) =>
+        getAuditEvents(
+          {
             entity_type: auditType || undefined,
             entity_id: auditIdFilter ? Number(auditIdFilter) : undefined,
-          })
-        );
-      }
-    } catch (err) {
-      setError(apiErrorMessage(err, "Failed to load"));
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, challengeFilter, auditType, auditIdFilter]);
+            before_id: loaded.at(-1)?.id,
+          },
+          signal
+        ),
+      [auditType, auditIdFilter]
+    ),
+    "Failed to load",
+    tab === "audit"
+  );
+  const active = tab === "review" ? queue : tab === "challenges" ? challenges : tab === "audit" ? audit : null;
+  const loading = active?.loading ?? false;
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const confirm = async () => {
-    if (!pending || reason.trim().length < 3) return;
+  const confirm = async (reason: string) => {
+    if (!pending) return;
     setBusy(true);
     setError("");
     try {
       if (pending.kind === "review") {
-        await reviewAttempt(pending.item.attempt_id, pending.decision, reason.trim());
+        await reviewAttempt(pending.item.attempt_id, pending.decision, reason);
         setNotice(`Attempt #${pending.item.attempt_id} ${pending.decision}ed.`);
       } else if (pending.kind === "challenge") {
-        await setChallengeStatus(pending.item.id, pending.action, reason.trim());
+        await setChallengeStatus(pending.item.id, pending.action, reason);
         setNotice(`Challenge #${pending.item.id}: ${pending.action} applied.`);
       } else {
-        await suspendCourse(pending.courseId, reason.trim());
+        await suspendCourse(pending.courseId, reason);
         setNotice(`Course #${pending.courseId} suspended with its live challenges.`);
       }
       setPending(null);
-      setReason("");
-      await load();
+      await active?.reload();
     } catch (err) {
       setError(apiErrorMessage(err, "Action failed"));
     } finally {
@@ -133,7 +179,7 @@ export default function TrustPage() {
   };
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "review", label: `Review queue${queue.length ? ` (${queue.length})` : ""}` },
+    { key: "review", label: `Review queue${queue.rows.length ? ` (${queue.rows.length}${queue.hasMore ? "+" : ""})` : ""}` },
     { key: "challenges", label: "Challenges" },
     { key: "users", label: "Users" },
     { key: "audit", label: "Audit log" },
@@ -179,18 +225,19 @@ export default function TrustPage() {
         ))}
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {(error || active?.error) && <div className="error-message">{error || active?.error}</div>}
       {notice && <div className="badge badge-success" style={{ marginBottom: 16 }}>{notice}</div>}
 
       {loading && tab !== "audit" && <TableSkeleton />}
 
       {!loading && tab === "review" && (
-        queue.length === 0 ? (
+        queue.rows.length === 0 ? (
           <div className="empty-state">
             <ShieldCheck size={48} />
             <p>No attempts waiting for review.</p>
           </div>
         ) : (
+          <>
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
@@ -205,7 +252,7 @@ export default function TrustPage() {
                 </tr>
               </thead>
               <tbody>
-                {queue.map((q) => (
+                {queue.rows.map((q) => (
                   <tr key={q.attempt_id}>
                     <td>#{q.attempt_id} (run {q.run_id ?? "—"})</td>
                     <td style={{ fontWeight: 600 }}>{q.challenge_title}</td>
@@ -232,6 +279,8 @@ export default function TrustPage() {
               </tbody>
             </table>
           </div>
+          <ListFooter shown={queue.rows.length} hasMore={queue.hasMore} loading={queue.loadingMore} onMore={queue.loadMore} />
+          </>
         )
       )}
 
@@ -248,12 +297,13 @@ export default function TrustPage() {
               </button>
             ))}
           </div>
-          {challenges.length === 0 ? (
+          {challenges.rows.length === 0 ? (
             <div className="empty-state">
               <ShieldCheck size={48} />
               <p>No challenges for this filter.</p>
             </div>
           ) : (
+            <>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
@@ -268,7 +318,7 @@ export default function TrustPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {challenges.map((c) => (
+                  {challenges.rows.map((c) => (
                     <tr key={c.id}>
                       <td>#{c.id}</td>
                       <td style={{ fontWeight: 600 }}>
@@ -314,6 +364,8 @@ export default function TrustPage() {
                 </tbody>
               </table>
             </div>
+            <ListFooter shown={challenges.rows.length} hasMore={challenges.hasMore} loading={challenges.loadingMore} onMore={challenges.loadMore} />
+            </>
           )}
         </>
       )}
@@ -366,69 +418,23 @@ export default function TrustPage() {
           {loading ? (
             <TableSkeleton />
           ) : (
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Actor</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((e) => (
-                  <tr key={e.id}>
-                    <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-                      {new Date(e.created_at + "Z").toLocaleString()}
-                    </td>
-                    <td>
-                      {e.actor_type}
-                      {e.actor_id !== null ? ` ${e.actor_id}` : ""}
-                    </td>
-                    <td>
-                      <span className="badge badge-purple">{e.action}</span>
-                    </td>
-                    <td>
-                      {e.entity_type} {e.entity_id ?? ""}
-                    </td>
-                    <td>
-                      <code style={{ fontSize: "0.75rem", whiteSpace: "pre-wrap" }}>{JSON.stringify(e.details)}</code>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            <>
+              <AuditTable events={audit.rows} />
+              <ListFooter shown={audit.rows.length} hasMore={audit.hasMore} loading={audit.loadingMore} onMore={audit.loadMore} />
+            </>
           )}
         </>
       )}
 
       {pending && (
-        <div className="dialog-overlay" onClick={() => !busy && setPending(null)}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>{dialogTitle}</h3>
-            <p>{dialogBody}</p>
-            <div className="form-group">
-              <label className="form-label">Reason / note (required)</label>
-              <input className="form-input" autoFocus value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
-            </div>
-            <div className="dialog-actions">
-              <button className="btn-cancel" onClick={() => setPending(null)} disabled={busy}>
-                Cancel
-              </button>
-              <button
-                className="btn-sm btn-deactivate"
-                onClick={confirm}
-                disabled={busy || reason.trim().length < 3}
-                style={{ padding: "10px 20px", fontSize: "0.85rem" }}
-              >
-                {busy ? "Processing…" : "Confirm"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReasonDialog
+          title={dialogTitle}
+          body={dialogBody}
+          label="Reason / note (required)"
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={confirm}
+        />
       )}
     </div>
   );

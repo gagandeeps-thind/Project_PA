@@ -3,6 +3,7 @@ import contextvars
 import json
 import logging
 import os
+import re
 import secrets
 import time as _time
 from datetime import datetime, timezone
@@ -60,8 +61,14 @@ access_logger = logging.getLogger("main")
 
 
 # --- Phase 0: per-request structured access log + request id -------------------
+_REQUEST_ID = re.compile(r"[A-Za-z0-9-]{1,64}")
+
+
 async def access_log_middleware(request: Request, call_next):
-    req_id = request.headers.get("X-Request-ID") or secrets.token_hex(8)
+    # A client id is kept only if it is short and plain, so it cannot forge or flood log lines.
+    req_id = request.headers.get("X-Request-ID", "")
+    if not _REQUEST_ID.fullmatch(req_id):
+        req_id = secrets.token_hex(8)
     token = _request_id_ctx.set(req_id)
     start = _time.perf_counter()
     status_code = 500

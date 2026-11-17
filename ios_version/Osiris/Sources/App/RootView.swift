@@ -6,10 +6,12 @@ import OsirisShared
 struct RootView: View {
     let graph: AppGraph
     @StateObject private var navigator: Observed<AppNavigatorViewModel, any RootState>
+    @StateObject private var store: CrystalStore
 
     init(graph: AppGraph) {
         self.graph = graph
         _navigator = StateObject(wrappedValue: Observed(graph.navigator()) { $0.state })
+        _store = StateObject(wrappedValue: CrystalStore(graph: graph))
     }
 
     var body: some View {
@@ -32,6 +34,9 @@ struct RootView: View {
                 ProgressView()
             }
         }
+        .environmentObject(store)
+        // StoreKit transactions are listened for from launch; unconfirmed ones retry after each sign-in.
+        .task { store.start() }
         .onOpenURL { url in _ = navigator.vm.open(link: url.absoluteString) }
     }
 }
@@ -52,6 +57,7 @@ private struct SignedInRoot: View {
     @StateObject private var social = Navigator()
     @StateObject private var wallet = Navigator()
     @StateObject private var profile = Navigator()
+    @EnvironmentObject private var store: CrystalStore
 
     var body: some View {
         TabView(selection: $section) {
@@ -74,6 +80,7 @@ private struct SignedInRoot: View {
                 .tag(AppSection.profile)
         }
         .onAppear { open(pending) }
+        .task { await store.retryUnfinished() }
         // Kotlin objects are NSObjects, which gives the pending link value equality.
         .onChange(of: pending as? NSObject) { _ in open(pending) }
     }

@@ -24,6 +24,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import osiris.fit.ui.common.SectionHeader
+import osiris.fit.platform.image.RemoteImages
+import osiris.fit.platform.image.rememberRemoteImage
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.theme.OsirisColors
 import com.osiris.shared.domain.common.Format
@@ -65,7 +67,7 @@ private fun LazyListScope.carousel(
 @Composable
 private fun DomainCard(domain: AriseDomain, baseUrl: String, onAttack: (AriseDomain) -> Unit) {
     FrostCard(Modifier.width(CARD_WIDTH), contentPadding = 12.dp) {
-        val photo = domain.photoUrl?.let { rememberRemoteImage(baseUrl.trimEnd('/') + it) }
+        val photo = domain.photoUrl?.let { rememberRemoteImage(baseUrl.trimEnd('/') + it, RemoteImages.THUMBNAIL_PX) }
         Box(
             Modifier.fillMaxWidth().height(PHOTO_HEIGHT).clip(RoundedCornerShape(12.dp)).background(OsirisColors.Surface),
             contentAlignment = Alignment.Center,

@@ -247,16 +247,14 @@ def _is_pr(db: Session, row: models.TrainingSession) -> bool:
     value = training.metric_value(row, metric)
     if value <= 0:
         return False
-    others = (
-        db.query(models.TrainingSession)
-        .filter(
-            models.TrainingSession.user_id == row.user_id,
-            models.TrainingSession.activity_key == row.activity_key,
-            models.TrainingSession.id != row.id,
-        )
-        .all()
-    )
-    return all(training.metric_value(o, metric) < value for o in others)
+    # Best of all the player's sessions of this activity; a tie with another session is not a PR.
+    better = db.query(models.TrainingSession.id).filter(
+        models.TrainingSession.user_id == row.user_id,
+        models.TrainingSession.activity_key == row.activity_key,
+        models.TrainingSession.id != row.id,
+        getattr(models.TrainingSession, metric) >= value,
+    ).first()
+    return better is None
 
 
 def _attachment(db: Session, row: models.TrainingSession) -> dict:
@@ -339,12 +337,9 @@ def social_feed(
                 )
             )
     items = _hydrate_posts(db, page, uid)
+    next_before_id = page[-1].id if len(posts) > limit and page else None  # read before commit expires it
     db.commit()
-    return SocialFeedOut(
-        active_today=active,
-        items=items,
-        next_before_id=page[-1].id if len(posts) > limit and page else None,
-    )
+    return SocialFeedOut(active_today=active, items=items, next_before_id=next_before_id)
 
 
 @router.get("/api/v2/social/discover", response_model=DiscoverOut)

@@ -45,6 +45,7 @@ import com.osiris.shared.presentation.start.ProgressViewModel
 import com.osiris.shared.presentation.start.StartViewModel
 import com.osiris.shared.presentation.support.SupportChatViewModel
 import com.osiris.shared.presentation.today.TodayViewModel
+import com.osiris.shared.presentation.wallet.StoreSupport
 import com.osiris.shared.presentation.wallet.WalletViewModel
 
 /**
@@ -102,6 +103,9 @@ class AppGraph(val config: AppConfig, platform: PlatformDependencies) {
     /** Whether this build has a Wallet tab; [wallet] is only valid when it does. */
     val hasWallet: Boolean get() = data.wallet != null
     fun wallet() = WalletViewModel(checkNotNull(data.wallet) { "This build has no wallet" })
+
+    /** Store billing (Google Play, App Store): account binding and server verification. */
+    fun store() = StoreSupport(data.auth, data.payments, config.features.passProducts)
     fun settings() = SettingsViewModel(data.auth, data.player, data.privacy, data.exercises)
     fun exerciseHub() = ExerciseHubViewModel(data.exercises)
     fun exerciseSession(

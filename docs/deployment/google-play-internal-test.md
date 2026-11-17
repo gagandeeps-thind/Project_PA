@@ -54,13 +54,31 @@ From the repo root, in Git Bash:
 ```
 export JAVA_HOME="$HOME/.jdks/jbr-21.0.11"
 export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
-./gradlew -Posiris.env=prod -Posiris.versionCode=1 -Posiris.versionName=1.0.0 :android_version:app:bundleRelease
+scripts/build_android_release.sh 1 1.0.0
 ```
 
-The file is `android_version/app/build/outputs/bundle/release/app-release.aab`.
+The arguments are the version code and the version name. Raise the version code by 1 for every upload, because Play
+refuses a repeated number.
 
-`-Posiris.env=prod` is required. Without it the app points at a local server. Raise `osiris.versionCode` by 1 for every
-upload, because Play refuses a repeated number.
+The file is `android_version/app/build/outputs/bundle/release/app-release.aab`. The script ends by printing what it read
+back from that file, and fails if any of it is wrong:
+
+```
+Package:      osiris.fit
+Version:      1.0.0 (1)
+Signed:       yes, certificate SHA-256 ...
+```
+
+The script runs `./gradlew -Posiris.env=prod -Posiris.versionCode=1 -Posiris.versionName=1.0.0
+:android_version:app:bundleRelease`. The build stops with an error, instead of producing a file you cannot use, when:
+
+- the environment is not prod. Release tasks use prod on their own; passing `-Posiris.env=dev` or `staging` is refused.
+- the signing credentials are missing (`keystore.properties`, or the `OSIRIS_KEYSTORE_*` variables).
+- no version code was given for a bundle.
+
+A prod build ignores `config/environments/local.properties`, except for `MAPBOX_ACCESS_TOKEN`. On a machine without that
+file, pass the token as `OSIRIS_MAPBOX_ACCESS_TOKEN` or `-Posiris.mapboxAccessToken=...`. Without a token the build
+prints a warning and the Arise map is switched off.
 
 ## Part 3. Create the app and upload
 
@@ -121,15 +139,17 @@ Products can only be created after a bundle with billing has been uploaded (Part
 ### 6.1 Create the products
 
 **Monetize with Play** > **Products**. The ids must match exactly, and each product must be **active**.
+Create the crystal packs only:
 
 | Type | Product id | Grants |
 |---|---|---|
 | One-time | `osiris_crystals_starter` | 500 crystals |
 | One-time | `osiris_crystals_adventurer` | 1200 crystals |
 | One-time | `osiris_crystals_champion` | 2600 crystals |
-| One-time | `osiris_founder_pack` | Founder pack |
-| Subscription, with one base plan | `osiris_pass_monthly` | Osiris Pass |
-| Subscription, with one base plan | `osiris_pass_annual` | Osiris Pass |
+
+The Founder Pack and Osiris Pass are not sold until they unlock real perks: the app hides them while
+`features.passProducts=false` (all environments today). See Step 3.3 of
+[google-play-release-and-billing.md](google-play-release-and-billing.md) for launching them later.
 
 ### 6.2 Let the server check purchases
 
@@ -174,12 +194,20 @@ New permissions can take up to a day to take effect.
 - [ ] Open an invite link from another app.
 - [ ] Download my data, then Erase my account on a throwaway account.
 
-Crashes appear in Play Console under **Android vitals**.
+Crashes appear in Play Console under **Android vitals**. Vitals only shows crashes from users who share
+diagnostics, and with a delay. The app also keeps its last crashes in a private file on the phone; on a
+tester's phone with USB debugging, a debug build prints it with
+`adb shell run-as osiris.fit cat files/crashes.log` (a release build is not debuggable, so `run-as`
+does not work there). The app has no crash reporting service: adding Firebase Crashlytics or Sentry is an
+open decision, see "Before a public launch".
 
 ## Before a public launch
 
 - Personal developer accounts created after 13 November 2023 must run a closed test with at least 12 testers opted in
   for 14 days in a row, then apply for production access. Organization accounts are generally exempt.
 - Complete the store listing: 512x512 icon, 1024x500 feature graphic, at least 2 phone screenshots, descriptions.
+- Choose a crash reporting service (Firebase Crashlytics or Sentry). Until then production crashes are visible only
+  in Android vitals. Either one adds an SDK and sends device and stack data to a third party, so it also needs a line
+  in the privacy policy and in the Play data safety form (Crash logs, Diagnostics).
 - Build what is still missing: password reset (needs an email provider), push notifications, a staffed support desk,
   and Play refund handling.

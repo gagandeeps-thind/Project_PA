@@ -37,6 +37,7 @@ private const val R_SHIFT = 16
 private const val G_SHIFT = 8
 private const val RGBA = 4
 private const val HALF = 0.5
+private const val TIMEOUT_MS = 10_000
 
 /**
  * Gradient, avalanche gradient or aspect drawn on the device: each map tile's Terrain-RGB elevation is
@@ -72,7 +73,12 @@ class TerrainTiles(
 
     private fun shade(tile: CanonicalTileID): Image? {
         val url = "https://api.mapbox.com/v4/mapbox.terrain-rgb/${tile.z}/${tile.x}/${tile.y}.pngraw?access_token=$token"
-        val bitmap = URL(url).openStream().use { BitmapFactory.decodeStream(it) } ?: return null
+        // With timeouts: a stalled tile server must not hold an IO thread, which database work shares.
+        val connection = URL(url).openConnection().apply {
+            connectTimeout = TIMEOUT_MS
+            readTimeout = TIMEOUT_MS
+        }
+        val bitmap = connection.getInputStream().use { BitmapFactory.decodeStream(it) } ?: return null
         val size = bitmap.width
         val pixels = IntArray(size * size).also { bitmap.getPixels(it, 0, size, 0, 0, size, size) }
         val shaded = TerrainShading.shade(layer, pixels, size, metresPerPixel(tile, size))

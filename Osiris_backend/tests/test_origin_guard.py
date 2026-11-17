@@ -36,12 +36,12 @@ def test_requests_through_the_cdn_are_served() -> None:
     print("PASS test_requests_through_the_cdn_are_served")
 
 
-def test_the_stripe_webhook_is_not_exempt() -> None:
-    # Stripe must call the CDN hostname, which adds the header; a direct call is refused.
-    assert client.post("/api/v1/payments/stripe/webhook", content=b"{}").status_code == 403
-    r = client.post("/api/v1/payments/stripe/webhook", content=b"{}", headers=VERIFIED)
+def test_the_payment_webhook_is_not_exempt() -> None:
+    # The provider must call the CDN hostname, which adds the header; a direct call is refused.
+    assert client.post("/api/v1/payments/webhook", content=b"{}").status_code == 403
+    r = client.post("/api/v1/payments/webhook", content=b"{}", headers=VERIFIED)
     assert r.status_code != 403, r.text
-    print("PASS test_the_stripe_webhook_is_not_exempt")
+    print("PASS test_the_payment_webhook_is_not_exempt")
 
 
 def test_the_platform_health_check_needs_no_header() -> None:
@@ -60,6 +60,6 @@ def test_without_the_setting_the_check_is_off() -> None:
 if __name__ == "__main__":
     test_requests_that_skip_the_cdn_are_refused()
     test_requests_through_the_cdn_are_served()
-    test_the_stripe_webhook_is_not_exempt()
+    test_the_payment_webhook_is_not_exempt()
     test_the_platform_health_check_needs_no_header()
     test_without_the_setting_the_check_is_off()

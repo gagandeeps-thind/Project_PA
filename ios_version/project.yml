@@ -19,6 +19,9 @@ targets:
       # One copy of the fonts for both apps: the Android ones, copied into the bundle root.
       - path: ../android_version/app/src/main/res/font
         buildPhase: resources
+      # Local StoreKit testing (simulator and Xcode runs only); never copied into the app.
+      - path: Osiris.storekit
+        buildPhase: none
     info:
       path: Osiris/Info.plist
       properties:
@@ -45,9 +48,14 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: osiris.fit
         FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../shared/presentation/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
         OTHER_LDFLAGS: [-framework, OsirisShared, -lsqlite3]
+    # Xcode Run uses the local StoreKit products; TestFlight and App Store builds use App Store Connect.
+    scheme:
+      storeKitConfiguration: Osiris.storekit
     preBuildScripts:
       - name: Build OsirisShared (Kotlin)
         script: |
           cd "$SRCROOT/.."
-          ./gradlew :shared:presentation:embedAndSignAppleFrameworkForXcode
+          # Release (Archive, TestFlight, App Store) always compiles the prod environment.
+          if [ "$CONFIGURATION" = "Release" ]; then ENV_ARG="-Posiris.env=prod"; else ENV_ARG=""; fi
+          ./gradlew :shared:presentation:embedAndSignAppleFrameworkForXcode $ENV_ARG
         basedOnDependencyAnalysis: false

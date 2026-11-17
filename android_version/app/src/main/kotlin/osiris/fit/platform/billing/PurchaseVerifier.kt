@@ -1,5 +1,8 @@
 package osiris.fit.platform.billing
 
+import com.osiris.shared.core.error.AppError
+import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.domain.wallet.PurchaseVerification
 import java.security.GeneralSecurityException
 import java.security.KeyFactory
 import java.security.PublicKey
@@ -18,6 +21,9 @@ import kotlinx.serialization.json.jsonPrimitive
  * Implementations may verify the Play Store RSA signature locally, forward the purchase token
  * to a backend verification endpoint (Google Play Developer API `purchases.products.get` /
  * `purchases.subscriptionsv2.get`), or compose both.
+ *
+ * The purchase may be granted only when the answer is a success with `entitled`; its figures
+ * (crystals credited, balance) are the server's. A failure leaves the purchase untouched for a retry.
  */
 fun interface PurchaseVerifier {
     suspend fun verify(
@@ -26,7 +32,7 @@ fun interface PurchaseVerifier {
         signature: String,
         purchaseToken: String,
         productIds: List<String>,
-    ): Boolean
+    ): Outcome<PurchaseVerification>
 }
 
 /**
@@ -49,7 +55,7 @@ class PlaySignaturePurchaseVerifier(
         signature: String,
         purchaseToken: String,
         productIds: List<String>,
-    ): Boolean {
+    ): Outcome<PurchaseVerification> {
         val basicsValid = packageName.isNotBlank() &&
             signedData.isNotBlank() &&
             purchaseToken.isNotBlank() &&
@@ -57,10 +63,10 @@ class PlaySignaturePurchaseVerifier(
             verifyJsonPayload(packageName, signedData, purchaseToken, productIds)
 
         val cryptoValid = basicsValid && verifySignatureIfConfigured(signedData, signature)
-        return if (!cryptoValid) {
-            false
-        } else {
-            remoteVerifier?.verify(packageName, signedData, signature, purchaseToken, productIds) ?: true
+        return when {
+            !cryptoValid -> Outcome.Failure(AppError.Validation("The purchase receipt did not pass the signature check."))
+            remoteVerifier == null -> Outcome.Success(PurchaseVerification(entitled = true))
+            else -> remoteVerifier.verify(packageName, signedData, signature, purchaseToken, productIds)
         }
     }
 

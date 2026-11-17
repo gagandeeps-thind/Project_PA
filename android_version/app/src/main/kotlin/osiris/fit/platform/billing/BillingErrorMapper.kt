@@ -1,6 +1,9 @@
 package osiris.fit.platform.billing
 
 import com.android.billingclient.api.BillingClient.BillingResponseCode
+import com.osiris.shared.core.error.AppError
+import com.osiris.shared.core.error.Outcome
+import com.osiris.shared.domain.wallet.PurchaseVerification
 
 /**
  * Pure mapping utilities for Google Play Billing error codes, exponential backoff delays,
@@ -93,6 +96,9 @@ object BillingErrorMapper {
             "Disconnected from Google Play Store. Reconnecting automatically..."
         BillingErrorCode.VERIFICATION_FAILED ->
             "Purchase verification failed. If you were charged, your transaction will be refunded or restored shortly."
+        BillingErrorCode.PURCHASES_UNAVAILABLE ->
+            "Purchases are temporarily unavailable. Nothing was added to your account; we'll retry, " +
+                "and Google Play refunds a purchase we can't confirm within 3 days."
         BillingErrorCode.UNKNOWN ->
             if (debugMessage.isNotBlank()) {
                 "Unable to complete Google Play purchase ($debugMessage). Please try again."
@@ -100,5 +106,35 @@ object BillingErrorMapper {
                 "Unable to complete Google Play purchase. Please try again later."
             }
     }
+
+    /**
+     * Maps a failed server verification to the banner to show, or null when the purchase is simply
+     * retried later without bothering the player (signed out, offline, timeout, rate limited).
+     * The purchase is never consumed or acknowledged on a failure.
+     */
+    fun fromVerifyFailure(error: AppError): BillingFeedback? = when {
+        error is AppError.Unauthorized || error is AppError.Offline || error is AppError.Timeout -> null
+        error is AppError.Http && error.status == HTTP_TOO_MANY_REQUESTS -> null
+        error is AppError.Http && error.status == HTTP_UNAVAILABLE -> feedback(BillingErrorCode.PURCHASES_UNAVAILABLE)
+        error is AppError.Http && error.status == HTTP_CONFLICT -> BillingFeedback(
+            code = BillingErrorCode.VERIFICATION_FAILED,
+            userMessage = "This purchase was made for a different Osiris account. Sign in to that account to receive it.",
+            isError = true,
+        )
+        else -> feedback(BillingErrorCode.VERIFICATION_FAILED)
+    }
+
+    /** The banner for a server answer: none when it granted the purchase, otherwise as [fromVerifyFailure]. */
+    fun fromVerification(answer: Outcome<PurchaseVerification>): BillingFeedback? = when (answer) {
+        is Outcome.Failure -> fromVerifyFailure(answer.error)
+        is Outcome.Success -> if (answer.value.entitled) null else feedback(BillingErrorCode.VERIFICATION_FAILED)
+    }
+
+    /** The standard error banner for [code]. */
+    fun feedback(code: BillingErrorCode) = BillingFeedback(code, userMessageFor(code, ""), isError = true)
+
+    private const val HTTP_CONFLICT = 409
+    private const val HTTP_TOO_MANY_REQUESTS = 429
+    private const val HTTP_UNAVAILABLE = 503
 }
 

@@ -34,6 +34,9 @@ data class SupportChatState(
 /**
  * The live support chat on Profile; reconnects only when the player asks. The chat counts as open
  * once the server's greeting arrives.
+ *
+ * The screen calls [pause] when it is covered or the app goes to the background, which closes the
+ * socket, and [resume] when it is on top again, which opens it again.
  */
 class SupportChatViewModel(
     private val support: SupportChatRepository,
@@ -45,12 +48,27 @@ class SupportChatViewModel(
     private var outgoing = Channel<String>(Channel.BUFFERED)
     private var connection: Job? = null
     private var generation = 0
+    private var paused = false
 
     init {
         connect()
     }
 
+    /** Closes a live connection without showing the chat as ended; [resume] reopens it. */
+    fun pause() {
+        if (paused || connection?.isActive != true) return
+        paused = true
+        // The closed socket must not report "Chat ended".
+        generation++
+        connection?.cancel()
+    }
+
+    fun resume() {
+        if (paused) connect()
+    }
+
     fun connect() {
+        paused = false
         connection?.cancel()
         outgoing.close()
         outgoing = Channel(Channel.BUFFERED)

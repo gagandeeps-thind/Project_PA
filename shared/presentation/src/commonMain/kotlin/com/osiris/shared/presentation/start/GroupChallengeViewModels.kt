@@ -99,9 +99,18 @@ data class ProgressState(
     /** null shows every activity. */
     val activity: String? = null,
     val detail: TrainingSession? = null,
+    /** Activity key to display name, for the filter chips and session titles. */
+    val names: Map<String, String> = emptyMap(),
+    /** A workout import (Health Connect on Android) is running. */
+    val importing: Boolean = false,
+    /** How the last import went, or why it could not start. */
+    val importStatus: String? = null,
 )
 
-/** Profile → Progress: weekly volume, recent sessions, and one session's charts. */
+/**
+ * Profile → Progress: weekly volume, recent sessions, one session's charts, and importing workouts
+ * from the platform's health store.
+ */
 class ProgressViewModel(
     private val training: TrainingRepository,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
@@ -110,6 +119,9 @@ class ProgressViewModel(
     val state: StateFlow<ProgressState> = _state.asStateFlow()
 
     init {
+        scope.launch {
+            training.activities().getOrNull()?.let { list -> _state.update { it.copy(names = list.associate { a -> a.key to a.name }) } }
+        }
         refresh()
     }
 
@@ -117,6 +129,26 @@ class ProgressViewModel(
         scope.launch { training.progress().getOrNull()?.let { p -> _state.update { it.copy(weeks = p.weeks) } } }
         loadSessions()
     }
+
+    /**
+     * Runs the platform's [import], which uploads past workouts and returns how many were saved. It runs
+     * here, not in the screen, so a rotation neither cancels it mid-upload nor loses the result.
+     */
+    fun importWorkouts(import: suspend () -> Outcome<Int>) {
+        if (_state.value.importing) return
+        _state.update { it.copy(importing = true, importStatus = "Importing…") }
+        scope.launch {
+            val status = when (val result = import()) {
+                is Outcome.Success -> if (result.value == 0) "No new workouts to import." else "Imported ${result.value} workout(s)."
+                is Outcome.Failure -> result.error.userMessage
+            }
+            _state.update { it.copy(importing = false, importStatus = status) }
+            refresh()
+        }
+    }
+
+    /** Why an import could not start (access refused, health store missing). */
+    fun importUnavailable(reason: String) = _state.update { it.copy(importStatus = reason) }
 
     fun filter(activity: String?) {
         _state.update { it.copy(activity = activity) }

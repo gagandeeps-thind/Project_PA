@@ -39,11 +39,13 @@ VALID_REASON_CODES = frozenset({
     "siege_win_payout",
     "siege_forfeit",
     "bounty_reward",
-    # Phase 3: real-money one-way top-up. Player paid via Stripe; crystals are credited
-    # exactly once per PaymentIntent (CrystalPurchase.stripe_payment_intent_id is unique and
-    # the webhook only credits a row that is not already 'succeeded'). This is a PURCHASE,
-    # not a cash-out — there is no inverse (crystals -> money) path anywhere by design.
+    # Real-money one-way top-up, credited exactly once per store-verified purchase
+    # (GooglePlayPurchase.purchase_token and AppStorePurchase.transaction_id are unique). This is a PURCHASE, not a cash-out —
+    # there is no inverse (crystals -> money) path anywhere by design.
     "crystal_purchase",
+    # A store refund, chargeback or revocation of such a purchase takes its crystals back, capped
+    # at the wallet balance (services.google_play.void_purchase). Reverses a grant; pays nothing out.
+    "crystal_refund",
 })
 
 

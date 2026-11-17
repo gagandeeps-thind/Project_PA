@@ -26,7 +26,9 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
 
 from core import logging_setup  # noqa: E402  (configures logging before anything logs)
+from core import origin_guard  # noqa: E402
 from core.origin_guard import OriginGuardMiddleware  # noqa: E402
+from core.security_headers import SecurityHeadersMiddleware  # noqa: E402
 import core.security  # noqa: E402,F401  (fail-closed secret checks run at import)
 import database  # noqa: E402
 import exercise_api  # noqa: E402
@@ -52,8 +54,11 @@ from services import jobs  # noqa: E402
 
 # Creates missing tables so a fresh dev database works without an extra step. Alembic stays the
 # schema source of truth: create_all never alters an existing table, so every model change
-# still needs a migration (`alembic upgrade head`).
-models.Base.metadata.create_all(bind=database.engine)
+# still needs a migration (`alembic upgrade head`). SQLite only: on PostgreSQL the image runs
+# Alembic before boot, and create_all would cost a round trip per table through the pooler.
+if database._IS_SQLITE:
+    models.Base.metadata.create_all(bind=database.engine)
+origin_guard.assert_boot_config()
 
 scheduler = BackgroundScheduler()
 
@@ -69,6 +74,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(jobs.process_telemetry_ttl, "interval", hours=24)
     scheduler.add_job(jobs.process_challenge_settlement, "interval", hours=1)
     scheduler.add_job(jobs.process_route_point_ttl, "interval", hours=24)
+    scheduler.add_job(jobs.process_play_voided_purchases, "interval", hours=6)
     scheduler.add_job(database.optimize, "interval", hours=24)
     scheduler.start()
     try:
@@ -77,16 +83,23 @@ async def lifespan(app: FastAPI):
         scheduler.shutdown()
 
 
-app = FastAPI(title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan)
+# The interactive docs and the schema are for development; production does not publish its API map.
+# (scripts/export_openapi.py calls app.openapi() directly, which works either way.)
+_docs = settings.is_dev_env()
+app = FastAPI(
+    title="Verified Fitness Reward System API", version="1.0-MVP", lifespan=lifespan,
+    docs_url="/docs" if _docs else None, redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 
 # Explicit CORS allowlist (a wildcard origin with credentials is invalid and unsafe). Origins come
 # from OSIRIS_CORS_ORIGINS; native apps are not subject to browser CORS and need no entry.
-_default_cors = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+_default_cors = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000" if settings.is_dev_env() else ""
 _cors_origins = [o.strip() for o in os.environ.get("OSIRIS_CORS_ORIGINS", _default_cors).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=True,
+    allow_credentials=False,  # auth is a bearer header; no cookies cross origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -98,6 +111,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Outside CORS, so a request that skipped the CDN is refused before anything else runs; inside the
 # access log, so those refusals are still logged.
 app.add_middleware(OriginGuardMiddleware)
+# Outside the origin guard, so its 403s carry the headers too.
+app.add_middleware(SecurityHeadersMiddleware)
 app.middleware("http")(logging_setup.access_log_middleware)
 
 for _router in (

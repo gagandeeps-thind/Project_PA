@@ -19,6 +19,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,12 @@ data class HomeScreenState(
     val trendingOsirians: List<SuggestedOsirian> = emptyList(),
     val trendingSheetOpen: Boolean = false,
     val feedPosts: List<FeedPost> = emptyList(),
+    /** An older page of [feedPosts] is being fetched. */
+    val feedLoadingMore: Boolean = false,
+    /** The last page came back short: there are no older posts to ask for. */
+    val feedEnd: Boolean = false,
+    /** A refresh of an already shown screen is running (the pull-to-refresh indicator). */
+    val refreshing: Boolean = false,
     val postComposerOpen: Boolean = false,
     val activeCommentsPostId: Int? = null,
     val activePostComments: List<PostCommentItem> = emptyList(),
@@ -99,6 +106,8 @@ class TodayViewModel(
         if (_state.value !is Loadable.Ready) {
             _state.value = Loadable.Loading
             _home.update { it.copy(today = Loadable.Loading) }
+        } else {
+            _home.update { it.copy(refreshing = true) }
         }
         loading = scope.launch { load() }
     }
@@ -114,20 +123,51 @@ class TodayViewModel(
         if (next is Loadable.Ready) {
             loadHomeExtras()
         }
+        // Not in a finally: a cancelled load was replaced by a newer refresh, which owns the flag.
+        _home.update { it.copy(refreshing = false) }
     }
 
-    private suspend fun loadHomeExtras() {
-        player.notifications().getOrNull()?.let { data ->
-            _home.update { it.copy(unreadNotifications = data.unreadCount, notifications = data.items) }
+    /** The four sections are independent, so they load side by side: one round trip of latency, not four. */
+    private suspend fun loadHomeExtras() = coroutineScope {
+        launch {
+            player.notifications().getOrNull()?.let { data ->
+                _home.update { it.copy(unreadNotifications = data.unreadCount, notifications = data.items) }
+            }
         }
-        player.suggestedChallenges().getOrNull()?.let { list ->
-            _home.update { it.copy(suggestedChallenges = list) }
+        launch {
+            player.suggestedChallenges().getOrNull()?.let { list ->
+                _home.update { it.copy(suggestedChallenges = list) }
+            }
         }
-        player.suggestedOsirians().getOrNull()?.let { list ->
-            _home.update { it.copy(suggestedOsirians = list) }
+        launch {
+            player.suggestedOsirians().getOrNull()?.let { list ->
+                _home.update { it.copy(suggestedOsirians = list) }
+            }
         }
-        player.feedPosts().getOrNull()?.let { posts ->
-            _home.update { it.copy(feedPosts = posts) }
+        launch {
+            player.feedPosts(FEED_PAGE, 0).getOrNull()?.let { posts ->
+                _home.update { it.copy(feedPosts = posts, feedEnd = posts.size < FEED_PAGE, feedLoadingMore = false) }
+            }
+        }
+    }
+
+    /** Fetches the next older page of People's Posts; the screen calls it near the end of the list. */
+    fun loadMoreFeed() {
+        val s = _home.value
+        if (s.feedLoadingMore || s.feedEnd || s.feedPosts.isEmpty()) return
+        _home.update { it.copy(feedLoadingMore = true) }
+        scope.launch {
+            val page = player.feedPosts(FEED_PAGE, s.feedPosts.size).orShow()
+            _home.update { cur ->
+                // Ignored when a refresh replaced the list meanwhile (it clears the flag).
+                if (page == null || !cur.feedLoadingMore) return@update cur.copy(feedLoadingMore = false)
+                // A post published meanwhile shifts the offsets by one, so a page can repeat a post.
+                cur.copy(
+                    feedLoadingMore = false,
+                    feedEnd = page.size < FEED_PAGE,
+                    feedPosts = (cur.feedPosts + page).distinctBy { it.id },
+                )
+            }
         }
     }
 
@@ -369,6 +409,9 @@ class TodayViewModel(
     companion object {
         /** A cached or network fix usually arrives well inside this; after it Today loads without one. */
         const val POSITION_GRACE_MS = 1_000L
+
+        /** People's Posts page size, the repository's default. */
+        const val FEED_PAGE = 25
         private const val MAX_REPS_PER_SET = 200
         private const val MAX_SETS = 20
         private const val MIN_HOLD_S = 10

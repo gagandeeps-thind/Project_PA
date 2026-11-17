@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────
- *  Error boundary – keeps one failing page from blanking the console
+ *  Error boundary – keeps a failing page or shell from blanking the console
  * ─────────────────────────────────────────────────────────── */
 import { Component, type ErrorInfo, type ReactNode } from "react";
 

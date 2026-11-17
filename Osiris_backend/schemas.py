@@ -21,7 +21,7 @@ class UserCreate(BaseModel):
     password: NewPassword = Field(..., description="8-72 characters (bcrypt's byte limit).")
     weight_kg: float = Field(..., gt=0, description="Weight in kg must be greater than 0")
     height_m: float = Field(..., gt=0, description="Height in meters must be greater than 0")
-    preferred_path: str = "Balance"  # Options: Strength, Cardio, Balance
+    preferred_path: str = Field("Balance", max_length=32)  # Options: Strength, Cardio, Balance
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
 
 # The JSON shape we expect when a user logs in
@@ -111,7 +111,7 @@ MAX_SAMPLES_PER_CHANNEL = 20000
 # full payload is persisted in TelemetrySession + TelemetryData for ML training and richer
 # fraud-detection in Phase 2.
 class ActivityProof(BaseModel):
-    activity_type: str                                     # pushups | squats | sprint | run | walk | burpees | plank | hold
+    activity_type: str = Field(..., max_length=32)         # pushups | squats | sprint | run | walk | burpees | plank | hold
     declared_score: int = Field(..., ge=0)
     duration_seconds: float = Field(..., gt=0)
     accelerometer: List[AccelerometerSample] = Field(default_factory=list, max_length=MAX_SAMPLES_PER_CHANNEL)
@@ -213,9 +213,10 @@ class RunSessionSummary(BaseModel):
 # The JSON shape we expect when a user submits a completed territory run
 class DomainCreate(BaseModel):
     owner_id: int
-    coordinates: List[Coordinate]
+    # A closed loop needs 4+ points; the cap bounds storage and the O(N*M) siege sweep.
+    coordinates: List[Coordinate] = Field(..., min_length=4, max_length=2000)
     defense_score: int
-    defense_type: str = "pushups"
+    defense_type: str = Field("pushups", max_length=32)
     device_timestamp: datetime = Field(..., description="Client device's current datetime (ISO 8601)")
     # Optional ML-Referee proof. If supplied, the server verifies it and uses verified_score
     # as the canonical defense_score; if rejected, the whole submission 400s.
@@ -293,10 +294,10 @@ class PartyRoleResponse(BaseModel):
 
 # JSON to register a B2B Merchant
 class MerchantCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     password: NewPassword
-    business_type: str = "general"
+    business_type: str = Field("general", max_length=50)
 
 class MerchantResponse(BaseModel):
     id: int
@@ -327,44 +328,6 @@ class MerchantProfile(BaseModel):
     class Config:
         from_attributes = True
 
-class PaymentIntentResponse(BaseModel):
-    """Returned when a merchant initiates the pilot-fee payment. `client_secret` is what the
-    Flutter Stripe SDK uses to confirm the card on-device; `publishable_key` lets the client
-    init the SDK from the server's config so the pk isn't pinned in two places."""
-    merchant_id: int
-    pilot_fee_cents: int
-    provider_payment_id: str         # Stripe PaymentIntent id (pi_...)
-    payment_status: str
-    client_secret: Optional[str] = None
-    publishable_key: Optional[str] = None
-    next_action: str
-
-
-
-class CrystalPackInfo(BaseModel):
-    pack_id: str
-    label: str
-    crystals: int
-    amount_cents: int
-    currency: str
-
-
-class CrystalPurchaseIntentRequest(BaseModel):
-    pack_id: str  # must be a key of CRYSTAL_PACKS; price is looked up server-side
-
-
-class CrystalPurchaseIntentResponse(BaseModel):
-    purchase_id: int
-    pack_id: str
-    crystal_amount: int
-    amount_cents: int
-    currency: str
-    payment_intent_id: str           # Stripe PaymentIntent id (pi_...)
-    client_secret: str
-    publishable_key: Optional[str] = None
-    status: str
-
-
 class GooglePlayVerifyRequest(BaseModel):
     """A purchase the app got from Play Billing. The server derives the product's kind and the
     crystal grant from `product_id`; the pattern keeps both values safe inside the Google API URL."""
@@ -383,6 +346,12 @@ class GooglePlayVerifyResponse(BaseModel):
     entitled: bool = False            # the purchase currently grants its product
 
 
+class AppStoreVerifyRequest(BaseModel):
+    """The StoreKit 2 transaction (`VerificationResult.jwsRepresentation`). Everything else, the
+    product included, is read from Apple's signed payload."""
+    signed_transaction: str = Field(min_length=1, max_length=16384, pattern=r"^[A-Za-z0-9._\-]+$")
+
+
 class GooglePlayEntitlementsResponse(BaseModel):
     osiris_pass: bool
     osiris_pass_product_id: Optional[str] = None
@@ -394,8 +363,8 @@ class GooglePlayEntitlementsResponse(BaseModel):
 class PaymentWebhookRequest(BaseModel):
     """Payload from the payment provider when a payment terminal-state is reached.
 
-    `provider_event_id` is the provider's top-level event id (Stripe sends `event.id` —
-    distinct from `payment_intent.id`). Optional during MVP smoke tests; required by real
+    `provider_event_id` is the provider's top-level event id (an event id —
+    distinct from the payment id). Optional during MVP smoke tests; required by real
     providers since they all retry failed deliveries. When present, we dedup against the
     `payment_webhook_events` table so a duplicate delivery is a no-op."""
     merchant_id: int
@@ -447,21 +416,29 @@ class MerchantBountyAnalytics(BaseModel):
     created_at: datetime
     expires_at: Optional[datetime] = None
 
+# Economy caps on a bounty: every completion mints its rewards, so a bounty cannot be a money printer.
+# Merchants get tighter crystal caps in routers/bounties.py.
+BOUNTY_MAX_XP = 1000
+BOUNTY_MAX_CRYSTALS = 500
+BOUNTY_MAX_COMPLETIONS = 10000
+BOUNTY_MAX_RADIUS_M = 5000
+
+
 # JSON to seed a Bounty (admin / merchant)
 class BountyCreate(BaseModel):
-    title: str
-    description: str
-    bounty_type: str = "daily"               # 'daily' | 'merchant_chest'
+    title: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(..., max_length=1000)
+    bounty_type: str = Field("daily", max_length=32)  # 'daily' | 'merchant_chest' (the admin console also sends others)
     merchant_id: Optional[int] = None
-    target_lat: float
-    target_lng: float
-    radius_m: float = 30.0
-    activity_type: str = "walk"
-    target_score: int = Field(0, ge=0)        # 0 = proximity-only
-    xp_reward: int = Field(50, ge=0)
-    crystal_reward: int = Field(0, ge=0)
-    coupon_text: Optional[str] = None
-    max_completions: int = Field(50, gt=0)
+    target_lat: float = Field(..., ge=-90, le=90)
+    target_lng: float = Field(..., ge=-180, le=180)
+    radius_m: float = Field(30.0, gt=0, le=BOUNTY_MAX_RADIUS_M)
+    activity_type: str = Field("walk", max_length=32)
+    target_score: int = Field(0, ge=0, le=100_000)  # 0 = proximity-only
+    xp_reward: int = Field(50, ge=0, le=BOUNTY_MAX_XP)
+    crystal_reward: int = Field(0, ge=0, le=BOUNTY_MAX_CRYSTALS)
+    coupon_text: Optional[str] = Field(None, max_length=200)
+    max_completions: int = Field(50, gt=0, le=BOUNTY_MAX_COMPLETIONS)
     expires_at: Optional[datetime] = None
 
 # Returned in the nearby-listing — includes computed distance from the caller.

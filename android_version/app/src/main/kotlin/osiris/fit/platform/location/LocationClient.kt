@@ -37,9 +37,12 @@ class LocationClient(context: Context) {
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(app, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    /** Fails with [AppError.Permission] when fine location is not granted. */
+    /**
+     * Fails with [AppError.Permission] when fine location is not granted. [cached] puts the last known
+     * position first; a run recorder turns it off, because that position can be minutes old.
+     */
     @SuppressLint("MissingPermission")
-    fun fixes(): Flow<LocationFix> = callbackFlow {
+    fun fixes(cached: Boolean = true): Flow<LocationFix> = callbackFlow {
         if (!hasPermission()) {
             close(LocationUnavailable(permissionError()))
             return@callbackFlow
@@ -66,7 +69,7 @@ class LocationClient(context: Context) {
             }
         }
         // A fast first position from the cache, so the map centres before the first live fix.
-        runCatching { fused.lastLocation.await() }.getOrNull()?.let {
+        if (cached) runCatching { fused.lastLocation.await() }.getOrNull()?.let {
             trySend(
                 LocationFix(
                     lat = it.latitude,

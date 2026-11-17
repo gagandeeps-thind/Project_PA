@@ -6,8 +6,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import exists
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 import growth_feed
 import models
@@ -68,12 +69,30 @@ def _is_pr(db: Session, row: models.TrainingSession) -> bool:
     return better is None
 
 
-def _out(db: Session, row: models.TrainingSession, with_series: bool = False) -> TrainingSessionOut:
+def _pr_ids(db: Session, rows: list[models.TrainingSession]) -> set[int]:
+    """`_is_pr` for a whole page: one query per primary metric on the page (at most three)."""
+    by_metric: dict[str, list[int]] = {}
+    for r in rows:
+        metric = training.BY_KEY[r.activity_key]["metric"]
+        if training.metric_value(r, metric) > 0:
+            by_metric.setdefault(metric, []).append(r.id)
+    row, earlier = models.TrainingSession, aliased(models.TrainingSession)
+    beaten: set[int] = set()
+    for metric, ids in by_metric.items():
+        beaten |= {i for (i,) in db.query(row.id).filter(row.id.in_(ids), exists().where(
+            earlier.user_id == row.user_id, earlier.activity_key == row.activity_key, earlier.id < row.id,
+            getattr(earlier, metric) >= getattr(row, metric),
+        ))}
+    return {i for ids in by_metric.values() for i in ids} - beaten
+
+
+def _out(db: Session, row: models.TrainingSession, with_series: bool = False,
+         is_pr: Optional[bool] = None) -> TrainingSessionOut:
     return TrainingSessionOut(
         id=row.id, activity_key=row.activity_key, mode=row.mode, source=row.source, started_at=row.started_at,
         duration_s=row.duration_s, distance_m=row.distance_m, elevation_gain_m=row.elevation_gain_m, reps=row.reps,
         **{f: getattr(row, f) for f in STAT_FIELDS},
-        posted=row.social_post_id is not None, is_pr=_is_pr(db, row),
+        posted=row.social_post_id is not None, is_pr=_is_pr(db, row) if is_pr is None else is_pr,
         series=TrainingSeries(**json.loads(row.series_json or "{}")) if with_series else None,
     )
 
@@ -222,7 +241,8 @@ def list_sessions(
         q = q.filter(models.TrainingSession.activity_key == activity)
     rows = q.order_by(models.TrainingSession.started_at.desc(), models.TrainingSession.id.desc()) \
         .offset(offset).limit(limit).all()
-    return TrainingSessions(items=[_out(db, r) for r in rows])
+    prs = _pr_ids(db, rows)
+    return TrainingSessions(items=[_out(db, r, is_pr=r.id in prs) for r in rows])
 
 
 @router.get("/api/v2/me/training/sessions/{session_id}", response_model=TrainingSessionOut)

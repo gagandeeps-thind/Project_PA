@@ -24,7 +24,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,17 +40,19 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import osiris.fit.platform.health.HealthAvailability
 import osiris.fit.platform.health.HealthConnectImporter
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.common.rememberShared
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.design.RaisedButton
 import osiris.fit.ui.start.TelemetryCharts
 import osiris.fit.ui.start.summaryLine
 import osiris.fit.ui.theme.OsirisColors
-import com.osiris.shared.core.error.Outcome
 import com.osiris.shared.domain.model.TrainingSession
 import com.osiris.shared.domain.model.WeeklyProgress
 import com.osiris.shared.presentation.AppGraph
 import com.osiris.shared.presentation.common.Loadable
+import com.osiris.shared.presentation.start.ProgressState
+import com.osiris.shared.presentation.start.ProgressViewModel
 import kotlinx.coroutines.launch
 
 private const val BAR_GAP = 0.3f
@@ -69,9 +70,7 @@ private const val HEALTH_CONNECT_STORE =
 fun ProgressSection(graph: AppGraph) {
     val vm = rememberShared { graph.progress() }
     val s by vm.state.collectAsStateWithLifecycle()
-    val names by produceState(emptyMap<String, String>()) {
-        value = graph.data.training.activities().getOrNull()?.associate { it.key to it.name }.orEmpty()
-    }
+    val names = s.names
     // Saveable: this screen leaves composition while another is open, and must still refresh on return.
     var resumed by rememberSaveable { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
@@ -97,10 +96,13 @@ fun ProgressSection(graph: AppGraph) {
             } else {
                 for (session in list.value) SessionRow(session, names[session.activityKey] ?: session.activityKey) { vm.open(session.id) }
             }
-            is Loadable.Failed -> Text(list.message, color = OsirisColors.Error)
-            Loadable.Loading -> Unit
+            is Loadable.Failed -> {
+                Text(list.message, color = OsirisColors.Error)
+                if (list.canRetry) RaisedButton(onClick = vm::refresh) { Text("Try again") }
+            }
+            Loadable.Loading -> SkeletonRows()
         }
-        HealthImport(graph, onImported = vm::refresh)
+        HealthImport(graph, vm, s)
     }
     s.detail?.let { SessionSheet(it, names[it.activityKey] ?: it.activityKey, onDismiss = vm::close) }
 }
@@ -175,36 +177,32 @@ private fun SessionSheet(s: TrainingSession, name: String, onDismiss: () -> Unit
     }
 }
 
-/** Import from Health Connect: ask for read access once, then upload the last 30 days. */
+/**
+ * Import from Health Connect: ask for read access once, then upload the last 30 days. The import runs
+ * in the view model and its progress is view model state; this only owns the system permission screen.
+ */
 @Composable
-private fun HealthImport(graph: AppGraph, onImported: () -> Unit) {
+private fun HealthImport(graph: AppGraph, vm: ProgressViewModel, s: ProgressState) {
     val context = LocalContext.current
     val importer = remember { HealthConnectImporter(context, graph.data.training) }
     val scope = rememberCoroutineScope()
-    var status by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    fun run() {
-        busy = true
-        status = "Importing…"
-        scope.launch {
-            status = when (val r = importer.import()) {
-                is Outcome.Success -> if (r.value == 0) "No new workouts to import." else "Imported ${r.value} workout(s)."
-                is Outcome.Failure -> r.error.userMessage
-            }
-            busy = false
-            onImported()
-        }
-    }
+    fun run() = vm.importWorkouts { importer.import() }
     val ask = rememberLauncherForActivityResult(importer.permissionContract) { granted ->
-        if (granted.containsAll(importer.permissions)) run() else status = "Health Connect access was not allowed."
+        if (granted.containsAll(importer.permissions)) run() else vm.importUnavailable("Health Connect access was not allowed.")
     }
     FrostCard(Modifier.fillMaxWidth()) {
         Text("Health Connect", style = MaterialTheme.typography.titleMedium)
         Text("Bring in workouts from Samsung Health, Fitbit, Google Fit and your watch apps.", color = OsirisColors.Muted)
         when (importer.availability()) {
             HealthAvailability.READY -> RaisedButton(
-                onClick = { scope.launch { if (importer.granted()) run() else ask.launch(importer.permissions) } },
-                enabled = !busy,
+                onClick = {
+                    scope.launch {
+                        // A Health Connect failure here counts as "not granted": asking again is harmless.
+                        val granted = runCatching { importer.granted() }.getOrDefault(false)
+                        if (granted) run() else ask.launch(importer.permissions)
+                    }
+                },
+                enabled = !s.importing,
                 modifier = Modifier.padding(top = 10.dp),
             ) { Text("Import last 30 days") }
             HealthAvailability.NOT_INSTALLED -> RaisedButton(
@@ -212,13 +210,13 @@ private fun HealthImport(graph: AppGraph, onImported: () -> Unit) {
                     try {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HEALTH_CONNECT_STORE)))
                     } catch (_: ActivityNotFoundException) {
-                        status = "Install Health Connect from the Play Store."
+                        vm.importUnavailable("Install Health Connect from the Play Store.")
                     }
                 },
                 modifier = Modifier.padding(top = 10.dp),
             ) { Text("Get Health Connect") }
             HealthAvailability.UNSUPPORTED -> Text("Health Connect is not available on this phone.", color = OsirisColors.Faint)
         }
-        status?.let { Text(it, color = OsirisColors.Secondary, modifier = Modifier.padding(top = 8.dp)) }
+        s.importStatus?.let { Text(it, color = OsirisColors.Secondary, modifier = Modifier.padding(top = 8.dp)) }
     }
 }

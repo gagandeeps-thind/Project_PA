@@ -23,6 +23,12 @@ buildscript {
 
 val androidEnabled = gradle.extra["osiris.android"] as Boolean
 
+// The environment compiled into the apps, decided once so :shared:core (GeneratedEnv) and the Android
+// app cannot disagree: -Posiris.env wins, a requested release task means prod, everything else is dev.
+// The Android app rejects a release that is not prod (android_version/app/build.gradle.kts).
+extra["osirisEnvName"] = providers.gradleProperty("osiris.env").orNull
+    ?: if (gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }) "prod" else "dev"
+
 // Conventions for every shared Kotlin Multiplatform module: the same targets, compiler
 // options and test setup everywhere, so a module only declares its own dependencies.
 subprojects {

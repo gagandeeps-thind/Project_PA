@@ -16,7 +16,7 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # Routes that read no player data and change only on deploy.
-PUBLIC_MAX_AGE = {"/api/v2/rules": 300}
+PUBLIC_MAX_AGE = {"/api/v2/rules": 300, "/.well-known/assetlinks.json": 3600}
 
 
 def _etag(body: bytes) -> str:

@@ -21,7 +21,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -84,7 +84,7 @@ def _pace(distance_m: float, seconds: Optional[float]) -> Optional[str]:
 # --- schemas ---------------------------------------------------------------------
 
 class ShareCreate(BaseModel):
-    kind: str
+    kind: str = Field(max_length=32)
     entity_id: int
 
 

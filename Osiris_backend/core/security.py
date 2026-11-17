@@ -3,7 +3,6 @@ webhook signatures, and the fail-closed boot checks for secrets."""
 import hashlib
 import hmac
 import logging
-import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -20,23 +19,24 @@ import models
 import settings
 from core.errors import _api_error
 from database import get_db
-from services import stripe_gateway
 
 logger = logging.getLogger(__name__)
 
 
 # --- v2.10: JWT secret loaded from env var with a clearly-flagged dev fallback ---
 # Set OSIRIS_JWT_SECRET in any non-dev environment. Deployment must use a 32+ byte secret
-# (HS256 minimum per RFC 7518 § 3.2). Setting OSIRIS_ENV=production makes a missing secret
-# fatal at boot — that's the production-safety check.
+# (HS256 minimum per RFC 7518 § 3.2). Fail closed: outside an explicit dev/test OSIRIS_ENV a missing
+# or short secret is fatal at boot, like the webhook secret below.
+JWT_SECRET_MIN_BYTES = 32
 _jwt_secret_from_env = settings.secret("OSIRIS_JWT_SECRET")
-if _jwt_secret_from_env:
-    SECRET_KEY = _jwt_secret_from_env
-elif os.environ.get("OSIRIS_ENV", "").lower() == "production":
+if not settings.is_dev_env() and len((_jwt_secret_from_env or "").encode("utf-8")) < JWT_SECRET_MIN_BYTES:
     raise RuntimeError(
-        "OSIRIS_JWT_SECRET is required when OSIRIS_ENV=production. "
+        f"OSIRIS_JWT_SECRET of at least {JWT_SECRET_MIN_BYTES} bytes is required unless OSIRIS_ENV is one of "
+        f"{sorted(settings.DEV_ENVS)}. "
         "Generate one with `python -c \"import secrets; print(secrets.token_urlsafe(48))\"`."
     )
+if _jwt_secret_from_env:
+    SECRET_KEY = _jwt_secret_from_env
 else:
     # Dev fallback: ephemeral 48-byte secret regenerated each boot. Existing tokens become
     # invalid on every reload, which is what we want during local development.
@@ -48,13 +48,15 @@ else:
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
+# The most privileged role gets a working day, so a leaked admin token is short-lived.
+ADMIN_TOKEN_EXPIRE_MINUTES = 60 * 12
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES):
     to_encode = data.copy()
     issued = datetime.now(timezone.utc)
-    expire = issued + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = issued + timedelta(minutes=expires_minutes)
     # iat lets the v2 API refuse tokens issued before a "sign out everywhere" (G4).
     to_encode.update({"exp": expire, "iat": int(issued.timestamp())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -67,7 +69,7 @@ def get_current_user_token(token: str = Depends(oauth2_scheme)):
         user_id_str: str = payload.get("sub")
         if role is None or user_id_str is None:
             raise HTTPException(status_code=401, detail="Could not validate credentials")
-        return {"id": int(user_id_str), "role": role, "iat": payload.get("iat")}
+        return {"id": int(user_id_str), "role": role, "iat": payload.get("iat"), "pwv": payload.get("pwv")}
     except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
@@ -76,15 +78,37 @@ def get_current_player(token_data: dict = Depends(get_current_user_token)):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return token_data
 
-def get_current_admin(token_data: dict = Depends(get_current_user_token)):
-    if token_data["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Not enough permissions")
+def password_fingerprint(hashed_password: str | None) -> str:
+    """A keyed digest of the stored hash, carried in admin and merchant tokens: a password reset
+    changes the hash, so every token issued before it stops matching (staff have no tokens_valid_after)."""
+    return hmac.new(SECRET_KEY.encode("utf-8"), (hashed_password or "").encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+
+_STAFF_TABLES = {"admin": models.Admin, "merchant": models.Merchant}
+
+
+def _require_staff(token_data: dict, db: Session) -> dict:
+    """An admin or merchant token is valid only while its row exists and its password is unchanged."""
+    table = _STAFF_TABLES[token_data["role"]]
+    row = db.query(table.hashed_password).filter(table.id == token_data["id"]).first()
+    if row is None:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    pwv = token_data.get("pwv")
+    # shortcut: tokens issued before pwv existed carry none and stay valid until they expire (7 days at most).
+    if pwv is not None and not hmac.compare_digest(str(pwv), password_fingerprint(row[0])):
+        raise _api_error(401, "SESSION_REVOKED", "This session was signed out. Please sign in again.")
     return token_data
 
-def get_current_merchant(token_data: dict = Depends(get_current_user_token)):
+
+def get_current_admin(token_data: dict = Depends(get_current_user_token), db: Session = Depends(get_db)):
+    if token_data["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return _require_staff(token_data, db)
+
+def get_current_merchant(token_data: dict = Depends(get_current_user_token), db: Session = Depends(get_db)):
     if token_data["role"] != "merchant":
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    return token_data
+    return _require_staff(token_data, db)
 
 
 # --- v2.10: webhook signature verification ---
@@ -113,11 +137,6 @@ if not _WEBHOOK_SECRET and not _IS_DEV_ENV:
         "and configure the same value on the payment provider's webhook settings."
     )
 
-# Stripe fail-closed boot check. Called here, AFTER the webhook-secret
-# check above, so that when multiple secrets are missing the OSIRIS_WEBHOOK_SECRET error
-# surfaces first (stripe_gateway is import-side-effect-free by design).
-stripe_gateway.assert_boot_config()
-
 async def verify_webhook_signature(request: Request) -> bytes:
     """Reads the raw body once, validates the X-Provider-Signature HMAC, and returns the
     body bytes so the calling endpoint can re-parse them (FastAPI's body() consumes the
@@ -135,10 +154,10 @@ async def verify_webhook_signature(request: Request) -> bytes:
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
     return body
 
-def get_current_admin_or_merchant(token_data: dict = Depends(get_current_user_token)):
+def get_current_admin_or_merchant(token_data: dict = Depends(get_current_user_token), db: Session = Depends(get_db)):
     if token_data["role"] not in ["admin", "merchant"]:
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    return token_data
+    return _require_staff(token_data, db)
 
 
 
@@ -157,6 +176,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8')[:BCRYPT_MAX_BYTES], hashed_password.encode('utf-8'))
 
 
+_dummy_hash: str | None = None
+
+
+def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -> bool:
+    """verify_password, or the same bcrypt work against a throwaway hash when there is no account, so
+    the response time does not reveal whether an email is registered. Always False without a hash."""
+    global _dummy_hash
+    if hashed_password:
+        return verify_password(plain_password, hashed_password)
+    if _dummy_hash is None:
+        _dummy_hash = get_password_hash(secrets.token_urlsafe(16))
+    verify_password(plain_password, _dummy_hash)
+    return False
+
+
 def _fits_bcrypt(password: str) -> str:
     if len(password.encode('utf-8')) > BCRYPT_MAX_BYTES:
         raise ValueError("Password is too long: at most 72 characters, fewer with accents or emoji")
@@ -167,21 +201,30 @@ def _fits_bcrypt(password: str) -> str:
 NewPassword = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(_fits_bcrypt)]
 
 
-def _require_active_player(token_data: dict, db: Session) -> dict:
-    """The PRD-010 checks: the player exists, is not suspended, and the token predates no sign-out."""
+def _require_active_player(token_data: dict, db: Session, allow_suspended: bool = False) -> dict:
+    """The PRD-010 checks: the player exists, is not suspended, and the token predates no sign-out.
+    `allow_suspended` keeps the data-protection rights (export, erase) of a suspended player."""
     # Runs on every player request: read the two columns it needs, not the whole user row.
     user = db.query(models.User.suspended_at, models.User.tokens_valid_after).filter(
         models.User.id == token_data["id"]).first()
     if user is None:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     suspended_at, tokens_valid_after = user
-    if suspended_at is not None:
+    if suspended_at is not None and not allow_suspended:
         raise _api_error(403, "ACCOUNT_SUSPENDED", "This account is suspended. Contact support.")
     if tokens_valid_after is not None:
         issued_at = token_data.get("iat") or 0
         if issued_at < int(tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()):
             raise _api_error(401, "SESSION_REVOKED", "This session was signed out. Please sign in again.")
     return token_data
+
+
+def require_valid_session(token_data: dict, db: Session, allow_suspended: bool = False) -> dict:
+    """For endpoints that take any role: staff tokens need their row and unchanged password, player tokens
+    the PRD-010 checks."""
+    if token_data["role"] in _STAFF_TABLES:
+        return _require_staff(token_data, db)
+    return _require_active_player(token_data, db, allow_suspended)
 
 
 def get_active_player(
@@ -200,7 +243,7 @@ def get_active_player_or_admin(
     """Read endpoints the admin console shares with the app: admins pass, players get the
     suspension check, other roles get 403."""
     if token_data["role"] == "admin":
-        return token_data
+        return _require_staff(token_data, db)
     if token_data["role"] != "player":
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return _require_active_player(token_data, db)

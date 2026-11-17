@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.rememberShared
@@ -47,6 +48,11 @@ fun SupportChatScreen(graph: AppGraph, onBack: () -> Unit) {
     var draft by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
     LaunchedEffect(s.lines.size) { if (s.lines.isNotEmpty()) list.animateScrollToItem(s.lines.lastIndex) }
+    // The socket is open only while this screen is on top and the app is in the foreground.
+    LifecycleResumeEffect(vm) {
+        vm.resume()
+        onPauseOrDispose { vm.pause() }
+    }
 
     OsirisScaffold("Support", vm, onBack = onBack) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
@@ -56,7 +62,7 @@ fun SupportChatScreen(graph: AppGraph, onBack: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(s.lines) { _, line ->
+                itemsIndexed(s.lines, key = { index, _ -> index }) { _, line ->
                     Box(Modifier.fillMaxWidth(), contentAlignment = if (line.mine) Alignment.CenterEnd else Alignment.CenterStart) {
                         Text(
                             line.text,

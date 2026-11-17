@@ -4,30 +4,35 @@ import com.android.billingclient.api.BillingClient.BillingResponseCode
 import com.osiris.shared.core.error.AppError
 import com.osiris.shared.core.error.Outcome
 import com.osiris.shared.domain.repository.PaymentsRepository
-import com.osiris.shared.domain.wallet.GooglePlayVerification
+import com.osiris.shared.domain.wallet.PurchaseVerification
+import com.osiris.shared.domain.wallet.StoreEntitlements
 import java.security.KeyPairGenerator
 import java.security.Signature
 import java.util.Base64
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BillingTest {
 
-    private fun server(vararg answers: Pair<String, Outcome<GooglePlayVerification>>) = ServerPurchaseVerifier(
+    private fun server(vararg answers: Pair<String, Outcome<PurchaseVerification>>) = ServerPurchaseVerifier(
         object : PaymentsRepository {
             override suspend fun verifyGooglePlay(productId: String, purchaseToken: String) = answers.toMap().getValue(productId)
+            override suspend fun verifyAppStore(signedTransaction: String) = error("not used")
+            override suspend fun entitlements(): Outcome<StoreEntitlements> = error("not used")
         },
     )
 
-    private suspend fun ServerPurchaseVerifier.check(vararg products: String) = verify("p", "{}", "s", "token", products.toList())
+    private suspend fun ServerPurchaseVerifier.check(vararg products: String) =
+        verify("p", "{}", "s", "token", products.toList()).getOrNull()?.entitled == true
 
     @Test
     fun serverVerifierGrantsOnlyWhenEveryProductIsEntitled() = runTest {
-        val yes = Outcome.Success(GooglePlayVerification(entitled = true))
-        val no = Outcome.Success(GooglePlayVerification(entitled = false))
+        val yes = Outcome.Success(PurchaseVerification(entitled = true))
+        val no = Outcome.Success(PurchaseVerification(entitled = false))
         assertTrue(server("a" to yes).check("a"))
         assertFalse(server("a" to yes, "b" to no).check("a", "b"))
     }
@@ -35,6 +40,41 @@ class BillingTest {
     @Test
     fun serverVerifierKeepsThePurchaseWhenTheServerCannotAnswer() = runTest {
         assertFalse(server("a" to Outcome.Failure(AppError.Offline())).check("a"))
+    }
+
+    @Test
+    fun serverVerifierReportsTheServersOwnFigures() = runTest {
+        // A pack bought with quantity 3: the server credits 3 x 500 and the app shows exactly that.
+        val answer = Outcome.Success(PurchaseVerification(crystalsCredited = 1500, balance = 1620, consume = true, entitled = true))
+        val v = server("a" to answer).verify("p", "{}", "s", "token", listOf("a")).getOrNull()!!
+        assertEquals(1500, v.crystalsCredited)
+        assertEquals(1620, v.balance)
+    }
+
+    @Test
+    fun verifyFailuresMapToBannersOrSilentRetries() {
+        val unavailable = BillingErrorMapper.fromVerifyFailure(AppError.Http(503, null, "x"))
+        assertEquals(BillingErrorCode.PURCHASES_UNAVAILABLE, unavailable?.code)
+        assertTrue(unavailable!!.userMessage.contains("temporarily unavailable"))
+        assertEquals(BillingErrorCode.VERIFICATION_FAILED, BillingErrorMapper.fromVerifyFailure(AppError.Http(409, null, "x"))?.code)
+        assertNull(BillingErrorMapper.fromVerifyFailure(AppError.Unauthorized()))
+        assertNull(BillingErrorMapper.fromVerifyFailure(AppError.Offline()))
+        assertNull(BillingErrorMapper.fromVerifyFailure(AppError.Http(429, null, "x")))
+        assertNull(BillingErrorMapper.fromVerification(Outcome.Success(PurchaseVerification(entitled = true))))
+        assertEquals(
+            BillingErrorCode.VERIFICATION_FAILED,
+            BillingErrorMapper.fromVerification(Outcome.Success(PurchaseVerification(entitled = false)))?.code,
+        )
+    }
+
+    @Test
+    fun passProductsAreHiddenUntilTheFlagIsOn() {
+        assertEquals(PlayBillingCatalog.CONSUMABLE_PRODUCT_IDS.toList(), PlayBillingCatalog.inAppProductIds(sellsPass = false))
+        assertTrue(PlayBillingCatalog.subscriptionProductIds(sellsPass = false).isEmpty())
+        assertTrue(PlayBillingCatalog.PRODUCT_FOUNDER_PACK in PlayBillingCatalog.inAppProductIds(sellsPass = true))
+        assertEquals(PlayBillingCatalog.SUBSCRIPTION_PRODUCT_IDS, PlayBillingCatalog.subscriptionProductIds(sellsPass = true))
+        assertEquals("Monthly", PlayBillingCatalog.planLabel("P1M"))
+        assertEquals("Yearly", PlayBillingCatalog.planLabel("P1Y"))
     }
 
     @Test
@@ -66,10 +106,6 @@ class BillingTest {
         assertTrue(PlayBillingCatalog.isConsumable(PlayBillingCatalog.PRODUCT_CRYSTALS_STARTER))
         assertFalse(PlayBillingCatalog.isConsumable(PlayBillingCatalog.PRODUCT_FOUNDER_PACK))
         assertFalse(PlayBillingCatalog.isConsumable(PlayBillingCatalog.SUB_OSIRIS_PASS_MONTHLY))
-        assertEquals(500, PlayBillingCatalog.crystalsForProduct(PlayBillingCatalog.PRODUCT_CRYSTALS_STARTER))
-        assertEquals(1200, PlayBillingCatalog.crystalsForProduct(PlayBillingCatalog.PRODUCT_CRYSTALS_ADVENTURER))
-        assertEquals(2600, PlayBillingCatalog.crystalsForProduct(PlayBillingCatalog.PRODUCT_CRYSTALS_CHAMPION))
-        assertEquals(0, PlayBillingCatalog.crystalsForProduct(PlayBillingCatalog.SUB_OSIRIS_PASS_MONTHLY))
     }
 
     @Test
@@ -176,7 +212,7 @@ class BillingTest {
                 signature = validSignature,
                 purchaseToken = "token_abc_123",
                 productIds = listOf(PlayBillingCatalog.PRODUCT_CRYSTALS_STARTER),
-            ),
+            ).isSuccess,
         )
 
         // Tampered package name must fail.
@@ -187,7 +223,7 @@ class BillingTest {
                 signature = validSignature,
                 purchaseToken = "token_abc_123",
                 productIds = listOf(PlayBillingCatalog.PRODUCT_CRYSTALS_STARTER),
-            ),
+            ).isSuccess,
         )
 
         // Tampered payload with original signature must fail cryptographic check.
@@ -199,7 +235,7 @@ class BillingTest {
                 signature = validSignature,
                 purchaseToken = "token_abc_123",
                 productIds = listOf(PlayBillingCatalog.PRODUCT_CRYSTALS_CHAMPION),
-            ),
+            ).isSuccess,
         )
     }
 }

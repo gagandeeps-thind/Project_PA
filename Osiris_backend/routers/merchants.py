@@ -1,12 +1,14 @@
 """Merchant accounts, merchant analytics, admin merchant management and platform revenue."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
 from core.clock import _now_naive_utc
-from core.security import get_current_admin, get_current_user_token, get_password_hash
+from core.rate_limit import _rl_onboard
+from core.security import get_current_admin, get_current_user_token, get_password_hash, require_valid_session
 from database import get_db
 from schemas import (
     AdminMerchantListItem,
@@ -38,7 +40,7 @@ def get_platform_revenue(db: Session = Depends(get_db), token_data: dict = Depen
 
 # --- Epic 1: Bounty Board Endpoints ---
 
-@router.post("/api/v1/merchants/register", response_model=MerchantResponse)
+@router.post("/api/v1/merchants/register", response_model=MerchantResponse, dependencies=[Depends(_rl_onboard)])
 def register_merchant(merchant: MerchantCreate, db: Session = Depends(get_db)):
     """Registers a B2B partner who can sponsor merchant_chest bounties at their storefront.
     Newly-registered merchants start `is_active=False` / `payment_status='payment_pending'`;
@@ -74,6 +76,7 @@ def get_merchant_profile(
         raise HTTPException(status_code=403, detail="Merchants can only view their own profile")
     if role not in ("merchant", "admin"):
         raise HTTPException(status_code=403, detail="Forbidden")
+    require_valid_session(token_data, db)
 
     merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
     if not merchant:
@@ -96,6 +99,7 @@ def get_merchant_bounties(
         raise HTTPException(status_code=403, detail="Merchants can only view their own bounties")
     if role not in ("merchant", "admin"):
         raise HTTPException(status_code=403, detail="Forbidden")
+    require_valid_session(token_data, db)
 
     merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
     if not merchant:
@@ -108,16 +112,18 @@ def get_merchant_bounties(
         .all()
     )
 
+    coupons: dict[int, int] = {
+        bid: int(n) for bid, n in db.query(models.BountyCompletion.bounty_id, func.count(models.BountyCompletion.id))
+        .filter(
+            models.BountyCompletion.bounty_id.in_([b.id for b in bounties] or [-1]),
+            models.BountyCompletion.coupon_code_issued.isnot(None),
+        )
+        .group_by(models.BountyCompletion.bounty_id)
+        .all()
+    }
     out: List[MerchantBountyAnalytics] = []
     for b in bounties:
-        coupon_count = (
-            db.query(models.BountyCompletion)
-            .filter(
-                models.BountyCompletion.bounty_id == b.id,
-                models.BountyCompletion.coupon_code_issued.isnot(None),
-            )
-            .count()
-        )
+        coupon_count = coupons.get(b.id, 0)
         out.append(MerchantBountyAnalytics(
             id=b.id,
             title=b.title,
@@ -141,10 +147,13 @@ def get_merchant_bounties(
 @router.get("/api/v1/admin/merchants", response_model=List[AdminMerchantListItem])
 def admin_list_merchants(
     status: Optional[str] = None,           # 'pending' | 'active' | 'declined' | 'all' (default 'all')
+    limit: Optional[int] = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     token_data: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Admin-only triage view. Filter by activation status; sorted newest-first."""
+    """Admin-only triage view. Filter by activation status; sorted newest-first. Without `limit`
+    every merchant is returned, as before."""
     q = db.query(models.Merchant)
     if status == "active":
         q = q.filter(models.Merchant.is_active == True)  # noqa: E712
@@ -154,8 +163,8 @@ def admin_list_merchants(
         q = q.filter(models.Merchant.payment_status == "payment_declined")
     elif status not in (None, "all"):
         raise HTTPException(status_code=400, detail="status must be one of: pending, active, declined, all")
-    rows = q.order_by(models.Merchant.created_at.desc()).all()
-    return rows
+    q = q.order_by(models.Merchant.created_at.desc(), models.Merchant.id.desc()).offset(offset)
+    return (q.limit(limit) if limit is not None else q).all()
 
 
 @router.post("/api/v1/admin/merchants/{merchant_id}/activate", response_model=AdminMerchantToggleResponse)

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +52,7 @@ import osiris.fit.ui.common.LoadableContent
 import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.TextInputDialog
 import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.exercise.ExerciseConsentSheet
 import osiris.fit.ui.exercise.WithdrawExerciseConsentDialog
 import osiris.fit.ui.theme.OsirisColors
@@ -139,7 +138,7 @@ private fun Settings(p: PlayerProfile, s: SettingsState, vm: SettingsViewModel, 
         item { Header("Invite friends") }
         item {
             when (val r = s.referral) {
-                Loadable.Loading -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp))
+                Loadable.Loading -> SkeletonRows(Modifier.padding(16.dp), rows = 2)
                 is Loadable.Failed -> ListItem(headlineContent = { Text(r.message) }, colors = clear())
                 is Loadable.Ready -> Column {
                     ListItem(
@@ -237,7 +236,7 @@ private fun BlocksSheet(s: SettingsState, vm: SettingsViewModel, onDismiss: () -
             Text("Blocked players", fontSize = 18.sp)
             val blocks = s.blocks
             when {
-                blocks == null -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(12.dp))
+                blocks == null -> SkeletonRows(Modifier.padding(12.dp))
                 blocks.isEmpty() -> Text("You haven't blocked anyone.", Modifier.padding(12.dp))
                 else -> for (b in blocks) {
                     ListItem(
@@ -257,7 +256,7 @@ private fun RulesSheet(s: SettingsState, onDismiss: () -> Unit) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp).navigationBarsPadding()) {
             Text("Rules", style = MaterialTheme.typography.titleLarge)
             val rules = s.rules
-            if (rules == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(12.dp))
+            if (rules == null) SkeletonRows(Modifier.padding(12.dp))
             for (section in rules.orEmpty()) {
                 Text(section.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
                 for (line in section.lines) Text("•  $line", Modifier.padding(vertical = 4.dp))

@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +52,7 @@ import osiris.fit.platform.permission.rememberPermission
 import osiris.fit.ui.common.ConfirmDialog
 import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.common.LoadingSkeleton
 import osiris.fit.ui.design.FrostCard
 import osiris.fit.ui.design.HeroMetric
 import osiris.fit.ui.design.KeyButton
@@ -80,7 +80,7 @@ fun LiveSessionScreen(graph: AppGraph, activityKey: String, mode: StartMode, onD
     val a = activity
     if (a == null) {
         OsirisScaffold("Workout", null, onBack = onDone) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            LoadingSkeleton(Modifier.padding(padding))
         }
     } else {
         Recording(graph, a, mode, onDone)

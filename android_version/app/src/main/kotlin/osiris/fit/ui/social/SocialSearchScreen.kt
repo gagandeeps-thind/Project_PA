@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PersonSearch
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.OutlinedButton
@@ -33,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import osiris.fit.ui.common.EmptyState
 import osiris.fit.ui.common.OsirisScaffold
 import osiris.fit.ui.common.rememberShared
+import osiris.fit.ui.common.SkeletonRows
 import osiris.fit.ui.design.KeyButton
 import osiris.fit.ui.theme.OsirisColors
 import com.osiris.shared.domain.model.SocialUser
@@ -58,7 +58,7 @@ fun SocialSearchScreen(graph: AppGraph, onBack: () -> Unit, onProfile: (Int) -> 
             )
             when (val results = s.results) {
                 null -> EmptyState(Icons.Outlined.PersonSearch, "Find training partners", "Type at least 2 letters of a name or handle.")
-                Loadable.Loading -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                Loadable.Loading -> SkeletonRows(Modifier.padding(horizontal = 16.dp), rows = 4)
                 is Loadable.Failed -> Text(results.message, color = OsirisColors.Error, modifier = Modifier.padding(16.dp))
                 is Loadable.Ready -> if (results.value.isEmpty()) {
                     EmptyState(Icons.Outlined.PersonSearch, "No one matches \"${s.query.trim()}\"")
