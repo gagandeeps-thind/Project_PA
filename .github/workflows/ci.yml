@@ -160,6 +160,7 @@ jobs:
           docker run -d --name osiris_ci -p 8000:8000 \
             -e OSIRIS_JWT_SECRET=ci-fixed-secret-not-for-production-use-only \
             -e OSIRIS_WEBHOOK_SECRET=ci-fixed-webhook-secret \
+            -e OSIRIS_ALLOW_NO_CDN=1 \
             osiris-backend:ci
           for i in $(seq 1 20); do
             if curl -fs http://127.0.0.1:8000/healthz; then echo "healthz OK"; exit 0; fi
