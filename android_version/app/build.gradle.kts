@@ -75,6 +75,7 @@ gradle.taskGraph.whenReady {
     val names = allTasks.filter { it.project == project }.map { it.name }
     val bundle = "packageReleaseBundle" in names
     if (bundle || "packageRelease" in names) {
+        val releaseBaseUrl = osirisEnv.getProperty("api.baseUrl.android").orEmpty().trim()
         val problems = listOfNotNull(
             (
                 "the environment is '$osirisEnvName'; release builds are prod only " +
@@ -82,6 +83,8 @@ gradle.taskGraph.whenReady {
                 ).takeIf { osirisEnvName != "prod" },
             "signing credentials are missing (keystore.properties or OSIRIS_KEYSTORE_*; see keystore.properties.template)"
                 .takeIf { !hasReleaseSigning },
+            "api.baseUrl.android must be https:// in a release, got '$releaseBaseUrl'"
+                .takeIf { !releaseBaseUrl.startsWith("https://") },
             "a positive whole-number version code is required for a bundle (-Posiris.versionCode=<N> or OSIRIS_VERSION_CODE)"
                 .takeIf { bundle && (explicitVersionCode == null || explicitVersionCode < 1) },
         )
