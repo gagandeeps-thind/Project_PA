@@ -59,10 +59,10 @@ val hasReleaseSigning = releaseStoreFile != null &&
 
 val explicitVersionCode = providers.gradleProperty("osiris.versionCode").orNull?.toIntOrNull()
     ?: System.getenv("OSIRIS_VERSION_CODE")?.toIntOrNull()
-val resolvedVersionCode = explicitVersionCode ?: 1
+val resolvedVersionCode = explicitVersionCode ?: 2
 val resolvedVersionName = providers.gradleProperty("osiris.versionName").orNull
     ?: System.getenv("OSIRIS_VERSION_NAME")?.takeIf { it.isNotBlank() }
-    ?: "1.0.0"
+    ?: "1.0.1"
 val playBillingPublicKey = (
     osirisEnv.getProperty("billing.playPublicKey")
         ?: System.getenv("OSIRIS_PLAY_BILLING_PUBLIC_KEY")
